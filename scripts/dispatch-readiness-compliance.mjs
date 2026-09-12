@@ -26,6 +26,39 @@ export const DISPATCH_BRIEF_DECLARATIONS = Object.freeze({
 
 export const DISPATCH_BRIEF_DECLARATION_FIELDS = Object.freeze(Object.keys(DISPATCH_BRIEF_DECLARATIONS));
 
+export const VERIFICATION_PHASES = Object.freeze([
+  "development",
+  "candidate-final",
+  "publication",
+  "merge-sensitive",
+]);
+
+const VERIFICATION_PLAN_LIST_FIELDS = Object.freeze([
+  "localChecks",
+  "finalRoots",
+  "invalidationTriggers",
+  "blockedDependencies",
+]);
+
+function verificationPlanProblems(plan) {
+  if (plan === undefined) return { problems: [], checked: false };
+  if (plan === null || typeof plan !== "object" || Array.isArray(plan)) {
+    return { problems: [{ field: "verificationPlan", message: "verificationPlan must be an object" }], checked: true };
+  }
+  const problems = [];
+  if (!VERIFICATION_PHASES.includes(plan.phase)) {
+    problems.push({ field: "verificationPlan.phase", message: `phase must be one of ${VERIFICATION_PHASES.join(", ")}`, code: "DISPATCH_VERIFICATION_PHASE_INVALID" });
+  }
+  for (const field of VERIFICATION_PLAN_LIST_FIELDS) {
+    const problem = nonEmptyList(plan[field], `verificationPlan.${field}`);
+    if (problem) problems.push(problem);
+  }
+  if (plan.sameRepoExecution !== "serial") {
+    problems.push({ field: "verificationPlan.sameRepoExecution", message: "same-repository output work must be serial", code: "DISPATCH_VERIFICATION_SERIAL_REQUIRED" });
+  }
+  return { problems, checked: true };
+}
+
 function declarationProblems(brief) {
   return DISPATCH_BRIEF_DECLARATION_FIELDS
     .filter((field) => brief[field] !== DISPATCH_BRIEF_DECLARATIONS[field])
@@ -277,6 +310,8 @@ export function validateDispatchBrief(brief) {
   // checked one, so `reasonCode == "DISPATCH_BRIEF_READY"` is an assertion a gate can make.
   const budgets = fieldBudgetProblems(brief.fieldBudgets);
   for (const problem of budgets.problems) problems.push(problem);
+  const verificationPlan = verificationPlanProblems(brief.verificationPlan);
+  problems.push(...verificationPlan.problems);
   const ready = citations.checked ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_READY_CITATIONS_UNCHECKED";
   return {
     ok: problems.length === 0,
@@ -286,6 +321,7 @@ export function validateDispatchBrief(brief) {
     // Reported the same way citations are: a brief that declared no budget is not being
     // called compliant, it is being called unjudged on this axis.
     fieldBudgets: { checked: brief.fieldBudgets !== undefined, declared: budgets.declared },
+    verificationPlan: { checked: verificationPlan.checked, ...(brief.verificationPlan === undefined ? {} : { phase: brief.verificationPlan?.phase ?? null }) },
   };
 }
 

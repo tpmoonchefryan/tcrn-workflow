@@ -175,6 +175,23 @@ const fixtureTestResult = Object.freeze({
   survivingModuleCoverage: { reasonCode: "SURVIVING_MODULE_COVERAGE_VERIFIED", retiredTestFiles: [], modules: [] },
 });
 
+function assertProgressReport(progress) {
+  assert.equal(progress.schemaVersion, "tcrn.progress-event.v1");
+  assert.equal(progress.status, "completed");
+  assert.equal(progress.terminal, "completed");
+  assert.deepEqual(progress.eventTypes, ["bound-before-controller", "controller-started", "controller-exited", "reaper-clean", "completed"]);
+  assert.ok(progress.polls > 0);
+  assert.ok(progress.bytesRead > 0);
+  assert.equal(progress.unchangedPolls, 0);
+}
+
+function assertTaskSuccess(actual) {
+  const { progress, ...withoutProgress } = actual;
+  assert.deepEqual(withoutProgress, { ok: true, command: "test", ...fixtureTestResult });
+  assertProgressReport(progress);
+  return progress;
+}
+
 // TCRN-CROSS-STORY-359: writing the fixture's one test file and writing the coverage
 // registry that describes it are the same act, so they happen in one place. Two cases
 // below replace the test file mid-run to prove recovery; before this helper existed they
@@ -2595,14 +2612,17 @@ test("a fresh real task entrypoint fails closed while a killed predecessor group
   assert.equal(result.stderr, "");
   const lines = result.stdout.trimEnd().split("\n");
   assert.equal(lines.length, 1, result.stdout);
-  assert.deepEqual(JSON.parse(lines[0]), { ok: true, command: "test", ...fixtureTestResult });
-  assert.deepEqual(JSON.parse(await readFile(resolve(root, "dist/evidence/p1/test.json"), "utf8")), {
+  assertTaskSuccess(JSON.parse(lines[0]));
+  const evidence = JSON.parse(await readFile(resolve(root, "dist/evidence/p1/test.json"), "utf8"));
+  const { progress: evidenceProgress, ...evidenceWithoutProgress } = evidence.result;
+  assert.deepEqual({ ...evidence, result: evidenceWithoutProgress }, {
     schemaVersion: "tcrn.command-evidence.v1",
     command: "test",
     ok: true,
     reasonCode: "TESTS_VERIFIED",
     result: fixtureTestResult,
   });
+  assertProgressReport(evidenceProgress);
   await assertTaskResidueClean(root);
 });
 
@@ -2773,7 +2793,7 @@ test("a permitted real-entrypoint Node relay cannot create a detached escaped de
   assert.equal(result.code, 0, result.stderr);
   assert.equal(result.signal, null);
   assert.equal(result.stderr, "");
-  assert.deepEqual(JSON.parse(result.stdout), { ok: true, command: "test", ...fixtureTestResult });
+  assertTaskSuccess(JSON.parse(result.stdout));
   await rm(relayResultPath);
   await assertTaskResidueClean(root);
 });
@@ -2856,7 +2876,7 @@ test("a real task entrypoint completes exec and execFile undefined optional call
   assert.equal(result.code, 0, result.stderr);
   assert.equal(result.signal, null);
   assert.equal(result.stderr, "");
-  assert.deepEqual(JSON.parse(result.stdout), { ok: true, command: "test", ...fixtureTestResult });
+  assertTaskSuccess(JSON.parse(result.stdout));
   await assertTaskResidueClean(root);
 });
 

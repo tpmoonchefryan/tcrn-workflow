@@ -78,3 +78,26 @@ test("a dispatch brief without a compliant Story scope is refused", () => {
   assert.equal(invalid.ok, false);
   assert.ok(invalid.problems.some((problem) => problem.field === "storyScope"));
 });
+
+test("STORY-412 verification cadence is optional for old briefs but strict when declared", () => {
+  const verificationPlan = {
+    phase: "development",
+    localChecks: ["node --test tests/dispatch-readiness-compliance.test.mjs"],
+    finalRoots: ["engine-release", "platform-layout", "product-gates"],
+    invalidationTriggers: ["sourceDigest", "environmentDigest", "commandDigest", "baselineDigest"],
+    blockedDependencies: ["unknown impact", "failed prior evidence"],
+    sameRepoExecution: "serial",
+  };
+  const ready = validateDispatchBrief({ ...brief, verificationPlan });
+  assert.equal(ready.ok, true, JSON.stringify(ready.problems));
+  assert.deepEqual(ready.verificationPlan, { checked: true, phase: "development" });
+  const malformed = validateDispatchBrief({ ...brief, verificationPlan: { ...verificationPlan, sameRepoExecution: "parallel" } });
+  assert.equal(malformed.ok, false);
+  assert.ok(malformed.problems.some((problem) => problem.code === "DISPATCH_VERIFICATION_SERIAL_REQUIRED"));
+  const missingPhase = validateDispatchBrief({ ...brief, verificationPlan: { ...verificationPlan, phase: "release" } });
+  assert.equal(missingPhase.ok, false);
+  assert.ok(missingPhase.problems.some((problem) => problem.code === "DISPATCH_VERIFICATION_PHASE_INVALID"));
+  const legacy = validateDispatchBrief(brief);
+  assert.equal(legacy.ok, true);
+  assert.equal(legacy.verificationPlan.checked, false);
+});

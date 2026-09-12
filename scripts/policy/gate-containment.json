@@ -7,12 +7,8 @@
     "product-gates"
   ],
   "executionOrder": [
-    "engine-suite",
-    "engine-p1",
-    "engine-guards",
     "engine-release",
     "platform-layout",
-    "chain-validate",
     "product-gates"
   ],
   "groups": [
@@ -21,6 +17,7 @@
       "command": "node scripts/push-gate.mjs",
       "contains": [
         "engine-p1",
+        "engine-p8",
         "engine-guards"
       ]
     },
@@ -30,6 +27,11 @@
       "contains": [
         "engine-suite"
       ]
+    },
+    {
+      "id": "engine-p8",
+      "command": "pnpm verify:p8",
+      "contains": []
     },
     {
       "id": "engine-guards",

@@ -57,6 +57,7 @@ import {
   safeWriteOutput,
   withExclusiveOutputSession,
 } from "./lib/safe-io.mjs";
+import { PROGRESS_WAIT_MAX_MS, readProgressDelta, summarizeProgress, waitForProgress } from "./lib/incremental-output.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
 
@@ -102,56 +103,173 @@ function run(executable, arguments_, options = {}) {
   return runLocalCommand(executable, arguments_, { cwd: repositoryRoot, ...options });
 }
 
+function controllerTimeoutMs() {
+  const configured = Number(process.env.TCRN_TEST_CONTROLLER_TIMEOUT_MS ?? "600000");
+  assertion(Number.isSafeInteger(configured) && configured > 0 && configured <= 600_000, "TEST_CONTROLLER_TIMEOUT_INVALID", String(configured));
+  return configured;
+}
+
+function terminateTestControllerGroup(processGroup) {
+  try { process.kill(-processGroup, "SIGTERM"); } catch (error) {
+    if (error?.code !== "ESRCH") throw error;
+  }
+}
+
+async function readProgressSnapshot(progressPath, cursor, events, counters) {
+  try {
+    const delta = await readProgressDelta(progressPath, cursor);
+    return {
+      cursor: delta.nextCursor,
+      events: [...events, ...delta.events],
+      counters: {
+        polls: counters.polls + 1,
+        unchangedPolls: counters.unchangedPolls + (delta.events.length === 0 ? 1 : 0),
+        bytesRead: counters.bytesRead + delta.bytesRead,
+      },
+    };
+  } catch {
+    return { cursor, events, counters };
+  }
+}
+
+function progressReport(events, cursor, counters) {
+  return {
+    ...summarizeProgress(events),
+    cursor,
+    ...counters,
+  };
+}
+
 async function runDetachedTestController(arguments_, extraEnvironment) {
-  const child = spawn(process.execPath, [testControllerBootstrapPath, ...arguments_], {
-    cwd: repositoryRoot,
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-    env: {
-      ...process.env,
-      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
-      NO_COLOR: "1",
-      npm_config_audit: "false",
-      npm_config_fund: "false",
-      npm_config_offline: "true",
-      ...extraEnvironment,
-      TCRN_TEST_CONTROLLER_LOCK_PATH: resolve(repositoryRoot, ".git/tcrn-workflow-output.lock"),
-      TCRN_TEST_CONTROLLER_OUTER_PID: String(process.pid),
-    },
-  });
-  assertion(Number.isSafeInteger(child.pid) && child.pid > 0, "TEST_CONTROLLER_PID_INVALID");
-  const stdout = [];
-  const stderr = [];
-  child.stdout.on("data", (chunk) => stdout.push(chunk));
-  child.stderr.on("data", (chunk) => stderr.push(chunk));
-  const result = new Promise((resolveResult, rejectResult) => {
-    child.once("error", rejectResult);
-    // The bootstrap keeps controller streams private, so no controller
-    // descendant can retain these task-facing descriptors. Waiting for close
-    // preserves complete stdout/stderr capture before zero-stderr validation
-    // and command-wide output-session release.
-    child.once("close", (code, signal) => resolveResult({ code, signal }));
-  });
-  if (process.env.TCRN_TEST_BIND_PROCESS_GROUP_FAILURE === "1") {
-    // This test-only injection exercises the failure branch before owner
-    // metadata can authorize the controller to discover a test file.
-    child.kill("SIGTERM");
-    await result;
+  const progressDirectory = await mkdtemp(join(tmpdir(), "tcrn-test-progress-"));
+  const progressPath = join(progressDirectory, "events.ndjson");
+  let child;
+  try {
+    child = spawn(process.execPath, [testControllerBootstrapPath, ...arguments_], {
+      cwd: repositoryRoot,
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: {
+        ...process.env,
+        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+        NO_COLOR: "1",
+        npm_config_audit: "false",
+        npm_config_fund: "false",
+        npm_config_offline: "true",
+        ...extraEnvironment,
+        TCRN_TEST_CONTROLLER_LOCK_PATH: resolve(repositoryRoot, ".git/tcrn-workflow-output.lock"),
+        TCRN_TEST_CONTROLLER_OUTER_PID: String(process.pid),
+        TCRN_TEST_CONTROLLER_PROGRESS_PATH: progressPath,
+      },
+    });
+    assertion(Number.isSafeInteger(child.pid) && child.pid > 0, "TEST_CONTROLLER_PID_INVALID");
+    const stdout = [];
+    const stderr = [];
+    child.stdout.on("data", (chunk) => stdout.push(chunk));
+    child.stderr.on("data", (chunk) => stderr.push(chunk));
+    const result = new Promise((resolveResult, rejectResult) => {
+      child.once("error", rejectResult);
+      // The bootstrap keeps controller streams private, so no controller
+      // descendant can retain these task-facing descriptors. Waiting for close
+      // preserves complete stdout/stderr capture before zero-stderr validation
+      // and command-wide output-session release.
+      child.once("close", (code, signal) => resolveResult({ code, signal }));
+    });
+    if (process.env.TCRN_TEST_BIND_PROCESS_GROUP_FAILURE === "1") {
+      // This test-only injection exercises the failure branch before owner
+      // metadata can authorize the controller to discover a test file.
+      child.kill("SIGTERM");
+      await result;
+      await waitForProcessGroupExit(child.pid);
+      fail("TEST_CONTROLLER_BIND_INJECTED_FAILURE", "test-only pre-bind injection");
+    }
+    await waitForTestControllerBindWindow();
+    // `detached` makes this controller the leader of a dedicated POSIX process
+    // group.  Recovery subsequently treats every live group member as a live
+    // command descendant, rather than trusting only this outer task PID.
+    await bindOutputSessionProcessGroup(child.pid);
+
+    const timeoutMs = controllerTimeoutMs();
+    const startedAt = Date.now();
+    const resultOutcome = result.then((value) => ({ kind: "exit", value }), (error) => ({ kind: "error", error }));
+    let cursor = 0;
+    let events = [];
+    let counters = { polls: 0, unchangedPolls: 0, bytesRead: 0 };
+    let completed;
+    while (completed === undefined) {
+      const remaining = timeoutMs - (Date.now() - startedAt);
+      if (remaining <= 0) {
+        terminateTestControllerGroup(child.pid);
+        await resultOutcome;
+        fail("TEST_CONTROLLER_TIMEOUT", `controller exceeded ${timeoutMs}ms`);
+      }
+      const waitController = new AbortController();
+      const wait = waitForProgress(progressPath, {
+        cursor,
+        events,
+        timeoutMs: Math.min(remaining, PROGRESS_WAIT_MAX_MS),
+        pollMs: 25,
+        maxPollMs: 1_000,
+        signal: waitController.signal,
+      });
+      const outcome = await Promise.race([
+        resultOutcome,
+        wait.then((value) => ({ kind: "progress", value }), (error) => ({ kind: "progress-error", error })),
+      ]);
+      waitController.abort();
+      if (outcome.kind === "error") throw outcome.error;
+      if (outcome.kind === "exit") {
+        completed = outcome.value;
+        const snapshot = await readProgressSnapshot(progressPath, cursor, events, counters);
+        cursor = snapshot.cursor;
+        events = snapshot.events;
+        counters = snapshot.counters;
+        break;
+      }
+      if (outcome.kind === "progress-error") throw outcome.error;
+      cursor = outcome.value.cursor;
+      events = outcome.value.events;
+      counters = {
+        polls: counters.polls + outcome.value.polls,
+        unchangedPolls: counters.unchangedPolls + outcome.value.unchangedPolls,
+        bytesRead: counters.bytesRead + outcome.value.bytesRead,
+      };
+      if (["completed", "failed", "orphaned"].includes(outcome.value.status)) {
+        const remainingAfterProgress = timeoutMs - (Date.now() - startedAt);
+        let exitOutcome = { kind: "timeout" };
+        if (remainingAfterProgress > 0) {
+          exitOutcome = await new Promise((resolveOutcome) => {
+            const timer = setTimeout(() => resolveOutcome({ kind: "timeout" }), remainingAfterProgress);
+            resultOutcome.then((value) => {
+              clearTimeout(timer);
+              resolveOutcome(value);
+            });
+          });
+        }
+        if (exitOutcome.kind === "timeout") {
+          terminateTestControllerGroup(child.pid);
+          await resultOutcome;
+          fail("TEST_CONTROLLER_TIMEOUT", `controller did not close after ${outcome.value.status}`);
+        }
+        if (exitOutcome.kind === "error") throw exitOutcome.error;
+        completed = exitOutcome.value;
+        break;
+      }
+    }
     await waitForProcessGroupExit(child.pid);
-    fail("TEST_CONTROLLER_BIND_INJECTED_FAILURE", "test-only pre-bind injection");
-  }
-  await waitForTestControllerBindWindow();
-  // `detached` makes this controller the leader of a dedicated POSIX process
-  // group.  Recovery subsequently treats every live group member as a live
-  // command descendant, rather than trusting only this outer task PID.
-  await bindOutputSessionProcessGroup(child.pid);
-  const completed = await result;
-  await waitForProcessGroupExit(child.pid);
-  if (completed.code !== 0) {
-    fail("COMMAND_FAILED", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stdout).toString("utf8")}${Buffer.concat(stderr).toString("utf8")}`);
-  }
-  if (Buffer.concat(stderr).toString("utf8").trim() !== "") {
-    fail("COMMAND_UNEXPECTED_STDERR", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stderr).toString("utf8")}`);
+    const progress = progressReport(events, cursor, counters);
+    if (completed.code === 0 && progress.status !== "completed") {
+      fail("TEST_CONTROLLER_PROGRESS_MISSING", JSON.stringify(progress));
+    }
+    if (completed.code !== 0) {
+      fail("COMMAND_FAILED", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stdout).toString("utf8")}${Buffer.concat(stderr).toString("utf8")}`);
+    }
+    if (Buffer.concat(stderr).toString("utf8").trim() !== "") {
+      fail("COMMAND_UNEXPECTED_STDERR", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stderr).toString("utf8")}`);
+    }
+    return { progress };
+  } finally {
+    await rm(progressDirectory, { recursive: true, force: true });
   }
 }
 
@@ -406,7 +524,7 @@ async function runTests({ trustOnly = false, p8Only = false, extraEnvironment = 
     .filter((path) => path.startsWith("tests/") && path.endsWith(".test.mjs"))
     .filter((path) => !trustOnly || path === "tests/release-trust.test.mjs")
     .filter((path) => !p8Only || ["tests/local-command-byte-fidelity.test.mjs", "tests/p8-workflow-rc.test.mjs"].includes(path));
-  await runDetachedTestController(["--test", ...tests], {
+  const controller = await runDetachedTestController(["--test", ...tests], {
     NODE_OPTIONS: `--import=${noNetworkImport}`,
     TCRN_OFFLINE_PROOF: "1",
     ...extraEnvironment,
@@ -417,7 +535,7 @@ async function runTests({ trustOnly = false, p8Only = false, extraEnvironment = 
       : p8Only
         ? "P8_WORKFLOW_RC_TESTS_VERIFIED"
         : "TESTS_VERIFIED",
-    { tests, result: "passed" },
+    { tests, result: "passed", progress: controller.progress },
   );
 }
 
@@ -458,6 +576,7 @@ async function verifyTestSuite() {
     return success("TESTS_VERIFIED", {
       tests: tests.tests,
       result: "passed",
+      progress: tests.progress,
       coverageConservation: registry.reasonCode,
       survivingModuleCoverage: {
         reasonCode: survivingModules.reasonCode,

@@ -39,7 +39,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
-import { ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
+import { pushGateExecutionPlan, ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -94,6 +94,15 @@ function run(command, argv) {
   if (result.error) return { ok: false, output: String(result.error.message) };
   return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
 }
+
+await timedStage("gate-containment", async () => {
+  try {
+    const declaration = JSON.parse(await readFile(resolve(repositoryRoot, "scripts/policy/gate-containment.json"), "utf8"));
+    pushGateExecutionPlan(declaration);
+  } catch (error) {
+    fail(error.reasonCode ?? "PUSH_GATE_CONTAINMENT_INVALID", error.message);
+  }
+});
 
 // A closing `**` must be right-flanking (CommonMark): not preceded by whitespace, and --
 // when preceded by punctuation -- followed by whitespace or punctuation. CJK prose walks

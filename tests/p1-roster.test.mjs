@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { P1_SEQUENCE, P1_TASKS, P1_GATE_SPECS } from "../scripts/p1-sequence.mjs";
 import { P1_GATE_SPECS as PREFLIGHT_SPECS } from "../scripts/preflight.mjs";
 import { buildRedLocatorPlan, locateContainedGates } from "../scripts/gate-red-locator.mjs";
-import { ENGINE_PUSH_GATE_CHILDREN } from "../scripts/lib/push-gate-children.mjs";
+import { buildContainedExecutionPlan, ENGINE_PUSH_GATE_CHILDREN, pushGateExecutionPlan } from "../scripts/lib/push-gate-children.mjs";
 import { P8_VERSION } from "../scripts/lib/p8-workflow-rc.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -119,23 +119,46 @@ test("the roster names each verb once", () => {
   assert.equal(new Set(P1_TASKS).size, P1_TASKS.length);
 });
 
-test("STORY-349 top-level gate containment preserves the roster's execution order", () => {
+test("STORY-349 top-level gate containment selects roots and preserves the semantic roster", () => {
   // MIN-149 removed helper-release and helper-suite with STORY-382: the helper repository
   // no longer carries the two scripts those groups ran. The order is asserted literally
   // rather than by count so that removing a group is a visible edit here, not a number.
   const declaration = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/policy/gate-containment.json"), "utf8"));
   assert.deepEqual(declaration.topLevel, ["engine-release", "platform-layout", "product-gates"]);
   assert.deepEqual(declaration.executionOrder, [
-    "engine-suite", "engine-p1", "engine-guards", "engine-release",
-    "platform-layout", "chain-validate", "product-gates",
+    "engine-release", "platform-layout", "product-gates",
   ]);
   const groups = new Map(declaration.groups.map((group) => [group.id, group]));
-  assert.deepEqual(groups.get("engine-release").contains, ["engine-p1", "engine-guards"]);
+  assert.deepEqual(groups.get("engine-release").contains, ["engine-p1", "engine-p8", "engine-guards"]);
   assert.deepEqual(groups.get("engine-p1").contains, ["engine-suite"]);
+  assert.equal(groups.get("engine-p8").command, "pnpm verify:p8");
   assert.equal(groups.has("helper-release"), false);
   assert.equal(groups.has("helper-suite"), false);
   assert.deepEqual(groups.get("platform-layout").contains, ["chain-validate"]);
   assert.deepEqual(ENGINE_PUSH_GATE_CHILDREN.map(({ script }) => script), ["verify:p1", "verify:p8", "guard-check"]);
+});
+
+test("STORY-413 final gate planning selects each top-level root once and records containment", () => {
+  const declaration = JSON.parse(readFileSync(join(REPO_ROOT, "scripts/policy/gate-containment.json"), "utf8"));
+  const plan = buildContainedExecutionPlan(declaration);
+  assert.deepEqual(plan.selected.map(({ id }) => id), declaration.topLevel);
+  assert.deepEqual(plan.coveredBy.map(({ id, coveredBy }) => ({ id, coveredBy })), [
+    { id: "engine-p1", coveredBy: "engine-release" },
+    { id: "engine-suite", coveredBy: "engine-release" },
+    { id: "engine-p8", coveredBy: "engine-release" },
+    { id: "engine-guards", coveredBy: "engine-release" },
+    { id: "chain-validate", coveredBy: "platform-layout" },
+  ]);
+  const pushPlan = pushGateExecutionPlan(declaration);
+  assert.deepEqual(pushPlan.pushGateChildren.map(({ id, script }) => ({ id, script })), [
+    { id: "engine-p1", script: "verify:p1" },
+    { id: "engine-p8", script: "verify:p8" },
+    { id: "engine-guards", script: "guard-check" },
+  ]);
+  const wrongOrder = { ...declaration, executionOrder: ["engine-p1", "engine-release", "platform-layout"] };
+  assert.throws(() => buildContainedExecutionPlan(wrongOrder), (error) => error.reasonCode === "GATE_CONTAINMENT_ROOT_ORDER_INVALID");
+  const wrongChild = { ...declaration, groups: declaration.groups.map((group) => group.id === "engine-p8" ? { ...group, command: "pnpm verify:p1" } : group) };
+  assert.throws(() => pushGateExecutionPlan(wrongChild), (error) => error.reasonCode === "GATE_CONTAINMENT_PUSH_PLAN_INVALID");
 });
 
 test("STORY-350 red locator runs every contained child separately and returns each conclusion", async () => {
@@ -154,6 +177,7 @@ test("STORY-350 red locator runs every contained child separately and returns ea
   assert.deepEqual(result.children.map(({ id, ok }) => ({ id, ok })), [
     { id: "engine-p1", ok: false },
     { id: "engine-suite", ok: true },
+    { id: "engine-p8", ok: true },
     { id: "engine-guards", ok: true },
   ]);
 });

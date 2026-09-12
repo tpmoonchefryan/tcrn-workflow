@@ -14,6 +14,8 @@ import {
   diffEvidence,
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
+import { assessEvidenceReuse, buildDevelopmentPlan, buildFinalGatePlan, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 
 const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const CHAIN_WORKSPACE = join(PLATFORM_ROOT, [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
@@ -135,4 +137,91 @@ test("STORY-375: runner counts come from machine output, not prose or a caller-s
   });
   assert.equal(parseTestRunOutput(JSON.stringify({ tests: ["fixture-test"], result: "passed" })).parseable, false);
   assert.equal(parseTestRunOutput("passed: 999 tests").parseable, false);
+});
+
+test("STORY-413: gate planning and evidence reuse use one positive and negative predicate", () => {
+  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
+  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const inputs = { sourceDigest: "source-a", environmentDigest: "environment-a", commandDigest: "command-a", baselineDigest: "baseline-a" };
+  const successful = { id: "evidence-1", ok: true, status: "completed", inputs };
+  const reusable = assessEvidenceReuse({ evidence: successful, inputs });
+  assert.equal(reusable.reusable, true);
+  assert.deepEqual(reusable.invalidated, []);
+  for (const changed of [
+    { ...inputs, sourceDigest: "source-b" },
+    { ...inputs, environmentDigest: "environment-b" },
+    { ...inputs, commandDigest: "command-b" },
+    { ...inputs, baselineDigest: "baseline-b" },
+    { ...inputs, baselineDigest: undefined },
+  ]) {
+    const rejected = assessEvidenceReuse({ evidence: successful, inputs: changed });
+    assert.equal(rejected.reusable, false, JSON.stringify(changed));
+    assert.equal(rejected.reused.length, 0);
+    assert.ok(rejected.invalidated[0].reasons.length > 0);
+  }
+  assert.equal(assessEvidenceReuse({ evidence: { ...successful, ok: false }, inputs }).reusable, false);
+  assert.equal(assessEvidenceReuse({ evidence: { ...successful, status: "running" }, inputs }).reusable, false);
+
+  const plan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, previousEvidence: [successful] });
+  assert.deepEqual(plan.selected.map(({ id }) => id), ["engine-release", "platform-layout", "product-gates"]);
+  assert.deepEqual(plan.executionOrder, plan.selected.map(({ id }) => id));
+  assert.equal(plan.execution.strategy, "serial");
+  assert.deepEqual(plan.reused, [{ id: "evidence-1", reason: "same source, environment, command, and baseline inputs" }]);
+  assert.ok(plan.coveredBy.every(({ coveredBy }) => coveredBy !== null));
+  const executed = recordExecution(plan, plan.selected.map(({ id }) => ({ id, ok: true })));
+  assert.deepEqual(executed.executed.map(({ id }) => id), plan.executionOrder);
+  assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
+  assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
+
+  const known = buildDevelopmentPlan({ changedFiles: ["scripts/task.mjs"], inputs, previousEvidence: [successful] });
+  assert.deepEqual(known.selected.map(({ id }) => id), ["typecheck", "test"]);
+  assert.deepEqual(known.blocked, []);
+  const unknown = buildDevelopmentPlan({ changedFiles: ["generated/unknown.bin"] });
+  assert.ok(unknown.blocked.some(({ id }) => id === "generated/unknown.bin"));
+  assert.deepEqual(unknown.selected.map(({ id }) => id), ["typecheck", "test"]);
+});
+
+test("STORY-414: progress waits report cursor deltas, unchanged polls, and terminal failures without false success", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "tcrn-progress-ledger-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "events.ndjson");
+  await appendProgressEvent(path, { type: "selected", id: "engine-release" });
+  await appendProgressEvent(path, { type: "controller-started", pid: 123 });
+  const first = await readProgressDelta(path);
+  assert.deepEqual(first.events.map(({ type }) => type), ["selected", "controller-started"]);
+  const unchanged = await readProgressDelta(path, first.nextCursor);
+  assert.deepEqual(unchanged.events, []);
+  assert.equal(unchanged.bytesRead, 0);
+  await appendProgressEvent(path, { type: "completed", ok: true, code: 0, signal: null });
+  const second = await readProgressDelta(path, first.nextCursor);
+  assert.deepEqual(second.events.map(({ type }) => type), ["completed"]);
+  assert.equal(summarizeProgress([...first.events, ...second.events]).status, "completed");
+  const completed = await waitForProgress(path, { cursor: first.nextCursor, events: first.events, timeoutMs: 100, pollMs: 5 });
+  assert.equal(completed.status, "completed");
+  assert.ok(completed.polls >= 1);
+  assert.ok(completed.bytesRead > 0);
+
+  const idlePath = join(root, "idle.ndjson");
+  const idle = await waitForProgress(idlePath, { timeoutMs: 25, pollMs: 5, maxPollMs: 10 });
+  assert.equal(idle.status, "timeout");
+  assert.ok(idle.polls >= 2);
+  assert.equal(idle.summary.status, "running");
+  const errorPath = join(root, "error.ndjson");
+  await appendProgressEvent(errorPath, { type: "error", reasonCode: "CONTROLLER_FAILED" });
+  const failed = await waitForProgress(errorPath, { timeoutMs: 100, pollMs: 5 });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.summary.status, "failed");
+
+  const cancelPath = join(root, "cancel.ndjson");
+  const controller = new AbortController();
+  const pending = waitForProgress(cancelPath, { timeoutMs: 100, pollMs: 10, signal: controller.signal });
+  setTimeout(() => controller.abort(), 5);
+  const cancelled = await pending;
+  assert.equal(cancelled.status, "cancelled");
+  assert.equal(cancelled.summary.status, "running");
+
+  await writeFileSync(join(root, "malformed.ndjson"), "{not-json}\n");
+  const malformed = await waitForProgress(join(root, "malformed.ndjson"), { timeoutMs: 100, pollMs: 5 });
+  assert.equal(malformed.status, "failed");
+  assert.equal(malformed.reasonCode, "PROGRESS_EVENT_INVALID");
 });
