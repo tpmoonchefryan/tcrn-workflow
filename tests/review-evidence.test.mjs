@@ -162,7 +162,7 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   assert.equal(assessEvidenceReuse({ evidence: { ...successful, ok: false }, inputs }).reusable, false);
   assert.equal(assessEvidenceReuse({ evidence: { ...successful, status: "running" }, inputs }).reusable, false);
 
-  const plan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, previousEvidence: [successful] });
+  const plan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, candidateReady: true, blockedDependencies: [], previousEvidence: [successful] });
   assert.deepEqual(plan.selected.map(({ id }) => id), ["engine-release", "platform-layout", "product-gates"]);
   assert.deepEqual(plan.executionOrder, plan.selected.map(({ id }) => id));
   assert.equal(plan.execution.strategy, "serial");
@@ -182,17 +182,22 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   assert.ok(failedRoot.blocked.some(({ id, reason }) => id === "platform-layout" && reason === "FIXTURE_ROOT_RED"));
   assert.equal(failedRoot.executed.find(({ id }) => id === "platform-layout").ok, false);
   let blockedCalls = 0;
-  const blockedPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, blockedDependencies: ["DS candidate pending"] });
+  const blockedPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, candidateReady: true, blockedDependencies: ["DS candidate pending"] });
   const blockedResult = await executeSelectedRoots(blockedPlan, async () => { blockedCalls += 1; return { ok: true }; });
   assert.equal(blockedCalls, 0);
   assert.deepEqual(blockedResult.executed, []);
   assert.ok(blockedResult.blocked.some(({ reason }) => reason === "DS candidate pending"));
   let missingInputCalls = 0;
-  const missingInputPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", executionPermission: true });
+  const missingInputPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", executionPermission: true, candidateReady: true, blockedDependencies: [] });
   await executeSelectedRoots(missingInputPlan, async () => { missingInputCalls += 1; return { ok: true }; });
   assert.equal(missingInputCalls, 0);
+  const unknownReadinessPlan = buildFinalGatePlan({ roster, containment, phase: "candidate-final", inputs, executionPermission: true, blockedDependencies: [] });
+  assert.equal(unknownReadinessPlan.executable, false);
+  let unknownReadinessCalls = 0;
+  await executeSelectedRoots(unknownReadinessPlan, async () => { unknownReadinessCalls += 1; return { ok: true }; });
+  assert.equal(unknownReadinessCalls, 0);
   const missingRequiredSuite = { ...containment, groups: containment.groups.filter((group) => group.id !== "engine-suite").map((group) => group.id === "engine-p1" ? { ...group, contains: [] } : group) };
-  assert.throws(() => buildFinalGatePlan({ roster, containment: missingRequiredSuite, inputs, executionPermission: true }), (error) => error.reasonCode === "GATE_PLAN_REQUIRED_GROUP_MISSING");
+  assert.throws(() => buildFinalGatePlan({ roster, containment: missingRequiredSuite, inputs, executionPermission: true, candidateReady: true, blockedDependencies: [] }), (error) => error.reasonCode === "GATE_PLAN_REQUIRED_GROUP_MISSING");
   assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
   assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
 

@@ -169,10 +169,10 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   const inputNames = ["sourceDigest", "environmentDigest", "commandDigest", "baselineDigest"];
   const missingInputs = inputNames.filter((_name, index) => requiredInputs[index] === null);
   if (missingInputs.length > 0) blocked.push({ id: "candidate-inputs", reason: `missing candidate inputs: ${missingInputs.join(", ")}` });
-  if (candidateReady === false) blocked.push({ id: "candidate-readiness", reason: "candidate is not ready" });
-  if (blockedDependencies !== undefined && (!Array.isArray(blockedDependencies) || blockedDependencies.some((entry) => typeof entry !== "string" || entry.trim().length === 0))) {
-    blocked.push({ id: "blocked-dependencies", reason: "blockedDependencies must be an array of non-empty strings" });
-  } else if (Array.isArray(blockedDependencies) && blockedDependencies.length > 0) {
+  if (candidateReady !== true) blocked.push({ id: "candidate-readiness", reason: candidateReady === false ? "candidate is not ready" : "candidateReady must be explicitly true" });
+  if (!Array.isArray(blockedDependencies) || blockedDependencies.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+    blocked.push({ id: "blocked-dependencies", reason: "blockedDependencies must be an array of non-empty strings or an empty list" });
+  } else if (blockedDependencies.length > 0) {
     blocked.push(...blockedDependencies.map((reason, index) => ({ id: `dependency-${index + 1}`, reason })));
   }
   if (executionPermission !== true) blocked.push({ id: "execution-permission", reason: "explicit candidate execution permission is required" });
