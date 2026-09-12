@@ -851,6 +851,69 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
+  test("TCRN-CROSS-STORY-409 R2 covers default, modified, reset, page-switch, disabled, and invalid-value lifecycle states", async () => {
+    const page = await preparePage();
+    try {
+      const selectGroup = (group) => page.document.querySelector(`[data-setting-group="${group}"]`)?.click();
+      const waitForReceiptChange = async (before, label) => waitFor(receiptAdvanced(page.document, before), label);
+      selectGroup("workspace");
+
+      const defaultRow = page.document.querySelector('[data-setting-row="driver.capabilityProfile"]');
+      assert.equal(defaultRow?.dataset.modified, "false", "an unchanged open field starts in its default state");
+      const driver = defaultRow.querySelector('[data-setting-control="driver.capabilityProfile"]');
+      const beforeModify = receiptText(page.document);
+      driver.value = "r2-isolated-driver";
+      driver.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitForReceiptChange(beforeModify, "the modified open-field receipt");
+      await waitFor(() => page.document.querySelector('[data-setting-row="driver.capabilityProfile"]')?.dataset.modified === "true", "the modified field to read back");
+      const modifiedRow = page.document.querySelector('[data-setting-row="driver.capabilityProfile"]');
+      assert.equal(modifiedRow?.dataset.modified, "true");
+      assert.ok(modifiedRow?.querySelector("[data-reset-setting]"), "a modified field exposes reset");
+
+      const beforeReset = receiptText(page.document);
+      modifiedRow.querySelector("[data-reset-setting]").click();
+      await waitForReceiptChange(beforeReset, "the open-field reset receipt");
+      await waitFor(() => page.document.querySelector('[data-setting-row="driver.capabilityProfile"]')?.dataset.modified === "false", "the reset field to read back");
+      assert.equal(page.document.querySelector('[data-setting-row="driver.capabilityProfile"]')?.dataset.modified, "false", "reset returns the field to the engine default");
+      assert.equal((await cli(["settings-catalog", "--workspace", page.workspace])).settings.find((entry) => entry.key === "driver.capabilityProfile").currentValue, "default");
+
+      const prompt = page.document.querySelector('[data-setting-control="retrieval.promptLanguages"]');
+      assert.ok(prompt?.hasAttribute("multiple"));
+      for (const option of [...prompt.options]) option.removeAttribute("selected");
+      for (const option of [...prompt.options]) option.setAttribute("selected", "");
+      const beforeSet = receiptText(page.document);
+      prompt.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitForReceiptChange(beforeSet, "the prompt-language collection receipt");
+      await waitFor(() => page.document.querySelector('[data-setting-row="retrieval.promptLanguages"]')?.dataset.modified === "true", "the prompt-language collection to read back");
+      assert.equal((await cli(["settings-catalog", "--workspace", page.workspace])).settings.find((entry) => entry.key === "retrieval.promptLanguages").currentValue, "en,zh-CN");
+
+      page.document.querySelector('[data-page-target="dashboard"]')?.click();
+      page.document.querySelector('[data-page-target="settings"]')?.click();
+      assert.equal(page.document.querySelector('[data-setting-control="retrieval.promptLanguages"]')?.options[0].hasAttribute("selected"), true, "page switching preserves the live collection state");
+
+      const currentPrompt = page.document.querySelector('[data-setting-control="retrieval.promptLanguages"]');
+      for (const option of [...currentPrompt.options]) option.removeAttribute("selected");
+      const beforeCollectionReset = receiptText(page.document);
+      currentPrompt.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitForReceiptChange(beforeCollectionReset, "the prompt-language collection reset receipt");
+      await waitFor(() => page.document.querySelector('[data-setting-row="retrieval.promptLanguages"]')?.dataset.modified === "false", "the prompt-language reset to read back");
+      assert.equal((await cli(["settings-catalog", "--workspace", page.workspace])).settings.find((entry) => entry.key === "retrieval.promptLanguages").currentValue, null, "clearing the collection removes the setting rather than writing an empty value");
+
+      selectGroup("machine");
+      assert.equal(page.document.querySelector("#partition-select")?.disabled, true, "workspace-only mode disables partition switching");
+      assert.match(page.document.querySelector('[data-machine-row="portal.port"]')?.textContent ?? "", /restart/u, "the machine port exposes its restart lifecycle");
+
+      selectGroup("workspace");
+      const numeric = page.document.querySelector('[data-setting-control="conference.positionBudgetBytes"]');
+      const beforeInvalid = receiptText(page.document);
+      numeric.value = "511";
+      numeric.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitFor(() => receiptText(page.document) !== beforeInvalid && receiptText(page.document).startsWith("✕"), "the invalid-value receipt");
+      assert.equal(page.document.querySelector('[data-setting-row="conference.positionBudgetBytes"]')?.dataset.modified, "false", "an engine-rejected value does not change the field");
+      assert.equal((await cli(["settings-catalog", "--workspace", page.workspace])).settings.find((entry) => entry.key === "conference.positionBudgetBytes").currentValue, "4096");
+    } finally { await page.cleanup(); }
+  });
+
   test("INC-193 the design authority is declared, and what cannot be checked here is yellow", async () => {
     const page = await preparePage();
     try {
