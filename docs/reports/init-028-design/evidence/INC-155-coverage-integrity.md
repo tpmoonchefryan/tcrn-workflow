@@ -39,7 +39,7 @@
         },
         "current": {
           "testCount": 5,
-          "assertionCount": 21
+          "assertionCount": 20
         },
         "removedTests": [
           "INC-145 M6: an active-plan reference refuses removal"
@@ -49,7 +49,7 @@
         ],
         "testCountLoss": 1,
         "testCountWaived": false,
-        "assertionLoss": 1,
+        "assertionLoss": 2,
         "assertionWaived": true,
         "ok": false
       }
@@ -117,6 +117,8 @@
 本次未减少基线成员，也未改动 waiver 或断言判据。
 
 第二十五次重录（2026-09-09，TCRN-CROSS-STORY-369）：本单保留覆盖基线的 128 个文件，改写九个既有测试文件的 AST 计数；被 Requirement 推翻的旧测试名通过带 `replacement` 的 coverage waiver 逐条承接，未删除测试文件或基线成员。
+
+第二十六次重录（2026-09-12，TCRN-CROSS-STORY-402/403）：本次保留覆盖基线的 137 个文件与所有测试名称；s244 当前测试实现有 5 条测试、20 条断言，s213 的空断言负腿仍保持断言守恒判据。
 
 ## 边界
 

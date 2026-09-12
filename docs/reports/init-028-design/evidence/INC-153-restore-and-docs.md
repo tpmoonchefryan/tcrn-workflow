@@ -30,19 +30,18 @@
 ```
 
 复核命令的旧回读写成了“exit 1、无匹配”，这是错误的。本次改为机械重跑，
-2026-09-11 按 TCRN-CROSS-INC-296 重录：真实 exit 0 且有 3 处匹配，
-分别为旧设置键过滤、宿主列表回落与角色类型守卫。下方块钉住当前匹配文本与字节，
-不将已退役的 persona 页面表达式继续写成现行输出。
+2026-09-12 按 TCRN-CROSS-STORY-402/403 重录：真实 exit 0 且有 2 处匹配，
+分别为旧设置键过滤与宿主列表回落。角色类型守卫随已退役的 persona 页面表达式
+一并移除；下方块钉住当前匹配文本与字节，不将退役表达式继续写成现行输出。
 
 ```verbatim:node scripts/verbatim-evidence-proof.mjs inc153-host-role-scan
 {
   "scan": "rg --no-line-number 'claude-code|codex|reviewer|role ===|host ===|host \\?' portal/index.html | sed 's/^ *//' | sort -u",
   "exitCode": 0,
-  "matchCount": 3,
+  "matchCount": 2,
   "matches": [
     "const LEGACY_MODEL_SETTING_KEYS = new Set([\"execution.claudeCodeSubagentPlan\", \"execution.codexSubagentPlan\"]);",
-    "const hostList = hosts.length > 0 ? hosts : [\"claude-code\", \"codex\"];",
-    "const roleValue = (role) => typeof role === \"string\" ? role : role?.value;"
+    "const hostList = hosts.length > 0 ? hosts : [\"claude-code\", \"codex\"];"
   ]
 }
 ```
