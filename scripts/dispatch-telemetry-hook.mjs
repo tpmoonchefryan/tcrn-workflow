@@ -86,6 +86,13 @@ function usageFrom(input, env) {
   return Object.values(result).some((value) => value !== null) ? result : null;
 }
 
+function hostArgument(argv = process.argv.slice(2)) {
+  const index = argv.findIndex((value) => value === "--host");
+  if (index < 0) return null;
+  const value = argv[index + 1];
+  return value === "claude" || value === "codex" ? value : null;
+}
+
 function eventName(input, env) {
   return firstDefined(input?.hook_event_name, input?.hookEventName, env?.TCRN_TELEMETRY_EVENT);
 }
@@ -114,7 +121,8 @@ function payloadFor(input, env, kind) {
   const observedModel = kind === "subagent-stop"
     ? inputField(input, ["model", "model_name", "modelName", "observed_model", "observedModel"], env, ["TCRN_TELEMETRY_OBSERVED_MODEL", "TCRN_OBSERVED_MODEL"])
     : null;
-  const host = inputField(input, ["host", "host_name", "hostName"], env, ["TCRN_TELEMETRY_HOST", "TCRN_HOST"], 64) ?? "unknown-host";
+  const configuredHost = boundedText(env?.TCRN_TELEMETRY_HOST ?? env?.TCRN_HOST, 64);
+  const host = configuredHost ?? inputField(input, ["host", "host_name", "hostName"], env, [], 64) ?? "unknown-host";
   const event = kind === "subagent-start" ? "SubagentStart" : "SubagentStop";
   return {
     dispatchId: inputField(input, ["dispatch_id", "dispatchId"], env, ["TCRN_DISPATCH_ID", "TCRN_TELEMETRY_DISPATCH_ID"]),
@@ -170,7 +178,9 @@ function readStdin() {
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
-  const result = await runTelemetryHook(readStdin());
+  const host = hostArgument();
+  const env = host === null ? process.env : { ...process.env, TCRN_TELEMETRY_HOST: host, TCRN_HOST: host };
+  const result = await runTelemetryHook(readStdin(), { env });
   process.stdout.write(`${JSON.stringify(result)}\n`);
   process.exit(0);
 }

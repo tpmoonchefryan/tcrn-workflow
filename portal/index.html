@@ -3669,7 +3669,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .tcrn-subnav__row .tcrn-subnav__item { flex: 1 1 auto; min-width: 0; }
 .tcrn-subnav__item { display: flex; align-items: center; gap: var(--tcrn-space-2); width: 100%; min-height: 34px; padding: 0 var(--tcrn-space-2h); border: 1px solid transparent; border-radius: var(--tcrn-radius-control); background: transparent; color: var(--tcrn-color-text-secondary); text-align: left; }
 .tcrn-subnav__item:hover { background: var(--tcrn-color-surface-muted); color: var(--tcrn-color-text-primary); }
-.tcrn-subnav__item[aria-current="page"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
+.tcrn-subnav__item[data-selected="true"] { background: var(--tcrn-color-brand-primary-bg); color: var(--tcrn-color-brand-primary); font-weight: var(--tcrn-type-weight-medium); }
 .tcrn-section { margin-bottom: var(--tcrn-space-5); }
 .tcrn-section__title { display: flex; align-items: center; gap: var(--tcrn-space-2); margin: 0 0 var(--tcrn-space-2); color: var(--tcrn-color-text-muted); font-size: var(--tcrn-type-size-caption); font-weight: var(--tcrn-type-weight-medium); letter-spacing: 0.06em; text-transform: uppercase; }
 .tcrn-top-bar__actions .tcrn-search-input { min-width: 0; flex: 1 1 auto; max-width: 430px; }
@@ -4200,7 +4200,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
             <div class="tcrn-page__head"><div><h1 data-i18n="page.settings">Settings</h1><p class="tcrn-page__lede" data-i18n="config.lede">Registered settings, read from the engine and changed through its public CLI.</p></div><div class="tcrn-page__actions"><span class="tcrn-badge" id="settings-count"></span></div></div>
           </div>
           <div class="tcrn-page-hierarchy__section-tabs" data-page-hierarchy-region="section-tabs" data-page-hierarchy-slot="section-tabs">
-            <nav class="tcrn-subnav tcrn-settings-layout__nav" data-settings-layout-nav data-settings-local-nav="true" aria-label="Settings groups" role="tablist"><button class="tcrn-subnav__item" data-setting-group="workspace" aria-current="page" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav>
+            <nav class="tcrn-subnav tcrn-settings-layout__nav" data-settings-layout-nav data-settings-local-nav="true" aria-label="Settings groups" role="tablist"><button class="tcrn-subnav__item" data-setting-group="workspace" data-i18n="settings.workspace">Workspace</button><button class="tcrn-subnav__item" data-setting-group="backup" data-i18n="settings.backup">Backup</button><button class="tcrn-subnav__item" data-setting-group="execution" data-i18n="settings.execution">Execution</button><button class="tcrn-subnav__item" data-setting-group="machine" data-i18n="settings.machine">Workflow</button></nav>
           </div>
           <div class="tcrn-page-hierarchy__lower-content" data-page-hierarchy-region="lower-content" data-page-hierarchy-slot="content">
             <div class="tcrn-manage tcrn-settings-layout" data-settings-layout-component="SettingsLayout" data-settings-layout="true" data-settings-layout-navigation-location="page-hierarchy-section-tabs" data-ds-candidate="TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6" data-ds-contract-status="candidate-consumed-pending-coordination" data-ds-contract-version="ds_consumption_contract_v2" data-ds-contract-digest="5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b" data-ds-rules="DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2" data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1" data-ds-static-overlay-bridge="mountStaticOverlayBoundary" data-ds-candidate-status="fixed-candidate-pending-coordination" data-settings-layout-mode="container-driven" data-settings-layout-form-policy="single-host-single-column" data-settings-layout-breakpoint="960px" data-settings-content-breakpoint="720px" data-settings-local-navigation="compact" data-settings-overflow-policy="no-page-overflow" data-settings-long-value-policy="native-inline-scroll-copy"><div class="tcrn-settings-layout__frame"><div class="tcrn-settings-layout__grid" data-settings-layout-grid><div class="tcrn-settings-layout__content" data-settings-layout-content data-settings-content="true" data-settings-complete-form="true"><div id="design-authority" hidden></div><div id="dispatch-config" class="tcrn-settings-layout__form" hidden></div><div id="settings-rows" class="tcrn-settings-layout__form"></div><div id="machine-settings" class="tcrn-settings-layout__form" hidden></div></div></div></div></div>
@@ -4260,6 +4260,109 @@ const BOOT = __PORTAL_BOOT__;
   const state = { locale: storedLocale ?? (Object.keys(LOCALES).includes(BOOT.machineDefaults?.locale) ? BOOT.machineDefaults.locale : null) ?? BOOT.defaultLocale ?? "en", theme: document.documentElement.dataset.tcrnTheme, page: "dashboard", dashboardTab: "overview", settingGroup: "workspace", settings: null, machineSettings: null, execution: null, vocabulary: null, status: null, work: null, knowledge: null, knowledgeQuery: "", knowledgeBody: null, gates: null, evolution: null, commands: [], audit: [], selectedVocabulary: "conferenceTypes", receipt: null, dispatchNotice: null, dispatchHost: null, agentsText: "", reconciliation: null, searchIndex: [], searchResults: [], searchSelection: 0 };
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  // DS Tabs is a behavior contract, not a role decoration. Every tablist below
+  // gets the same roving tabindex, Arrow/Home/End activation, and tabpanel wiring
+  // as the fixed DS Tabs component. The three product surfaces remain responsible
+  // for their own state transitions; this helper only owns the shared tab semantics.
+  const tabListConfigs = new WeakMap();
+  const tabIdentity = (tab) => tab?.dataset.workspaceTab ?? tab?.dataset.settingGroup ?? tab?.dataset.vocabularyCategory ?? tab?.id ?? "";
+  const tabIdPart = (value) => String(value).replace(/[^a-zA-Z0-9_-]/gu, "-");
+  const tabButtons = (list) => $$('[role="tab"], [data-workspace-tab], [data-setting-group], [data-vocabulary-category]', list);
+  const tabPanelFor = (list, tab) => {
+    if (!list || !tab) return null;
+    const value = tabIdentity(tab);
+    if (list.dataset.ui === "workspace-tabs") {
+      const panel = $$('[data-workspace-panel]', document).find((candidate) => candidate.dataset.workspacePanel === value);
+      if (panel) panel.id = `dashboard-panel-${tabIdPart(value)}`;
+      return panel || null;
+    }
+    if (list.dataset.settingsLocalNav === "true") {
+      const panel = $("[data-settings-layout-content]");
+      if (panel) panel.id = "settings-panel";
+      return panel || null;
+    }
+    if (list.id === "vocabulary-nav") return $("#vocabulary-terms");
+    return null;
+  };
+  const ensureTabContract = (list) => {
+    const tabs = tabButtons(list);
+    for (const tab of tabs) {
+      const value = tabIdentity(tab);
+      if (!tab.id) {
+        const prefix = list.dataset.ui === "workspace-tabs" ? "dashboard" : list.dataset.settingsLocalNav === "true" ? "settings" : "vocabulary";
+        tab.id = `${prefix}-tab-${tabIdPart(value)}`;
+      }
+      tab.setAttribute("role", "tab");
+      const panel = tabPanelFor(list, tab);
+      if (panel) {
+        panel.setAttribute("role", "tabpanel");
+        panel.setAttribute("tabindex", "0");
+        tab.setAttribute("aria-controls", panel.id);
+      }
+    }
+    return tabs;
+  };
+  const syncTabList = (list, identity = null, focus = false) => {
+    if (!list) return null;
+    const tabs = ensureTabContract(list);
+    const enabled = tabs.filter((tab) => !tab.disabled && tab.getAttribute("aria-disabled") !== "true");
+    const selected = (identity === null ? tabs.find((tab) => tab.getAttribute("aria-selected") === "true") : tabs.find((tab) => tabIdentity(tab) === identity))
+      || enabled[0]
+      || tabs[0]
+      || null;
+    for (const tab of tabs) {
+      const isSelected = tab === selected;
+      tab.setAttribute("aria-selected", String(isSelected));
+      tab.setAttribute("tabindex", isSelected ? "0" : "-1");
+      tab.setAttribute("data-selected", String(isSelected));
+      const panel = tabPanelFor(list, tab);
+      if (panel && panel.getAttribute("aria-labelledby") === null) panel.setAttribute("aria-labelledby", tab.id);
+    }
+    const selectedPanel = tabPanelFor(list, selected);
+    if (selectedPanel && selected) selectedPanel.setAttribute("aria-labelledby", selected.id);
+    tabListConfigs.get(list)?.onSync?.(selected, selectedPanel);
+    if (focus) selected?.focus();
+    return selected;
+  };
+  const selectTab = (list, tab, focus = false) => {
+    const config = tabListConfigs.get(list);
+    if (!config || !tab) return;
+    const identity = tabIdentity(tab);
+    config.onSelect?.(tab, { focus });
+    syncTabList(list, identity, focus);
+  };
+  const selectTabByIdentity = (list, identity, focus = false) => {
+    const tab = tabButtons(list).find((candidate) => tabIdentity(candidate) === identity);
+    if (tab) selectTab(list, tab, focus);
+  };
+  const bindTabList = (list, { selected = null, onSelect, onSync } = {}) => {
+    if (!list) return null;
+    tabListConfigs.set(list, { onSelect, onSync });
+    if (list.dataset.tabKeyboardBound !== "true") {
+      list.dataset.tabKeyboardBound = "true";
+      list.addEventListener("keydown", (event) => {
+        const target = event.target instanceof Element ? event.target.closest('[role="tab"]') : null;
+        if (!target || target.closest('[role="tablist"]') !== list || target.disabled || target.getAttribute("aria-disabled") === "true") return;
+        const enabled = tabButtons(list).filter((tab) => !tab.disabled && tab.getAttribute("aria-disabled") !== "true");
+        const currentIndex = enabled.indexOf(target);
+        if (currentIndex < 0 || enabled.length === 0) return;
+        let nextIndex = null;
+        if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % enabled.length;
+        else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex + enabled.length - 1) % enabled.length;
+        else if (event.key === "Home") nextIndex = 0;
+        else if (event.key === "End") nextIndex = enabled.length - 1;
+        if (nextIndex === null) return;
+        event.preventDefault();
+        selectTab(list, enabled[nextIndex], true);
+      });
+      list.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target.closest('[role="tab"]') : null;
+        if (!target || target.closest('[role="tablist"]') !== list || target.disabled || target.getAttribute("aria-disabled") === "true") return;
+        selectTab(list, target, false);
+      });
+    }
+    return syncTabList(list, selected);
+  };
   const esc = (value) => String(value ?? "").replace(/[&<>"']/gu, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character]);
   const localeText = (key) => LOCALES[state.locale]?.[key] ?? LOCALES[BOOT.fallbackLocale || "en"]?.[key] ?? key;
   const t = (key, values = {}) => Object.entries(values).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), localeText(key));
@@ -4748,13 +4851,13 @@ const BOOT = __PORTAL_BOOT__;
   };
   const renderSettings = () => {
     destroyStaticOverlayMounts();
+    bindTabList($('[data-settings-layout-nav]'), {
+      selected: state.settingGroup,
+      onSelect: (tab) => { state.settingGroup = tab.dataset.settingGroup; renderSettings(); },
+    });
     const settings = state.settings?.settings || [];
     const visible = settings.filter((entry) => settingGroup(entry.key) === state.settingGroup && !LEGACY_MODEL_SETTING_KEYS.has(entry.key) && !DISPATCH_SETTING_KEYS.has(entry.key));
     setText("#settings-count", `${visible.length} ${t("config.keyCount")}`);
-    $$('[data-setting-group]').forEach((button) => {
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", String(button.dataset.settingGroup === state.settingGroup));
-    });
     $("#settings-rows").innerHTML = visible.map((entry) => {
       const modified = entry.currentValue !== entry.defaultValue;
       const reset = modified ? `<button type="button" class="tcrn-button tcrn-button--quiet tcrn-button--md tcrn-icon-button tcrn-setting-row__reset" data-reset-setting="${esc(entry.key)}" data-cli-action="settings-remove" aria-label="${esc(t("config.reset"))}"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5"/><path d="M2.6 2.8v2.6h2.6"/></svg></button>` : "";
@@ -4919,6 +5022,14 @@ const BOOT = __PORTAL_BOOT__;
     renderGatesView();
     renderEvolutionView();
     renderAudit("#dashboard-audit");
+    bindTabList($('[data-ui="workspace-tabs"]'), {
+      selected: state.dashboardTab,
+      onSelect: (tab) => { state.dashboardTab = tab.dataset.workspaceTab; },
+      onSync: (tab) => {
+        const selected = tab?.dataset.workspaceTab;
+        $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== selected; });
+      },
+    });
   };
   // Each vocabulary domain is a table of its own fields, not one paragraph per term:
   // the read surface publishes distinct columns (a name, what it means, where it
@@ -5037,11 +5148,10 @@ const BOOT = __PORTAL_BOOT__;
     // setting the engine stopped publishing — so it is checked against the list rather
     // than trusted, and falls back to the first entry instead of rendering nothing.
     if (!categories.includes(state.selectedVocabulary)) state.selectedVocabulary = categories[0];
-    $("#vocabulary-nav").innerHTML = categories.map((category) => `<span class="tcrn-subnav__row"><button class="tcrn-subnav__item" data-vocabulary-category="${esc(category)}" aria-current="${state.selectedVocabulary === category ? "page" : "false"}">${esc(vocabularyCategoryLabel(category))}</button>${conceptTip("vocabulary." + category, "bottom")}</span>`).join("");
-    $$('[data-vocabulary-category]').forEach((button) => {
-      button.setAttribute("role", "tab");
-      button.setAttribute("aria-selected", String(state.selectedVocabulary === button.dataset.vocabularyCategory));
-      button.addEventListener("click", () => { state.selectedVocabulary = button.dataset.vocabularyCategory; renderVocabulary(); });
+    $("#vocabulary-nav").innerHTML = categories.map((category) => `<span class="tcrn-subnav__row"><button class="tcrn-subnav__item" data-vocabulary-category="${esc(category)}">${esc(vocabularyCategoryLabel(category))}</button>${conceptTip("vocabulary." + category, "bottom")}</span>`).join("");
+    bindTabList($("#vocabulary-nav"), {
+      selected: state.selectedVocabulary,
+      onSelect: (tab) => { state.selectedVocabulary = tab.dataset.vocabularyCategory; renderVocabulary(); },
     });
     const terms = vocabularyRows(state.selectedVocabulary);
     const columns = vocabularyColumns(state.selectedVocabulary);
@@ -5130,14 +5240,12 @@ const BOOT = __PORTAL_BOOT__;
   };
   const renderSearchResults = () => { const target = $("#search-results"); target.hidden = state.searchResults.length === 0; target.innerHTML = state.searchResults.map((result, index) => `<button type="button" class="tcrn-search-result" aria-current="${index === state.searchSelection ? "true" : "false"}" data-search-index="${index}"><strong>${esc(result.label)}</strong><span class="tcrn-search-result__meta">${esc(result.meta)} · ${esc(result.page)}</span></button>`).join(""); $$('[data-search-index]').forEach((button) => button.addEventListener("click", () => chooseSearch(Number(button.dataset.searchIndex)))); };
   const search = (query) => { const normalized = query.trim().toLocaleLowerCase(); state.searchResults = normalized ? state.searchIndex.filter((entry) => entry.text.toLocaleLowerCase().includes(normalized)).slice(0, 12) : []; state.searchSelection = 0; renderSearchResults(); };
-  const chooseSearch = (index = 0) => { const result = state.searchResults[index]; if (!result) return; navigate(result.page); state.searchResults = []; renderSearchResults(); if (result.vocabulary) { state.selectedVocabulary = result.vocabulary; renderVocabulary(); } if (result.key) { state.settingGroup = settingGroup(result.key); $$('[data-setting-group]').forEach((button) => button.setAttribute("aria-current", button.dataset.settingGroup === state.settingGroup ? "page" : "false")); renderSettings(); const target = result.dispatch ? $("#dispatch-config") : $(`[data-setting-row="${CSS.escape(result.key)}"]`); target?.classList.add("tcrn-highlight"); target?.scrollIntoView({ block: "center" }); } };
+  const chooseSearch = (index = 0) => { const result = state.searchResults[index]; if (!result) return; navigate(result.page); state.searchResults = []; renderSearchResults(); if (result.vocabulary) { state.selectedVocabulary = result.vocabulary; renderVocabulary(); } if (result.key) { state.settingGroup = settingGroup(result.key); renderSettings(); const target = result.dispatch ? $("#dispatch-config") : $(`[data-setting-row="${CSS.escape(result.key)}"]`); target?.classList.add("tcrn-highlight"); target?.scrollIntoView({ block: "center" }); } };
   $$('[data-page-target]').forEach((button) => button.addEventListener("click", () => navigate(button.dataset.pageTarget)));
-  $$('[data-setting-group]').forEach((button) => button.addEventListener("click", () => { state.settingGroup = button.dataset.settingGroup; $$('[data-setting-group]').forEach((candidate) => { candidate.setAttribute("aria-current", candidate === button ? "page" : "false"); candidate.setAttribute("aria-selected", String(candidate === button)); }); renderSettings(); }));
-  $$('[data-workspace-tab]').forEach((button) => button.addEventListener("click", () => { state.dashboardTab = button.dataset.workspaceTab; $$('[data-workspace-tab]').forEach((candidate) => { const selected = candidate === button; candidate.setAttribute("aria-selected", selected ? "true" : "false"); candidate.setAttribute("data-selected", selected ? "true" : "false"); }); $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== state.dashboardTab; }); }));
   $("#save-agents").addEventListener("click", async () => { echo("agents-write"); const result = await api("/api/agents-md", { method: "PUT", body: JSON.stringify({ file: "AGENTS.md", text: $("#agents-md").value }) }); showReceipt(result); await loadAgents(); });
   $("#agents-md").addEventListener("input", (event) => { state.agentsText = event.target.value; renderProseDirectory(); renderGutter(); });
   $("#agents-md").addEventListener("scroll", () => { $("#prose-gutter").scrollTop = $("#agents-md").scrollTop; });
-  $("#receipt-chip").addEventListener("click", openReceipt); $("#audit-button").addEventListener("click", () => { state.dashboardTab = "audit"; $$('[data-workspace-tab]').forEach((button) => button.setAttribute("aria-selected", button.dataset.workspaceTab === "audit" ? "true" : "false")); $$('[data-workspace-panel]').forEach((panel) => { panel.hidden = panel.dataset.workspacePanel !== "audit"; }); }); $("#drawer-button").addEventListener("click", openReceipt); $("#drawer-close").addEventListener("click", closeReceipt);
+  $("#receipt-chip").addEventListener("click", openReceipt); $("#audit-button").addEventListener("click", () => selectTabByIdentity($('[data-ui="workspace-tabs"]'), "audit")); $("#drawer-button").addEventListener("click", openReceipt); $("#drawer-close").addEventListener("click", closeReceipt);
   $("#partition-select").addEventListener("change", async (event) => { if (!BOOT.partitionMode) return; const selected = await api("/api/partition", { method: "POST", body: JSON.stringify({ partition: event.target.value }) }); if (selected.ok) { BOOT.selectedPartition = selected.selectedPartition; BOOT.workspace = selected.workspace; BOOT.workspaceName = selected.workspaceName; BOOT.proseRoot = selected.proseRoot; BOOT.paths = selected.paths; setText("#workspace-label", BOOT.workspace); $("#workspace-label").title = BOOT.workspace; applyRailIdentity(); await refresh(); await loadAgents(); } else showReceipt(selected); });
   $("#theme-button").addEventListener("click", () => {
     state.theme = state.theme === "light" ? "dark" : "light";

@@ -97,6 +97,8 @@ test("INC-220 the Codex document is shaped the way the host documents it", () =>
   }
   const injection = document.hooks.SessionStart[0].hooks[0].command;
   assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host codex$/u);
+  const telemetry = document.hooks.SubagentStart[0].hooks[0].command;
+  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host codex$/u);
 });
 
 test("INC-220 the Claude rendering keeps the project-dir form that host resolves", () => {
@@ -109,6 +111,8 @@ test("INC-220 the Claude rendering keeps the project-dir form that host resolves
   }
   const injection = claudeHookSettings().SessionStart[0].hooks[0].command;
   assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host claude$/u);
+  const telemetry = claudeHookSettings().SubagentStart[0].hooks[0].command;
+  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host claude$/u);
 });
 
 test("INC-220 harness drift is reported when a live Claude hook is gone", () => {

@@ -179,14 +179,14 @@ export function capabilityGaps() {
 }
 
 function claudeCommand(handler) {
-  const host = handler === "scripts/knowledge-inject-hook.mjs" ? " --host claude" : "";
+  const host = handler === "scripts/knowledge-inject-hook.mjs" || handler === "scripts/dispatch-telemetry-hook.mjs" ? " --host claude" : "";
   return `node "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/${handler}"${host}`;
 }
 
 function codexCommand(handler, repoRoot) {
   // Codex resolves no project-dir variable, so the command is absolute — the same shape
   // the engine's own generated Codex hooks use.
-  const host = handler === "scripts/knowledge-inject-hook.mjs" ? " --host codex" : "";
+  const host = handler === "scripts/knowledge-inject-hook.mjs" || handler === "scripts/dispatch-telemetry-hook.mjs" ? " --host codex" : "";
   return `node ${JSON.stringify(join(repoRoot, handler))}${host}`;
 }
 

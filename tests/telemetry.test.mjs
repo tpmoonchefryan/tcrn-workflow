@@ -127,6 +127,18 @@ test("STORY-372: both hook events record bounded facts and never fabricate obser
   assert.equal(unavailable.ok, true);
 });
 
+test("STORY-393 U6: an explicit Codex hook host is preserved over payload ambiguity", async (t) => {
+  const root = await scratch("tcrn-telemetry-explicit-host-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const result = await runTelemetryHook(
+    { hook_event_name: "SubagentStart", session_id: "codex-child", host: "claude" },
+    { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_HOST: "codex", TCRN_TELEMETRY_AT: INSTANT(11) } },
+  );
+  assert.equal(result.reasonCode, "TELEMETRY_RECORDED");
+  const record = (await readTelemetryRecords(root, { limit: 10 })).records[0];
+  assert.equal(record.payload.source, "hook:codex:SubagentStart");
+});
+
 test("STORY-393: the dispatch hook cannot mint an observation checkpoint from external input", async (t) => {
   const root = await scratch("tcrn-telemetry-checkpoint-hook-");
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -277,6 +289,18 @@ test("STORY-393 U5: repeated start-stop pairs in one trusted session form one co
   assert.equal(sealed.ok, true, JSON.stringify(sealed));
   const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage");
   assert.equal(receipt.payload.channelCheckpoints.retrieval.recordCount, 4);
+  assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true);
+});
+
+test("STORY-393 U5: contiguous intervals from separate sessions on one host cover one day", async (t) => {
+  const root = await scratch("tcrn-telemetry-coverage-contiguous-sessions-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await unionCheckpoints(root, [
+    ["session-a", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
+    ["session-b", "2026-09-10T12:00:00.000Z", "2026-09-11T00:00:00.000Z"],
+  ]);
+  const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, true, JSON.stringify(sealed));
   assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true);
 });
 

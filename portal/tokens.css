@@ -118,6 +118,15 @@
   --tcrn-z-overlay: 30;
   --tcrn-z-popover: 20;
   --tcrn-container-readable: 1120px;
+  --tcrn-container-settings-split: 960px;
+  --tcrn-container-settings-content-stack: 720px;
+  --tcrn-container-settings-local-nav: 208px;
+  --tcrn-container-settings-control-min: 240px;
+  --tcrn-container-settings-choice-option: 112px;
+  --tcrn-container-settings-choice-padding: 8px;
+  --tcrn-container-settings-number-min: 12ch;
+  --tcrn-container-page-third-level-split: 960px;
+  --tcrn-container-page-third-level-nav: 208px;
 }
 [data-tcrn-theme="dark"] {
   --tcrn-selection-fill: rgba(236, 236, 234, 0.09);

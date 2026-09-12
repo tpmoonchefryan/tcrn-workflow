@@ -413,6 +413,8 @@ const layoutRequirements = [
   { name: "topbar DS mapping status", source: indexText, text: 'data-ds-mapping-status="candidate-consumed-pending-coordination"' },
   { name: "settings DS surface contracts", source: indexText, text: 'data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1"' },
   { name: "settings DS static overlay bridge", source: indexText, text: 'data-ds-static-overlay-bridge="mountStaticOverlayBoundary"' },
+  { name: "DS tabs keyboard contract", source: indexText, text: 'event.key === "ArrowRight"' },
+  { name: "DS tabs panel contract", source: indexText, text: 'panel.setAttribute("role", "tabpanel")' },
   { name: "topbar DS source address", source: indexText, text: 'data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-navigation-shells.html#navigation-shell-spec"' },
   { name: "partition DS source address", source: indexText, text: 'data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/components-controls-data.html#field-spec-usage"' },
   { name: "status DS source address", source: indexText, text: 'data-ds-source-url="https://tcrn-design-system-storybook.vercel.app/proof-proof-visual-instances.html#owner-quality-product-shell"' },

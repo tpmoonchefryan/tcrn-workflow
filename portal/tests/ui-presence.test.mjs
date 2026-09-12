@@ -715,6 +715,78 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
+  test("TCRN-CROSS-STORY-407/411 R2-W1 gives every tablist DS keyboard and tabpanel semantics", async () => {
+    const page = await preparePage();
+    try {
+      const keydown = (target, key) => {
+        const event = new page.window.Event("keydown", { bubbles: true, cancelable: true });
+        Object.defineProperty(event, "key", { value: key });
+        target.dispatchEvent(event);
+      };
+      const tabLists = [...page.document.querySelectorAll('[role="tablist"]')];
+      assert.equal(tabLists.length, 3, "dashboard, settings, and vocabulary must all expose a tablist");
+      for (const list of tabLists) {
+        const tabs = [...list.querySelectorAll('[role="tab"]')];
+        assert.ok(tabs.length > 1, "each tablist must expose its complete tab set");
+        assert.equal(tabs.filter((tab) => tab.getAttribute("aria-selected") === "true").length, 1, "each tablist has one selected tab");
+        assert.equal(tabs.filter((tab) => tab.getAttribute("tabindex") === "0").length, 1, "each tablist has one tabbable tab");
+        for (const tab of tabs) {
+          assert.ok(tab.id, "each tab has a stable id");
+          assert.equal(tab.getAttribute("aria-current"), null, "a real tab must not announce a page-current navigation state");
+          assert.ok(tab.getAttribute("aria-controls"), "each tab controls a panel");
+          const panel = page.document.getElementById(tab.getAttribute("aria-controls"));
+          assert.equal(panel?.getAttribute("role"), "tabpanel", "each tab target is a tabpanel");
+        }
+        const selected = tabs.find((tab) => tab.getAttribute("aria-selected") === "true");
+        const panel = page.document.getElementById(selected.getAttribute("aria-controls"));
+        assert.equal(panel?.getAttribute("aria-labelledby"), selected.id, "the selected tab labels its panel");
+      }
+
+      const settingsList = page.document.querySelector('[data-settings-layout-nav]');
+      const workspace = settingsList.querySelector('[data-setting-group="workspace"]');
+      keydown(workspace, "ArrowRight");
+      const backup = settingsList.querySelector('[data-setting-group="backup"]');
+      assert.equal(backup.getAttribute("aria-selected"), "true", "ArrowRight selects the next settings group");
+      assert.equal(page.document.getElementById("settings-panel").getAttribute("aria-labelledby"), backup.id);
+      keydown(backup, "Home");
+      assert.equal(workspace.getAttribute("aria-selected"), "true", "Home selects the first settings group");
+      const machine = settingsList.querySelector('[data-setting-group="machine"]');
+      keydown(workspace, "End");
+      assert.equal(machine.getAttribute("aria-selected"), "true", "End selects the last settings group");
+      assert.equal(page.document.getElementById("settings-panel").getAttribute("aria-labelledby"), machine.id);
+
+      const dashboardList = page.document.querySelector('[data-ui="workspace-tabs"]');
+      const overview = dashboardList.querySelector('[data-workspace-tab="overview"]');
+      keydown(overview, "ArrowRight");
+      const work = dashboardList.querySelector('[data-workspace-tab="work"]');
+      assert.equal(work.getAttribute("aria-selected"), "true", "dashboard ArrowRight selects the next panel");
+      assert.equal(page.document.querySelector('[data-workspace-panel="work"]').hidden, false);
+      assert.equal(page.document.querySelector('[data-workspace-panel="overview"]').hidden, true);
+      keydown(work, "End");
+      const audit = dashboardList.querySelector('[data-workspace-tab="audit"]');
+      assert.equal(audit.getAttribute("aria-selected"), "true", "dashboard End selects the final panel");
+      assert.equal(page.document.querySelector('[data-workspace-panel="audit"]').hidden, false);
+      keydown(audit, "Home");
+      assert.equal(overview.getAttribute("aria-selected"), "true");
+
+      page.document.querySelector('[data-page-target="vocabulary"]')?.click();
+      const vocabularyList = page.document.querySelector("#vocabulary-nav");
+      const vocabularyTabs = [...vocabularyList.querySelectorAll('[role="tab"]')];
+      const firstVocabularyTab = vocabularyTabs[0];
+      keydown(firstVocabularyTab, "ArrowRight");
+      const selectedVocabularyTab = [...vocabularyList.querySelectorAll('[role="tab"]')]
+        .find((tab) => tab.getAttribute("aria-selected") === "true");
+      assert.notEqual(selectedVocabularyTab, firstVocabularyTab, "vocabulary ArrowRight selects the next category");
+      const vocabularyPanel = page.document.getElementById(selectedVocabularyTab.getAttribute("aria-controls"));
+      assert.equal(vocabularyPanel.getAttribute("role"), "tabpanel");
+      assert.equal(vocabularyPanel.getAttribute("aria-labelledby"), selectedVocabularyTab.id);
+      keydown(selectedVocabularyTab, "End");
+      const lastVocabularyTab = [...vocabularyList.querySelectorAll('[role="tab"]')]
+        .find((tab) => tab.getAttribute("aria-selected") === "true");
+      assert.equal(lastVocabularyTab, [...vocabularyList.querySelectorAll('[role="tab"]')].at(-1), "vocabulary End selects the final category");
+    } finally { await page.cleanup(); }
+  });
+
   test("INC-183 every enum setting is its own dictionary entry", async () => {
     const page = await preparePage();
     try {
@@ -849,6 +921,46 @@ if (process.argv[2] === "status" && actual.status === 0) {
           if (category === "setting:backup.cadence") assert.equal(countOf(terms.textContent, categoryDescription.textContent.trim()), 1, `${locale}/backup category copy must appear once`);
           if (category === "setting:storage.backend") assert.notEqual(descriptions[0], descriptions[1], `${locale}/storage backend values need distinct meaning`);
         }
+      }
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-410 R2-W2 explains storage choices in user terms before technical detail", async () => {
+    const page = await preparePage();
+    try {
+      const technicalShorthand = /NDJSON|sidecar|backend|边车|后端|サイドカー|バックエンド|사이드카|백엔드/iu;
+      const functionalChoice = {
+        file: /compatib|兼容|互換|호환/u,
+        segmented: /grow|small|section|分段|片段|増え|小さ|늘|단위|grandit|petites/u,
+      };
+      page.document.querySelector('[data-page-target="settings"]')?.click();
+      page.document.querySelector('[data-setting-group="workspace"]')?.click();
+      const storageRow = () => page.document.querySelector('[data-setting-row="storage.backend"] .tcrn-setting-row__description')?.textContent.trim() ?? "";
+      page.document.querySelector('[data-page-target="vocabulary"]')?.click();
+      const openStorageVocabulary = () => {
+        const button = page.document.querySelector('[data-vocabulary-category="setting:storage.backend"]');
+        assert.ok(button, "the storage backend dictionary entry must remain available");
+        button.dispatchEvent(new page.window.Event("click", { bubbles: true }));
+        const table = page.document.querySelector('[data-vocabulary-table="setting:storage.backend"]');
+        assert.ok(table, "the storage backend table must render");
+        return [...table.querySelectorAll('.tcrn-table-shell__row')].map((row) => row.children[1]?.textContent.trim() ?? "");
+      };
+      for (const locale of ["en", "zh-CN", "ja", "ko", "fr"]) {
+        page.document.querySelector(`[data-locale-option="${locale}"]`)?.click();
+        page.document.querySelector('[data-page-target="settings"]')?.click();
+        page.document.querySelector('[data-setting-group="workspace"]')?.click();
+        const main = storageRow();
+        assert.ok(main.length > 0, `${locale} storage setting needs a main explanation`);
+        assert.doesNotMatch(main, technicalShorthand, `${locale} main storage explanation must lead with user consequences`);
+        assert.match(main, functionalChoice.file, `${locale} main storage explanation must explain the compatibility choice`);
+        assert.match(main, functionalChoice.segmented, `${locale} main storage explanation must explain the growing-history choice`);
+
+        page.document.querySelector('[data-page-target="vocabulary"]')?.click();
+        const descriptions = openStorageVocabulary();
+        assert.equal(descriptions.length, 2, `${locale} must explain both storage values`);
+        assert.ok(descriptions.every((description) => description.length > 0 && !technicalShorthand.test(description)), `${locale} value explanations must lead with a user-facing choice`);
+        assert.match(descriptions[0], functionalChoice.file, `${locale} file value must state when to choose it`);
+        assert.match(descriptions[1], functionalChoice.segmented, `${locale} segmented value must state when to choose it`);
       }
     } finally { await page.cleanup(); }
   });
