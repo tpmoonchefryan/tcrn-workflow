@@ -4851,6 +4851,8 @@ const BOOT = __PORTAL_BOOT__;
   };
   const renderSettings = () => {
     destroyStaticOverlayMounts();
+    const settingsPanel = $("[data-settings-layout-content]");
+    if (settingsPanel) settingsPanel.dataset.settingsPanelGroup = state.settingGroup;
     bindTabList($('[data-settings-layout-nav]'), {
       selected: state.settingGroup,
       onSelect: (tab) => { state.settingGroup = tab.dataset.settingGroup; renderSettings(); },
@@ -5148,6 +5150,8 @@ const BOOT = __PORTAL_BOOT__;
     // setting the engine stopped publishing — so it is checked against the list rather
     // than trusted, and falls back to the first entry instead of rendering nothing.
     if (!categories.includes(state.selectedVocabulary)) state.selectedVocabulary = categories[0];
+    const vocabularyPanel = $("#vocabulary-terms");
+    if (vocabularyPanel) vocabularyPanel.dataset.vocabularyPanelCategory = state.selectedVocabulary;
     $("#vocabulary-nav").innerHTML = categories.map((category) => `<span class="tcrn-subnav__row"><button class="tcrn-subnav__item" data-vocabulary-category="${esc(category)}">${esc(vocabularyCategoryLabel(category))}</button>${conceptTip("vocabulary." + category, "bottom")}</span>`).join("");
     bindTabList($("#vocabulary-nav"), {
       selected: state.selectedVocabulary,
