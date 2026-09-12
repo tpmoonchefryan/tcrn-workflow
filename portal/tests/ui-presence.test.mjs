@@ -288,7 +288,7 @@ function topbarFindings(document) {
   const domOrder = header ? [header, ...header.querySelectorAll("*")] : [];
   if (actionOrder.some((node) => !node || !domOrder.includes(node))) findings.push("topbar:action-ownership");
   else if (actionOrder.some((node, index) => index > 0 && domOrder.indexOf(actionOrder[index - 1]) >= domOrder.indexOf(node))) findings.push("topbar:action-order");
-  if (header?.getAttribute("data-ds-mapping-status") !== "provisional-awaiting-DS112") findings.push("topbar:mapping-status");
+  if (header?.getAttribute("data-ds-mapping-status") !== "rejected-awaiting-next-DS112") findings.push("topbar:mapping-status");
   return findings;
 }
 
@@ -539,7 +539,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
       assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463");
-      assert.equal(layout.getAttribute("data-ds-contract-status"), "pending-coordination-recheck");
+      assert.equal(layout.getAttribute("data-ds-contract-status"), "rejected-awaiting-next-DS112");
       assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v2");
       assert.equal(layout.getAttribute("data-ds-contract-digest"), "6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b");
       assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2", "DS-112-R1", "DS-112-R2"]);
@@ -612,7 +612,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const findings = (root) => {
         const output = [];
         if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@1a4709db59af073f1d30403258881999d2364463") output.push("ds-candidate");
-        if (root.getAttribute("data-ds-contract-status") !== "pending-coordination-recheck") output.push("ds-contract-status");
+        if (root.getAttribute("data-ds-contract-status") !== "rejected-awaiting-next-DS112") output.push("ds-contract-status");
         if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v2") output.push("ds-contract-version");
         if (root.getAttribute("data-ds-contract-digest") !== "6ea12f36efe107af3d9340a6927b974b9bdd88749407a4036c16b2be857e347b") output.push("ds-contract-digest");
         if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2") output.push("ds-rules");
