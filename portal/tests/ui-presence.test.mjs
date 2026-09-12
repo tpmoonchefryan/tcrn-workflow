@@ -538,13 +538,13 @@ if (process.argv[2] === "status" && actual.status === 0) {
     try {
       const layout = page.document.querySelector('[data-settings-layout-component="SettingsLayout"]');
       assert.ok(layout, "the settings page must consume the DS SettingsLayout contract");
-      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6");
+      assert.equal(layout.getAttribute("data-ds-candidate"), "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d");
       assert.equal(layout.getAttribute("data-ds-contract-status"), "candidate-consumed-pending-coordination");
-      assert.equal(layout.getAttribute("data-ds-contract-version"), "ds_consumption_contract_v2");
-      assert.equal(layout.getAttribute("data-ds-contract-digest"), "5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b");
-      assert.equal(layout.getAttribute("data-ds-surface-contracts"), "overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1");
+      assert.equal(layout.getAttribute("data-ds-contract-version"), "ai_consumption_contract_v1");
+      assert.equal(layout.getAttribute("data-ds-contract-digest"), "2f2c0f5ccfec4a8d710c45f4374f09e8882f1ae9a35c881c73ca50d416d984bb");
+      assert.equal(layout.getAttribute("data-ds-surface-contracts"), "overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1 operation-feedback-contract-v1 content-scope-contract-v1 consumer-evidence-contract-v1 verification-cadence-contract-v1");
       assert.equal(layout.getAttribute("data-ds-static-overlay-bridge"), "mountStaticOverlayBoundary");
-      assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2", "DS-112-R1", "DS-112-R2"]);
+      assert.deepEqual(layout.getAttribute("data-ds-rules")?.split(" "), ["DS-106-R1", "DS-106-R2", "DS-107-R1", "DS-107-R2", "DS-108-R1", "DS-108-R2", "DS-112-R1", "DS-112-R2", "DS-116-R1", "DS-116-R2", "DS-117-R1", "DS-117-R2", "DS-118-R1", "DS-118-R2", "DS-119-R1", "DS-119-R2"]);
       const required = {
         "data-settings-layout-mode": "container-driven",
         "data-settings-layout-form-policy": "single-host-single-column",
@@ -613,11 +613,11 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(layout);
       const findings = (root) => {
         const output = [];
-        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6") output.push("ds-candidate");
+        if (root.getAttribute("data-ds-candidate") !== "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d") output.push("ds-candidate");
         if (root.getAttribute("data-ds-contract-status") !== "candidate-consumed-pending-coordination") output.push("ds-contract-status");
-        if (root.getAttribute("data-ds-contract-version") !== "ds_consumption_contract_v2") output.push("ds-contract-version");
-        if (root.getAttribute("data-ds-contract-digest") !== "5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b") output.push("ds-contract-digest");
-        if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2") output.push("ds-rules");
+        if (root.getAttribute("data-ds-contract-version") !== "ai_consumption_contract_v1") output.push("ds-contract-version");
+        if (root.getAttribute("data-ds-contract-digest") !== "2f2c0f5ccfec4a8d710c45f4374f09e8882f1ae9a35c881c73ca50d416d984bb") output.push("ds-contract-digest");
+        if (root.getAttribute("data-ds-rules") !== "DS-106-R1 DS-106-R2 DS-107-R1 DS-107-R2 DS-108-R1 DS-108-R2 DS-112-R1 DS-112-R2 DS-116-R1 DS-116-R2 DS-117-R1 DS-117-R2 DS-118-R1 DS-118-R2 DS-119-R1 DS-119-R2") output.push("ds-rules");
         if (root.getAttribute("data-settings-layout-navigation-location") !== "page-hierarchy-section-tabs") output.push("navigation-location");
         const required = {
           "data-settings-layout-mode": "container-driven",
@@ -666,6 +666,61 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.ok(findings(layout).includes("stepper-numeric-entry"), "a Stepper numeric mutation must red");
       stepper.remove();
       assert.deepEqual(findings(layout), [], "restoring the candidate must return the positive proof to green");
+    } finally { await page.cleanup(); }
+  });
+
+  test("TCRN-CROSS-STORY-407/409/411 R3 consumes DS116-119 operation, scope, and evidence markers", async () => {
+    const page = await preparePage();
+    try {
+      const feedback = page.document.querySelector("#operation-feedback");
+      assert.ok(feedback, "the receipt drawer must expose the DS OperationFeedback root");
+      assert.deepEqual({
+        phase: feedback.getAttribute("data-operation-phase"),
+        state: feedback.getAttribute("data-operation-state"),
+        geometry: feedback.getAttribute("data-operation-geometry"),
+        notification: feedback.getAttribute("data-operation-update-notification"),
+        live: feedback.getAttribute("aria-live"),
+      }, { phase: "idle", state: "idle", geometry: "responsive-safe", notification: "aria-live", live: "polite" });
+      assert.ok(feedback.querySelector('[data-operation-short-status="true"]'));
+      assert.ok(feedback.querySelector('[data-operation-identity="true"]'));
+      const detailsTrigger = feedback.querySelector('[data-operation-details-trigger="true"]');
+      const details = feedback.querySelector('[data-operation-details="true"]');
+      assert.ok(detailsTrigger && details);
+      assert.equal(details.hidden, true);
+      detailsTrigger.click();
+      assert.equal(details.hidden, false);
+      assert.equal(detailsTrigger.getAttribute("aria-expanded"), "true");
+      detailsTrigger.click();
+      assert.equal(details.hidden, true);
+
+      page.document.querySelector('[data-setting-group="machine"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const scope = page.document.querySelector('[data-content-scope="machine-settings"]');
+      assert.ok(scope, "machine settings must consume the independent ContentScope contract");
+      assert.deepEqual({
+        source: scope.getAttribute("data-content-source"),
+        phase: scope.getAttribute("data-content-phase"),
+        valid: scope.getAttribute("data-content-valid"),
+        shown: scope.getAttribute("data-content-shown-count"),
+        total: scope.getAttribute("data-content-total-count"),
+        countKind: scope.getAttribute("data-content-count-kind"),
+        stale: scope.getAttribute("data-content-stale"),
+      }, { source: "engine.machine-settings", phase: "content", valid: "true", shown: "4", total: "4", countKind: "total", stale: "false" });
+      assert.equal(scope.querySelectorAll("[data-machine-row]").length, 4);
+      assert.equal(scope.querySelectorAll(".tcrn-content-scope__content").length, 1);
+      assert.equal(page.document.querySelector("#settings-rows .tcrn-state-surface"), null, "a sibling scope must not supply the machine empty state");
+
+      const chip = page.document.querySelector("#receipt-chip");
+      const control = page.document.querySelector('[data-machine-control="portal.defaultTheme"]');
+      assert.ok(chip && control);
+      control.value = control.value === "dark" ? "light" : "dark";
+      control.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitFor(() => feedback.getAttribute("data-operation-phase") === "success" ? "success" : null, "the operation feedback receipt update");
+      assert.equal(feedback.getAttribute("data-operation-phase"), "success");
+      assert.equal(feedback.getAttribute("data-operation-state"), "ready");
+      assert.equal(feedback.querySelector('[data-operation-short-status="true"]')?.getAttribute("data-operation-short-status-phase"), "success");
+      assert.ok(feedback.querySelector('[data-operation-identity-field="actor"]')?.textContent);
+      assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /MACHINE_SETTINGS_WRITE_COMMITTED/u);
     } finally { await page.cleanup(); }
   });
 
@@ -1134,7 +1189,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.equal(content.parentElement, page.document.body, "the popover layer must be mounted at document body");
       assert.equal(content.getAttribute("data-overlay-boundary"), "document-body");
       assert.equal(content.getAttribute("data-overlay-positioning"), "static-fixed");
-      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6");
+      assert.equal(content.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d");
       assert.equal(content.hidden, true, "a mounted popover starts closed");
       // INC-201: the contract is that the trigger names *a* design-system button
       // component, which is what design-proof's button-family leg enforces. It used to
@@ -1192,7 +1247,7 @@ if (process.argv[2] === "status" && actual.status === 0) {
         assert.equal(layer.parentElement, page.document.body, "every layer must escape the settings row boundary");
         assert.equal(layer.getAttribute("data-overlay-boundary"), "document-body");
         assert.equal(layer.getAttribute("data-overlay-positioning"), "static-fixed");
-        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6");
+        assert.equal(layer.getAttribute("data-ds-overlay-candidate"), "TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d");
         assert.equal(layer.hidden, true);
         return { trigger, layer };
       };

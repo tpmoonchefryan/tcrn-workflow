@@ -195,7 +195,7 @@ legs.push({
 // and none of the button treatment, and looked unlike every other control beside it.
 // Checking "is this class design-system-defined" is therefore not enough; the question
 // is whether the element names the component it is.
-const DS_BUTTON_FAMILY = new Set(["tcrn-button", "tcrn-icon-button", "tcrn-link-button"]);
+const DS_BUTTON_FAMILY = new Set(["tcrn-button", "tcrn-icon-button", "tcrn-link-button", "tcrn-operation-feedback__details-trigger"]);
 // Controls that are legitimately not button components: rows and items that happen to
 // be rendered as <button> for keyboard semantics. Explicit, so a new one is a decision
 // rather than a class name that slips past.
@@ -406,12 +406,12 @@ const layoutRequirements = [
   { name: "two-level settings flow", source: initLayoutSource, text: '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] [data-settings-layout-grid] { display: block; }' },
   { name: "two-level editor flow", source: initLayoutSource, text: '[data-page-hierarchy="true"][data-page-hierarchy-depth="two"] .tcrn-editor-shell { display: block; }' },
   { name: "two-level navigation is not sticky", source: initLayoutSource, text: "  position: static;" },
-  { name: "settings DS candidate", source: indexText, text: 'data-ds-candidate="TCRN-Design-System@3a91bab4232c769125c03d39beb3cae6a3e328c6"' },
-  { name: "settings DS contract version", source: indexText, text: 'data-ds-contract-version="ds_consumption_contract_v2"' },
-  { name: "settings DS contract digest", source: indexText, text: 'data-ds-contract-digest="5cad4072dcca7ad959bd018cb10ff82fe588e94158a27d6cd50b6d8c2c73f07b"' },
+  { name: "settings DS candidate", source: indexText, text: 'data-ds-candidate="TCRN-Design-System@e464b5139fc59aae5c5a64731afbbee64446df1d"' },
+  { name: "settings DS contract version", source: indexText, text: 'data-ds-contract-version="ai_consumption_contract_v1"' },
+  { name: "settings DS contract digest", source: indexText, text: 'data-ds-contract-digest="2f2c0f5ccfec4a8d710c45f4374f09e8882f1ae9a35c881c73ca50d416d984bb"' },
   { name: "settings DS coordination status", source: indexText, text: 'data-ds-contract-status="candidate-consumed-pending-coordination"' },
   { name: "topbar DS mapping status", source: indexText, text: 'data-ds-mapping-status="candidate-consumed-pending-coordination"' },
-  { name: "settings DS surface contracts", source: indexText, text: 'data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1"' },
+  { name: "settings DS surface contracts", source: indexText, text: 'data-ds-surface-contracts="overlay-boundary-contract-v1 field-value-selection-contract-v1 dictionary-content-contract-v1 operation-feedback-contract-v1 content-scope-contract-v1 consumer-evidence-contract-v1 verification-cadence-contract-v1"' },
   { name: "settings DS static overlay bridge", source: indexText, text: 'data-ds-static-overlay-bridge="mountStaticOverlayBoundary"' },
   { name: "DS tabs keyboard contract", source: indexText, text: 'event.key === "ArrowRight"' },
   { name: "DS tabs panel contract", source: indexText, text: 'panel.setAttribute("role", "tabpanel")' },
