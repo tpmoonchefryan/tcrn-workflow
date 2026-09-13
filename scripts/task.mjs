@@ -57,7 +57,7 @@ import {
   safeWriteOutput,
   withExclusiveOutputSession,
 } from "./lib/safe-io.mjs";
-import { PROGRESS_WAIT_MAX_MS, readProgressDelta, summarizeProgress, waitForProgress } from "./lib/incremental-output.mjs";
+import { delay, PROGRESS_WAIT_MAX_MS, readProgressDelta, summarizeProgress, waitForProgress } from "./lib/incremental-output.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
 
@@ -113,31 +113,6 @@ function terminateTestControllerGroup(processGroup) {
   try { process.kill(-processGroup, "SIGTERM"); } catch (error) {
     if (error?.code !== "ESRCH") throw error;
   }
-}
-
-async function readProgressSnapshot(progressPath, cursor, events, counters) {
-  try {
-    const delta = await readProgressDelta(progressPath, cursor);
-    return {
-      cursor: delta.nextCursor,
-      events: [...events, ...delta.events],
-      counters: {
-        polls: counters.polls + 1,
-        unchangedPolls: counters.unchangedPolls + (delta.events.length === 0 ? 1 : 0),
-        bytesRead: counters.bytesRead + delta.bytesRead,
-      },
-    };
-  } catch {
-    return { cursor, events, counters };
-  }
-}
-
-function progressReport(events, cursor, counters) {
-  return {
-    ...summarizeProgress(events),
-    cursor,
-    ...counters,
-  };
 }
 
 async function runDetachedTestController(arguments_, extraEnvironment) {
@@ -210,6 +185,7 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
         timeoutMs: Math.min(remaining, PROGRESS_WAIT_MAX_MS),
         pollMs: 25,
         maxPollMs: 1_000,
+        counters,
         signal: waitController.signal,
       });
       const outcome = await Promise.race([
@@ -220,20 +196,25 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
       if (outcome.kind === "error") throw outcome.error;
       if (outcome.kind === "exit") {
         completed = outcome.value;
-        const snapshot = await readProgressSnapshot(progressPath, cursor, events, counters);
-        cursor = snapshot.cursor;
-        events = snapshot.events;
-        counters = snapshot.counters;
+        try {
+          const delta = await readProgressDelta(progressPath, cursor);
+          cursor = delta.nextCursor;
+          events = [...events, ...delta.events];
+          counters = {
+            polls: counters.polls + 1,
+            unchangedPolls: counters.unchangedPolls + (delta.events.length === 0 ? 1 : 0),
+            bytesRead: counters.bytesRead + delta.bytesRead,
+          };
+        } catch {
+          // The controller's exit result remains authoritative when the final
+          // progress read cannot be completed.
+        }
         break;
       }
       if (outcome.kind === "progress-error") throw outcome.error;
       cursor = outcome.value.cursor;
       events = outcome.value.events;
-      counters = {
-        polls: counters.polls + outcome.value.polls,
-        unchangedPolls: counters.unchangedPolls + outcome.value.unchangedPolls,
-        bytesRead: counters.bytesRead + outcome.value.bytesRead,
-      };
+      counters = { polls: outcome.value.polls, unchangedPolls: outcome.value.unchangedPolls, bytesRead: outcome.value.bytesRead };
       if (["completed", "failed", "orphaned"].includes(outcome.value.status)) {
         const remainingAfterProgress = timeoutMs - (Date.now() - startedAt);
         let exitOutcome = { kind: "timeout" };
@@ -257,7 +238,7 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
       }
     }
     await waitForProcessGroupExit(child.pid);
-    const progress = progressReport(events, cursor, counters);
+    const progress = { ...summarizeProgress(events), cursor, ...counters };
     if (completed.code === 0 && progress.status !== "completed") {
       fail("TEST_CONTROLLER_PROGRESS_MISSING", JSON.stringify(progress));
     }
@@ -277,29 +258,35 @@ async function waitForTestControllerBindWindow() {
   const holdPath = process.env.TCRN_TEST_BIND_WINDOW_HOLD_PATH;
   if (!holdPath) return;
   assertion(holdPath === resolve(holdPath), "TEST_CONTROLLER_BIND_WINDOW_PATH", holdPath);
-  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+  await waitForLifecycleCondition(async () => {
     try {
       await lstat(holdPath);
-      return;
+      return true;
     } catch (error) {
-      if (error?.code !== "ENOENT") throw error;
+      if (error?.code === "ENOENT") return false;
+      throw error;
     }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
-  }
-  fail("TEST_CONTROLLER_BIND_WINDOW_TIMEOUT", holdPath);
+  }, () => fail("TEST_CONTROLLER_BIND_WINDOW_TIMEOUT", holdPath));
 }
 
 async function waitForProcessGroupExit(processGroup) {
-  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+  await waitForLifecycleCondition(() => {
     try {
       process.kill(-processGroup, 0);
+      return false;
     } catch (error) {
-      if (error.code === "ESRCH") return;
+      if (error.code === "ESRCH") return true;
       fail("TEST_CONTROLLER_GROUP_LIVENESS_UNKNOWN", `${processGroup}: ${error.code ?? error.message}`);
     }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
+  }, () => fail("TEST_CONTROLLER_GROUP_LIVENESS_TIMEOUT", String(processGroup)));
+}
+
+async function waitForLifecycleCondition(probe, onTimeout) {
+  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+    if (await probe()) return;
+    await delay(10);
   }
-  fail("TEST_CONTROLLER_GROUP_LIVENESS_TIMEOUT", String(processGroup));
+  return onTimeout();
 }
 
 async function readText(path) {

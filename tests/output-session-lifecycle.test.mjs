@@ -15,21 +15,25 @@ import { countCoverage } from "../scripts/coverage-conservation.mjs";
 import { admitLegacyOutputSessionReceipt, bindOutputSessionProcessGroup, readBoundClaim, recoverStaleOutputSessionLock, safeWriteOutput, withExclusiveOutputSession } from "../scripts/lib/safe-io.mjs";
 
 const ownerSchema = "tcrn.output-session-owner.v1";
-async function fixture(context) {
-  const root = await mkdtemp(join(tmpdir(), "tcrn-output-session-"));
+async function fixture(context, { tempRoot = tmpdir(), prefix = "tcrn-output-session-", resolvePath = true } = {}) {
+  const root = await mkdtemp(join(tempRoot, prefix));
   await mkdir(resolve(root, ".git"));
   context.after(() => rm(root, { recursive: true, force: true }));
-  return realpath(root);
+  return resolvePath ? realpath(root) : root;
 }
 
 async function shortFixture(context) {
   // Unix-domain socket paths are capped on macOS. Keep the hostile-claim
   // corpus beneath /tmp so socket coverage is deterministic rather than
   // conditionally skipped due solely to the system temporary-root length.
-  const root = await mkdtemp("/tmp/tcrn-os-");
-  await mkdir(resolve(root, ".git"));
-  context.after(() => rm(root, { recursive: true, force: true }));
-  return root;
+  return fixture(context, { tempRoot: "/tmp", prefix: "tcrn-os-", resolvePath: false });
+}
+
+async function emptyLockFixture(context) {
+  const root = await fixture(context);
+  const lock = lockPath(root);
+  await mkdir(lock, { mode: 0o700 });
+  return { root, lock };
 }
 
 function lockPath(root) {
@@ -107,9 +111,7 @@ async function sealOwner(lock, pid, extra = {}) {
 }
 
 async function deadOwnerLock(context) {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   await sealOwner(lock, 999999);
   return { root, lock };
 }
@@ -230,6 +232,19 @@ async function taskEntrypointFixture(context, testSource) {
   return root;
 }
 
+async function importGuardTaskFixture(context, testLine) {
+  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
+  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
+  const root = await taskEntrypointFixture(context, [
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
+    testLine,
+    "",
+  ].join("\n"));
+  return { root, importPath };
+}
+
 function startTaskEntrypoint(root, extraEnvironment = {}) {
   const environment = {
     ...process.env,
@@ -243,26 +258,38 @@ function startTaskEntrypoint(root, extraEnvironment = {}) {
     env: environment,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  return { child, result: collectProcessOutput(child) };
+}
+
+function collectProcessOutput(child) {
   let stdout = "";
   let stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
   child.stderr.on("data", (chunk) => { stderr += chunk; });
-  const result = once(child, "close").then(([code, signal]) => ({ code, signal, stdout, stderr }));
-  return { child, result };
+  return once(child, "close").then(([code, signal]) => ({ code, signal, stdout, stderr }));
+}
+
+async function pollUntil(check, onTimeout) {
+  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+    const value = await check();
+    if (value !== undefined) return value;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  return onTimeout();
 }
 
 async function waitForPath(path, diagnostic) {
-  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+  return pollUntil(async () => {
     try {
       await lstat(path);
-      return;
+      return true;
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  const result = diagnostic ? await diagnostic : undefined;
-  assert.fail(`timed out waiting for ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
+  }, async () => {
+    const result = diagnostic ? await diagnostic : undefined;
+    assert.fail(`timed out waiting for ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
+  });
 }
 
 // TCRN-CROSS-INC-231: an owner is not established when owner.json appears -- it is
@@ -271,43 +298,41 @@ async function waitForPath(path, diagnostic) {
 // refused on identity change rather than on content.
 async function waitForSealedOwner(root, diagnostic) {
   const ownerPath = resolve(lockPath(root), "owner.json");
-  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+  return pollUntil(async () => {
     try {
       const owner = JSON.parse(await readFile(ownerPath, "utf8"));
       if (owner?.processGroup !== null && owner?.processGroup !== undefined) return owner;
     } catch (error) {
       if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  const result = diagnostic ? await diagnostic : undefined;
-  assert.fail(`timed out waiting for a sealed owner at ${ownerPath}${result ? `: ${JSON.stringify(result)}` : ""}`);
+  }, async () => {
+    const result = diagnostic ? await diagnostic : undefined;
+    assert.fail(`timed out waiting for a sealed owner at ${ownerPath}${result ? `: ${JSON.stringify(result)}` : ""}`);
+  });
 }
 
 async function readJsonWhenReady(path, diagnostic) {
-  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+  return pollUntil(async () => {
     try {
       return JSON.parse(await readFile(path, "utf8"));
     } catch (error) {
       if (error?.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  const result = diagnostic ? await diagnostic : undefined;
-  assert.fail(`timed out reading ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
+  }, async () => {
+    const result = diagnostic ? await diagnostic : undefined;
+    assert.fail(`timed out reading ${path}${result ? `: ${JSON.stringify(result)}` : ""}`);
+  });
 }
 
 async function waitForDeadPid(pid) {
-  for (let elapsed = 0; elapsed < 10_000; elapsed += 10) {
+  return pollUntil(() => {
     try {
       process.kill(pid, 0);
     } catch (error) {
-      if (error?.code === "ESRCH") return;
+      if (error?.code === "ESRCH") return true;
       throw error;
     }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
-  assert.fail(`timed out waiting for descendant ${pid} to exit`);
+  }, () => assert.fail(`timed out waiting for descendant ${pid} to exit`));
 }
 
 async function liveDetachedProcessGroup() {
@@ -419,30 +444,49 @@ async function reviewFixture(context, bytes = "{\"combinedFinding\":{\"id\":\"RC
   return { path, bytes, digest: createHash("sha256").update(bytes).digest("hex") };
 }
 
+async function authorityGrowthFixture(context, target) {
+  const { root, lock } = await emptyLockFixture(context);
+  const review = await reviewFixture(context);
+  const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
+  const targetPath = target === "legacy" ? receipt.path : review.path;
+  const originalIdentity = await lstat(targetPath);
+  const probe = await open(targetPath, "r");
+  const prototype = Object.getPrototypeOf(probe);
+  const originalRead = prototype.read;
+  const originalStat = prototype.stat;
+  await probe.close();
+  return { root, lock, receipt, targetPath, originalIdentity, prototype, originalRead, originalStat };
+}
+
+async function loadSafeIoHarness(root, name, transform, { asUrl = false } = {}) {
+  const source = await readFile(new URL("../scripts/lib/safe-io.mjs", import.meta.url), "utf8");
+  const instrumented = transform(source);
+  const harnessPath = resolve(root, `${name}-safe-io-harness.mjs`);
+  await writeFile(harnessPath, instrumented, { mode: 0o600 });
+  const url = pathToFileURL(harnessPath).href;
+  return asUrl ? url : import(`${url}?${Date.now()}`);
+}
+
 async function loadPostMkdirBarrierHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "  const lock = await pathMetadata(lockPath, \"OUTPUT_SESSION_LOST\");\n";
   const barrier = "  await globalThis.__tcrnOutputSessionPostMkdirBarrier(lockPath);\n";
-  assert.equal(source.split(marker).length, 2);
-  const instrumented = source.replace(marker, `${marker}${barrier}`);
-  assert.equal(instrumented.replace(barrier, ""), source);
-  const harnessPath = resolve(root, "post-mkdir-safe-io-harness.mjs");
-  await writeFile(harnessPath, instrumented, { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "post-mkdir", (source) => {
+    assert.equal(source.split(marker).length, 2);
+    const instrumented = source.replace(marker, `${marker}${barrier}`);
+    assert.equal(instrumented.replace(barrier, ""), source);
+    return instrumented;
+  });
 }
 
 async function loadLegacyRmdirBarrierHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "    if (afterEmptyRead.ctimeMs !== lock.ctimeMs || afterEmptyRead.mtimeMs !== lock.mtimeMs) fail(\"OUTPUT_SESSION_RECOVERY_LEGACY_RECEIPT_MISMATCH\", lockPath);\n";
   const barrier = "    await globalThis.__tcrnLegacyRmdirBarrier(lockPath);\n";
-  assert.equal(source.split(marker).length, 2);
-  const instrumented = source.replace(marker, `${marker}${barrier}`);
-  assert.equal(instrumented.replace(barrier, ""), source);
-  const harnessPath = resolve(root, "legacy-rmdir-safe-io-harness.mjs");
-  await writeFile(harnessPath, instrumented, { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "legacy-rmdir", (source) => {
+    assert.equal(source.split(marker).length, 2);
+    const instrumented = source.replace(marker, `${marker}${barrier}`);
+    assert.equal(instrumented.replace(barrier, ""), source);
+    return instrumented;
+  });
 }
 
 async function rewriteLegacyReceipt(receipt, mutate) {
@@ -474,71 +518,59 @@ async function crashInjectionHarness(root, name, marker, { before = false, parti
 }
 
 async function livenessHarness(root, name, marker, prefix = "", code = "EPERM", condition = "true") {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const injection = `    if (${condition}) { const error = Object.assign(new Error(${JSON.stringify(code)}), { code: ${JSON.stringify(code)} }); throw error; }\n`;
-  assert.equal(source.split(marker).length, 2, name);
-  const replacement = prefix ? `${prefix}${injection}${marker.slice(prefix.length)}` : `${injection}${marker}`;
-  const instrumented = source.replace(marker, replacement);
-  assert.equal(instrumented.replace(injection, ""), source, name);
-  const harnessPath = resolve(root, `${name}-safe-io-harness.mjs`);
-  await writeFile(harnessPath, instrumented, { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, name, (source) => {
+    assert.equal(source.split(marker).length, 2, name);
+    const replacement = prefix ? `${prefix}${injection}${marker.slice(prefix.length)}` : `${injection}${marker}`;
+    const instrumented = source.replace(marker, replacement);
+    assert.equal(instrumented.replace(injection, ""), source, name);
+    return instrumented;
+  });
 }
 
 async function observedUidHarness(root, targetPath) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
-  const start = source.indexOf("export async function readBoundClaim(path, reasonCode) {");
-  const end = source.indexOf("\nfunction assertDeadProcess", start);
-  assert.ok(start >= 0 && end > start, "readBoundClaim source boundary");
-  const section = source.slice(start, end);
-  const injected = section
-    .replace("  const before = await pathMetadata(path, reasonCode);\n", "  const before = await pathMetadata(path, reasonCode);\n  const expectedUid = globalThis.__tcrnObservedUid?.(path) ?? __tcrnOriginalUid;\n")
-    .replaceAll("process.getuid?.()", "expectedUid")
-    .replace("__tcrnOriginalUid", "process.getuid?.()");
-  assert.notEqual(injected, section, "observed UID instrumentation applied");
-  const harnessPath = resolve(root, "observed-uid-safe-io-harness.mjs");
-  await writeFile(harnessPath, `${source.slice(0, start)}${injected}${source.slice(end)}`, { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "observed-uid", (source) => {
+    const start = source.indexOf("export async function readBoundClaim(path, reasonCode) {");
+    const end = source.indexOf("\nfunction assertDeadProcess", start);
+    assert.ok(start >= 0 && end > start, "readBoundClaim source boundary");
+    const section = source.slice(start, end);
+    const injected = section
+      .replace("  const before = await pathMetadata(path, reasonCode);\n", "  const before = await pathMetadata(path, reasonCode);\n  const expectedUid = globalThis.__tcrnObservedUid?.(path) ?? __tcrnOriginalUid;\n")
+      .replaceAll("process.getuid?.()", "expectedUid")
+      .replace("__tcrnOriginalUid", "process.getuid?.()");
+    assert.notEqual(injected, section, "observed UID instrumentation applied");
+    return `${source.slice(0, start)}${injected}${source.slice(end)}`;
+  });
 }
 
 async function lockObservedUidHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "  if (lock.isSymbolicLink() || !lock.isDirectory() || lock.uid !== process.getuid?.() || (lock.mode & 0o777) !== 0o700) {\n";
   const replacement = "  if (lock.isSymbolicLink() || !lock.isDirectory() || lock.uid !== (globalThis.__tcrnObservedLockUid ?? process.getuid?.()) || (lock.mode & 0o777) !== 0o700) {\n";
-  assert.equal(source.split(marker).length, 2, "lock observed UID validation boundary");
-  const harnessPath = resolve(root, "lock-observed-uid-safe-io-harness.mjs");
-  await writeFile(harnessPath, source.replace(marker, replacement), { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "lock-observed-uid", (source) => {
+    assert.equal(source.split(marker).length, 2, "lock observed UID validation boundary");
+    return source.replace(marker, replacement);
+  });
 }
 
 async function pathnameReplacementHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "    const beforeRemove = await pathMetadata(stagePath, \"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\");\n";
   const barrier = "    await globalThis.__tcrnStagePathnameReplacement(stagePath);\n";
-  assert.equal(source.split(marker).length, 2, "stage pathname replacement boundary");
-  const harnessPath = resolve(root, "stage-pathname-replacement-safe-io-harness.mjs");
-  await writeFile(harnessPath, source.replace(marker, `${barrier}${marker}`), { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "stage-pathname-replacement", (source) => {
+    assert.equal(source.split(marker).length, 2, "stage pathname replacement boundary");
+    return source.replace(marker, `${barrier}${marker}`);
+  });
 }
 
 async function acquisitionRestartHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "  if (lockBeforeAcquisition) {\n    try {\n";
   const barrier = "    await globalThis.__tcrnAcquisitionRestartInterleave({ lockPath, recoveryClaim });\n";
-  assert.equal(source.split(marker).length, 2, "acquisition restart boundary");
-  const harnessPath = resolve(root, "acquisition-restart-safe-io-harness.mjs");
-  await writeFile(harnessPath, source.replace(marker, `${marker}${barrier}`), { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "acquisition-restart", (source) => {
+    assert.equal(source.split(marker).length, 2, "acquisition restart boundary");
+    return source.replace(marker, `${marker}${barrier}`);
+  });
 }
 
 async function releaseAcquisitionInterleaveHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const releaseMarker = "  injectReleaseFailure(\"after-owner-unlink\");\n";
   const observedMarker = "  if (lockBeforeAcquisition) {\n    try {\n";
   const publicationMarker = "  await publishAcquisition();\n  try {\n";
@@ -570,16 +602,15 @@ async function releaseAcquisitionInterleaveHarness(root) {
     "    await writeFile(process.env.TCRN_TEST_ACQUISITION_PUBLISHED_PATH, `${JSON.stringify({ pid: process.pid, claimPid: published.value.pid })}\\n`, { mode: 0o600, flag: \"wx\" });",
     "  }",
   ].join("\n");
-  assert.equal(source.split(releaseMarker).length, 2, "release ownerless barrier boundary");
-  assert.equal(source.split(observedMarker).length, 2, "acquisition observed barrier boundary");
-  assert.equal(source.split(publicationMarker).length, 2, "acquisition publication proof boundary");
-  const instrumented = source
-    .replace(releaseMarker, `${releaseMarker}${releaseBarrier}`)
-    .replace(observedMarker, `${observedMarker}${observedBarrier}`)
-    .replace(publicationMarker, `${publicationMarker.replace("  try {\n", publicationProof + "\n  try {\n")}`);
-  const harnessPath = resolve(root, "release-acquisition-interleave-safe-io-harness.mjs");
-  await writeFile(harnessPath, instrumented, { mode: 0o600 });
-  return pathToFileURL(harnessPath).href;
+  return loadSafeIoHarness(root, "release-acquisition-interleave", (source) => {
+    assert.equal(source.split(releaseMarker).length, 2, "release ownerless barrier boundary");
+    assert.equal(source.split(observedMarker).length, 2, "acquisition observed barrier boundary");
+    assert.equal(source.split(publicationMarker).length, 2, "acquisition publication proof boundary");
+    return source
+      .replace(releaseMarker, `${releaseMarker}${releaseBarrier}`)
+      .replace(observedMarker, `${observedMarker}${observedBarrier}`)
+      .replace(publicationMarker, `${publicationMarker.replace("  try {\n", publicationProof + "\n  try {\n")}`);
+  }, { asUrl: true });
 }
 
 function startExclusiveOutputSession(moduleUrl, root, environment = {}) {
@@ -597,46 +628,90 @@ function startExclusiveOutputSession(moduleUrl, root, environment = {}) {
     env: { ...process.env, ...environment },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  let stdout = "";
-  let stderr = "";
-  child.stdout.on("data", (chunk) => { stdout += chunk; });
-  child.stderr.on("data", (chunk) => { stderr += chunk; });
-  return { child, result: once(child, "close").then(([code, signal]) => ({ code, signal, stdout, stderr })) };
+  return { child, result: collectProcessOutput(child) };
+}
+
+async function assertPublicationCrashRecovery(context, points, prefix, sourceFor) {
+  for (const point of points) {
+    const root = await fixture(context);
+    const runnerPath = resolve(root, `${prefix}-${point}.mjs`);
+    await writeFile(runnerPath, sourceFor(root), { mode: 0o600 });
+    const runner = spawn(process.execPath, [runnerPath], {
+      env: { ...process.env, TCRN_TEST_OWNER_PUBLICATION_CRASH_AT: point },
+      stdio: ["ignore", "ignore", "ignore"],
+    });
+    const [code, signal] = await once(runner, "exit");
+    assert.equal(code, null, point);
+    assert.equal(signal, "SIGKILL", point);
+    assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED", point);
+    await assertRecoveryStateClean(root);
+    await rm(runnerPath);
+  }
+}
+
+async function acquisitionCrashResults(context, points, environmentKey) {
+  const safeIo = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
+  const results = [];
+  for (const point of points) {
+    const root = await fixture(context);
+    const runner = spawn(process.execPath, ["--input-type=module", "--eval", [
+      `import { withExclusiveOutputSession } from ${JSON.stringify(safeIo.href)};`,
+      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+    ].join("\n")], {
+      env: { ...process.env, [environmentKey]: point },
+      stdio: "ignore",
+    });
+    const [code, signal] = await once(runner, "exit");
+    await withExclusiveOutputSession(root, async () => {});
+    await assertRecoveryStateClean(root);
+    results.push({ point, code, signal });
+  }
+  return results;
+}
+
+function inheritedPipeSource({ detached, testName }) {
+  const child = detached ? "holder" : "child";
+  const options = detached ? '{ detached: true, stdio: "inherit" }' : '{ stdio: "inherit" }';
+  return [
+    'import { spawn } from "node:child_process";',
+    'import { writeFileSync } from "node:fs";',
+    'import test from "node:test";',
+    'const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;',
+    `const ${child} = spawn(process.execPath, ["--eval", "const { existsSync } = require(\\\"node:fs\\\"); const lock = process.argv[1]; const timer = setInterval(() => { if (!existsSync(lock)) { clearInterval(timer); process.exit(0); } }, 10);", lockPath], ${options});`,
+    ...(detached ? [`${child}.unref();`] : []),
+    `writeFileSync(process.env.TCRN_TASK_PIPE_HOLDER_PID_PATH, String(${child}.pid) + "\\n");`,
+    `test(${JSON.stringify(testName)}, () => {});`,
+    "",
+  ].join("\n");
 }
 
 async function localPublicationReplacementHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "    locallyPublishedRecoveryClaims.set(claimPath, claimIdentity);\n";
   const barrier = "    await globalThis.__tcrnLocalPublicationReplacement(claimPath, stagingPath);\n";
-  assert.equal(source.split(marker).length, 2, "local publication identity boundary");
-  const instrumented = source.replace(marker, `${marker}${barrier}`);
-  assert.equal(instrumented.replace(barrier, ""), source);
-  const harnessPath = resolve(root, "local-publication-replacement-safe-io-harness.mjs");
-  await writeFile(harnessPath, instrumented, { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "local-publication-replacement", (source) => {
+    assert.equal(source.split(marker).length, 2, "local publication identity boundary");
+    const instrumented = source.replace(marker, `${marker}${barrier}`);
+    assert.equal(instrumented.replace(barrier, ""), source);
+    return instrumented;
+  });
 }
 
 async function eexistPublicationHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "    try { await link(stagingPath, claimPath); } catch (error) {\n";
   const barrier = "    try { await globalThis.__tcrnEexistPublication(stagingPath, claimPath); await link(stagingPath, claimPath); } catch (error) {\n";
-  assert.equal(source.split(marker).length, 2, "EEXIST publication boundary");
-  const harnessPath = resolve(root, "eexist-publication-safe-io-harness.mjs");
-  await writeFile(harnessPath, source.replace(marker, barrier), { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "eexist-publication", (source) => {
+    assert.equal(source.split(marker).length, 2, "EEXIST publication boundary");
+    return source.replace(marker, barrier);
+  });
 }
 
 async function terminalCleanReadbackHarness(root) {
-  const sourcePath = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  const source = await readFile(sourcePath, "utf8");
   const marker = "    await assertRecoveryClean(gitDirectory, lockPath, recoveryClaim, \"OUTPUT_SESSION_RECOVERY_CLAIM_CHANGED\");\n    return { reasonCode: \"OUTPUT_SESSION_STALE_LOCK_RECOVERED\", lockDev: lock.dev, lockIno: lock.ino, lockCtimeMs: lock.ctimeMs, lockMtimeMs: lock.mtimeMs };\n";
   const observer = "    await globalThis.__tcrnTerminalCleanReadback(gitDirectory, lockPath, recoveryClaim);\n";
-  assert.equal(source.split(marker).length, 2, "terminal clean readback boundary");
-  const harnessPath = resolve(root, "terminal-clean-readback-safe-io-harness.mjs");
-  await writeFile(harnessPath, source.replace(marker, marker.replace("    return", `${observer}    return`)), { mode: 0o600 });
-  return import(`${pathToFileURL(harnessPath).href}?${Date.now()}`);
+  return loadSafeIoHarness(root, "terminal-clean-readback", (source) => {
+    assert.equal(source.split(marker).length, 2, "terminal clean readback boundary");
+    return source.replace(marker, marker.replace("    return", `${observer}    return`));
+  });
 }
 
 async function createFifo(path) {
@@ -975,9 +1050,7 @@ test("lock-absent cleanup and pre-acquisition reject wrong or transplanted claim
 });
 
 test("an ownerless lock without a fixed claim requires the later durable legacy receipt", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const exact = await receipt(lock);
   for (const key of Object.keys(exact)) {
     await assert.rejects(recoverStaleOutputSessionLock(root, { ...exact, [key]: exact[key] + 1 }), expectReason("OUTPUT_SESSION_RECOVERY_LEGACY_RECEIPT_REQUIRED"));
@@ -987,9 +1060,7 @@ test("an ownerless lock without a fixed claim requires the later durable legacy 
 });
 
 test("an exact coordinator-admitted external legacy receipt recovers once and cannot replay", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const { authority } = await legacyAuthority(context, root, lock);
   assert.equal((await recoverStaleOutputSessionLock(root, authority)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
   await assertRecoveryStateClean(root);
@@ -1022,9 +1093,7 @@ test("every closed legacy receipt field group and canonical-form variant fails M
     ["malformed canonical bytes", () => "{\n"],
   ];
   for (const [, mutate] of mutations) {
-    const root = await fixture(context);
-    const lock = lockPath(root);
-    await mkdir(lock, { mode: 0o700 });
+    const { root, lock } = await emptyLockFixture(context);
     const review = await reviewFixture(context);
     const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
     const request = await rewriteLegacyReceipt(receipt, mutate);
@@ -1036,9 +1105,7 @@ test("every closed legacy receipt field group and canonical-form variant fails M
 });
 
 test("only module-private branded legacy authority is accepted and copies or reseals stay REQUIRED", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const review = await reviewFixture(context);
   const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
   const copied = structuredClone(receipt.authority);
@@ -1081,9 +1148,7 @@ test("legacy recovery preserves nonempty and replacement locks and rejects the e
 });
 
 test("an add-then-remove change after the empty read cannot authorize legacy rmdir", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const review = await reviewFixture(context);
   const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
   const receiptIdentity = await lstat(receipt.path);
@@ -1109,9 +1174,7 @@ test("an add-then-remove change after the empty read cannot authorize legacy rmd
 });
 
 test("legacy receipt source non-authority forms fail MISMATCH without lock mutation", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const receipt = await legacyAuthority(context, root, lock);
   await assert.rejects(recoverStaleOutputSessionLock(root, { ...receipt.authority }), expectReason("OUTPUT_SESSION_RECOVERY_LEGACY_RECEIPT_REQUIRED"));
   await lstat(lock);
@@ -1143,9 +1206,7 @@ test("legacy source symlink, copied authority replacement, and pathname replacem
     ["post-admission pathname/inode replacement", async (receipt) => { await rename(receipt.path, `${receipt.path}.old`); await writeFile(receipt.path, receipt.bytes, { mode: 0o600 }); }],
   ];
   for (const [, mutate] of cases) {
-    const root = await fixture(context);
-    const lock = lockPath(root);
-    await mkdir(lock, { mode: 0o700 });
+    const { root, lock } = await emptyLockFixture(context);
     const receipt = await legacyAuthority(context, root, lock);
     await mutate(receipt);
     await assert.rejects(recoverStaleOutputSessionLock(root, receipt.authority), expectReason("OUTPUT_SESSION_RECOVERY_LEGACY_RECEIPT_MISMATCH"));
@@ -1158,18 +1219,7 @@ test("legacy receipt and review authority one-shot sparse growth stop at maximum
     ["legacy", 1],
     ["review", 3],
   ]) {
-    const root = await fixture(context);
-    const lock = lockPath(root);
-    await mkdir(lock, { mode: 0o700 });
-    const review = await reviewFixture(context);
-    const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
-    const targetPath = target === "legacy" ? receipt.path : review.path;
-    const originalIdentity = await lstat(targetPath);
-    const probe = await open(targetPath, "r");
-    const prototype = Object.getPrototypeOf(probe);
-    const originalRead = prototype.read;
-    const originalStat = prototype.stat;
-    await probe.close();
+    const { root, lock, receipt, targetPath, originalIdentity, prototype, originalRead, originalStat } = await authorityGrowthFixture(context, target);
     let stats = 0;
     let targetBytesRead = 0;
     let grew = false;
@@ -1202,17 +1252,7 @@ test("legacy receipt and review authority one-shot sparse growth stop at maximum
 
 test("legacy receipt and review authority continuous growth is incremental, capped, and non-destructive", async (context) => {
   for (const target of ["legacy", "review"]) {
-    const root = await fixture(context);
-    const lock = lockPath(root);
-    await mkdir(lock, { mode: 0o700 });
-    const review = await reviewFixture(context);
-    const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
-    const targetPath = target === "legacy" ? receipt.path : review.path;
-    const originalIdentity = await lstat(targetPath);
-    const probe = await open(targetPath, "r");
-    const prototype = Object.getPrototypeOf(probe);
-    const originalRead = prototype.read;
-    await probe.close();
+    const { root, lock, receipt, targetPath, originalIdentity, prototype, originalRead } = await authorityGrowthFixture(context, target);
     let reads = 0;
     let targetBytesRead = 0;
     let growthRounds = 0;
@@ -1303,9 +1343,7 @@ test("legacy and review authority oversize sources reject before their descripto
 });
 
 test("a malformed review source with its matching coordinator digest still fails MISMATCH", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const review = await reviewFixture(context, "{\n");
   const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest, admit: false });
   await assert.rejects(admitLegacyOutputSessionReceipt(receipt.request), expectReason("OUTPUT_SESSION_RECOVERY_LEGACY_RECEIPT_MISMATCH"));
@@ -1323,9 +1361,7 @@ test("review authority source non-authority forms fail MISMATCH without lock mut
     async (review) => { const bytes = Buffer.alloc(65_537, 0x61); await writeFile(review.path, bytes, { mode: 0o644 }); return { path: review.path, digest: createHash("sha256").update(bytes).digest("hex") }; },
   ];
   for (const mutate of cases) {
-    const root = await fixture(context);
-    const lock = lockPath(root);
-    await mkdir(lock, { mode: 0o700 });
+    const { root, lock } = await emptyLockFixture(context);
     const review = await reviewFixture(context);
     const receipt = await legacyAuthority(context, root, lock, { reviewPath: review.path, reviewDigest: review.digest });
     const supplied = await mutate(review);
@@ -1335,18 +1371,14 @@ test("review authority source non-authority forms fail MISMATCH without lock mut
 });
 
 test("a live empty initialization cannot be deleted with a caller-minted receipt", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const exact = await receipt(lock);
   await assert.rejects(recoverStaleOutputSessionLock(root, exact), expectReason("OUTPUT_SESSION_RECOVERY_LEGACY_RECEIPT_REQUIRED"));
   assert.equal((await lstat(lock)).ino, exact.lockIno);
 });
 
 test("a sibling recovery claim remains an identity-bound barrier and is never removed by a losing caller", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   const exact = await receipt(lock);
   const claim = resolve(root, ".git/.tcrn-workflow-output-recovery-claim");
   await writeFile(claim, "foreign\n", { mode: 0o600 });
@@ -1356,9 +1388,7 @@ test("a sibling recovery claim remains an identity-bound barrier and is never re
 });
 
 test("dead owner metadata recovers while a live owner is rejected", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   await sealOwner(lock, process.pid);
   await assert.rejects(recoverStaleOutputSessionLock(root), expectReason("OUTPUT_SESSION_RECOVERY_OWNER_LIVE"));
   await rm(resolve(lock, "owner.json"));
@@ -1369,9 +1399,7 @@ test("dead owner metadata recovers while a live owner is rejected", async (conte
 test("descendant process-group liveness blocks recovery and normal release until the exact group is gone", async (context) => {
   const group = await liveDetachedProcessGroup();
   try {
-    const root = await fixture(context);
-    const lock = lockPath(root);
-    await mkdir(lock, { mode: 0o700 });
+    const { root, lock } = await emptyLockFixture(context);
     await sealOwner(lock, 999999, { processGroup: group.pid });
     const before = await snapshotFilesystem([lock, resolve(lock, "owner.json")]);
     await assert.rejects(recoverStaleOutputSessionLock(root), expectReason("OUTPUT_SESSION_RECOVERY_DESCENDANT_LIVE"));
@@ -2163,40 +2191,16 @@ test("forced crash leaves recoverable dead-owner metadata", async (context) => {
 });
 
 test("acquisition provenance recovers a dead claimant before, during, and after initial owner publication", async (context) => {
-  const safeIo = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  for (const point of ["after-marker-publication", "after-lock-mkdir", "after-owner-publication"]) {
-    const root = await fixture(context);
-    const runner = spawn(process.execPath, ["--input-type=module", "--eval", [
-      `import { withExclusiveOutputSession } from ${JSON.stringify(safeIo.href)};`,
-      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
-    ].join("\n")], {
-      env: { ...process.env, TCRN_TEST_OUTPUT_SESSION_ACQUISITION_CRASH_AT: point },
-      stdio: "ignore",
-    });
-    const [code, signal] = await once(runner, "exit");
+  for (const { point, code, signal } of await acquisitionCrashResults(context, ["after-marker-publication", "after-lock-mkdir", "after-owner-publication"], "TCRN_TEST_OUTPUT_SESSION_ACQUISITION_CRASH_AT")) {
     assert.equal(code, null, point);
     assert.equal(signal, "SIGKILL", point);
-    await withExclusiveOutputSession(root, async () => {});
-    await assertRecoveryStateClean(root);
   }
 });
 
 test("acquisition hard-link publication resumes every durable crash boundary", async (context) => {
-  const safeIo = new URL("../scripts/lib/safe-io.mjs", import.meta.url);
-  for (const point of ["stage-open", "stage-partial", "stage-fsynced", "before-link", "nlink2", "stage-unlinked", "fixed-nlink1"]) {
-    const root = await fixture(context);
-    const runner = spawn(process.execPath, ["--input-type=module", "--eval", [
-      `import { withExclusiveOutputSession } from ${JSON.stringify(safeIo.href)};`,
-      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
-    ].join("\n")], {
-      env: { ...process.env, TCRN_TEST_OUTPUT_SESSION_ACQUISITION_PUBLICATION_CRASH_AT: point },
-      stdio: "ignore",
-    });
-    const [code, signal] = await once(runner, "exit");
+  for (const { point, code, signal } of await acquisitionCrashResults(context, ["stage-open", "stage-partial", "stage-fsynced", "before-link", "nlink2", "stage-unlinked", "fixed-nlink1"], "TCRN_TEST_OUTPUT_SESSION_ACQUISITION_PUBLICATION_CRASH_AT")) {
     assert.equal(code, null, point);
     assert.equal(signal, "SIGKILL", point);
-    await withExclusiveOutputSession(root, async () => {});
-    await assertRecoveryStateClean(root);
   }
 });
 
@@ -2369,53 +2373,23 @@ test("two-process release and acquisition interleavings preserve the release tra
 });
 
 test("atomic owner-group publication recovers before and after its durable replacement", async (context) => {
-  for (const point of ["group-stage-open", "group-stage-partial", "group-stage-fsynced", "prepublication", "afterpublication"]) {
-    const root = await fixture(context);
-    const runnerPath = resolve(root, `owner-publication-${point}.mjs`);
-    await writeFile(runnerPath, [
-      `import { bindOutputSessionProcessGroup, withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
-      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => bindOutputSessionProcessGroup(999998));`,
-      "",
-    ].join("\n"), { mode: 0o600 });
-    const runner = spawn(process.execPath, [runnerPath], {
-      env: { ...process.env, TCRN_TEST_OWNER_PUBLICATION_CRASH_AT: point },
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-    const [code, signal] = await once(runner, "exit");
-    assert.equal(code, null, point);
-    assert.equal(signal, "SIGKILL", point);
-    assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED", point);
-    await assertRecoveryStateClean(root);
-    await rm(runnerPath);
-  }
+  await assertPublicationCrashRecovery(context, ["group-stage-open", "group-stage-partial", "group-stage-fsynced", "prepublication", "afterpublication"], "owner-publication", (root) => [
+    `import { bindOutputSessionProcessGroup, withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
+    `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => bindOutputSessionProcessGroup(999998));`,
+    "",
+  ].join("\n"));
 });
 
 test("atomic initial owner publication recovers before and after its durable replacement", async (context) => {
-  for (const point of ["initial-stage-open", "initial-stage-partial", "initial-stage-fsynced", "initial-prepublication", "initial-afterpublication"]) {
-    const root = await fixture(context);
-    const runnerPath = resolve(root, `initial-owner-publication-${point}.mjs`);
-    await writeFile(runnerPath, [
-      `import { withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
-      `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
-      "",
-    ].join("\n"), { mode: 0o600 });
-    const runner = spawn(process.execPath, [runnerPath], {
-      env: { ...process.env, TCRN_TEST_OWNER_PUBLICATION_CRASH_AT: point },
-      stdio: ["ignore", "ignore", "ignore"],
-    });
-    const [code, signal] = await once(runner, "exit");
-    assert.equal(code, null, point);
-    assert.equal(signal, "SIGKILL", point);
-    assert.equal((await recoverStaleOutputSessionLock(root)).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED", point);
-    await assertRecoveryStateClean(root);
-    await rm(runnerPath);
-  }
+  await assertPublicationCrashRecovery(context, ["initial-stage-open", "initial-stage-partial", "initial-stage-fsynced", "initial-prepublication", "initial-afterpublication"], "initial-owner-publication", (root) => [
+    `import { withExclusiveOutputSession } from ${JSON.stringify(new URL("../scripts/lib/safe-io.mjs", import.meta.url).href)};`,
+    `await withExclusiveOutputSession(${JSON.stringify(root)}, async () => {});`,
+    "",
+  ].join("\n"));
 });
 
 test("a malformed owner-publication stage preserves the dead lock fail-closed", async (context) => {
-  const root = await fixture(context);
-  const lock = lockPath(root);
-  await mkdir(lock, { mode: 0o700 });
+  const { root, lock } = await emptyLockFixture(context);
   await sealOwner(lock, 999999);
   const stagePath = resolve(lock, ".owner.json.staging-999999-0-1");
   await writeFile(stagePath, "foreign\\n", { mode: 0o600 });
@@ -2425,15 +2399,7 @@ test("a malformed owner-publication stage preserves the dead lock fail-closed", 
 });
 
 test("an unbound detached test controller exits before discovery after its task owner dies", async (context) => {
-  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
-  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
-  const root = await taskEntrypointFixture(context, [
-    'import { writeFileSync } from "node:fs";',
-    'import test from "node:test";',
-    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
-    'test("only a durably bound controller may import this source", () => {});',
-    "",
-  ].join("\n"));
+  const { root, importPath } = await importGuardTaskFixture(context, 'test("only a durably bound controller may import this source", () => {});');
   const readyPath = resolve(root, "bind-window-ready.json");
   const orphanPath = resolve(root, "bind-window-orphan.json");
   const holdPath = resolve(root, "bind-window-release");
@@ -2481,15 +2447,7 @@ test("an unbound detached test controller exits before discovery after its task 
 });
 
 test("a pre-bind process-group bind failure terminates the controller before test discovery", async (context) => {
-  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
-  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
-  const root = await taskEntrypointFixture(context, [
-    'import { writeFileSync } from "node:fs";',
-    'import test from "node:test";',
-    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
-    'test("pre-bind failure never discovers this source", () => {});',
-    "",
-  ].join("\n"));
+  const { root, importPath } = await importGuardTaskFixture(context, 'test("pre-bind failure never discovers this source", () => {});');
   const failed = await startTaskEntrypoint(root, {
     TCRN_TEST_BIND_PROCESS_GROUP_FAILURE: "1",
     TCRN_TEST_BIND_WINDOW_IMPORT_PATH: importPath,
@@ -2503,15 +2461,7 @@ test("a pre-bind process-group bind failure terminates the controller before tes
 });
 
 test("a bound bootstrap blocks recovery before it starts the test controller", async (context) => {
-  const importPath = resolve(await mkdtemp(join(tmpdir(), "tcrn-test-import-")), "imported");
-  context.after(() => rm(resolve(importPath, ".."), { recursive: true, force: true }));
-  const root = await taskEntrypointFixture(context, [
-    'import { writeFileSync } from "node:fs";',
-    'import test from "node:test";',
-    'if (process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH) writeFileSync(process.env.TCRN_TEST_BIND_WINDOW_IMPORT_PATH, "test-source-imported\\n");',
-    'test("controller starts only after its group was recorded", () => {});',
-    "",
-  ].join("\n"));
+  const { root, importPath } = await importGuardTaskFixture(context, 'test("controller starts only after its group was recorded", () => {});');
   const boundPath = resolve(root, "bind-window-bound.json");
   const runPath = resolve(root, "bind-window-run");
   const interrupted = startTaskEntrypoint(root, {
@@ -2661,17 +2611,7 @@ test("a concurrent real task entrypoint preserves its live command-wide owner an
 });
 
 test("the real command-five test path rejects detached inherited-pipe descendants and reproduces the rejected cycle only in a disposable fixture", async (context) => {
-  const holderSource = [
-    'import { spawn } from "node:child_process";',
-    'import { writeFileSync } from "node:fs";',
-    'import test from "node:test";',
-    'const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;',
-    'const holder = spawn(process.execPath, ["--eval", "const { existsSync } = require(\\\"node:fs\\\"); const lock = process.argv[1]; const timer = setInterval(() => { if (!existsSync(lock)) { clearInterval(timer); process.exit(0); } }, 10);", lockPath], { detached: true, stdio: "inherit" });',
-    'holder.unref();',
-    'writeFileSync(process.env.TCRN_TASK_PIPE_HOLDER_PID_PATH, String(holder.pid) + "\\n");',
-    'test("the descendant waits for the command-wide lock", () => {});',
-    "",
-  ].join("\n");
+  const holderSource = inheritedPipeSource({ detached: true, testName: "the descendant waits for the command-wide lock" });
   const current = await taskEntrypointFixture(context, holderSource);
   const currentHolderPath = resolve(current, "pipe-holder.pid");
   const currentResult = await startTaskEntrypoint(current, {
@@ -2694,7 +2634,7 @@ test("the real command-five test path rejects detached inherited-pipe descendant
   const fixedBootstrap = await readFile(rejectedBootstrapPath, "utf8");
   const rejectedMarker = "// Test-controller output goes to private regular files, never inherited pipes.\n";
   assert.equal(fixedBootstrap.includes(rejectedMarker), true, "controller topology fixture boundary");
-  const rejectedBootstrap = `${fixedBootstrap.slice(0, fixedBootstrap.indexOf(rejectedMarker))}await progressRecord("bound-before-controller", { processGroup: process.pid, outerPid });\nconst testController = spawn(process.execPath, testArguments, {\n  stdio: "inherit",\n  env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },\n});\nawait progressRecord("controller-started", { pid: testController.pid, processGroup: process.pid });\nconst result = await new Promise((resolveResult, rejectResult) => {\n  testController.once("error", rejectResult);\n  testController.once("close", (code, signal) => resolveResult({ code, signal }));\n});\nawait progressRecord("controller-exited", { pid: testController.pid, code: result.code, signal: result.signal, ok: result.code === 0 && result.signal === null });\nawait progressRecord("reaper-clean", { processGroup: process.pid });\nawait progressRecord("completed", { ok: result.code === 0 && result.signal === null, code: result.code, signal: result.signal });\nprocess.exitCode = result.code ?? (result.signal ? 1 : 1);\n`;
+  const rejectedBootstrap = `${fixedBootstrap.slice(0, fixedBootstrap.indexOf(rejectedMarker))}await appendProgressIfConfigured(progressPath, "bound-before-controller", { processGroup: process.pid, outerPid });\nconst testController = spawn(process.execPath, testArguments, {\n  stdio: "inherit",\n  env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },\n});\nawait appendProgressIfConfigured(progressPath, "controller-started", { pid: testController.pid, processGroup: process.pid });\nconst result = await new Promise((resolveResult, rejectResult) => {\n  testController.once("error", rejectResult);\n  testController.once("close", (code, signal) => resolveResult({ code, signal }));\n});\nawait appendProgressIfConfigured(progressPath, "controller-exited", { pid: testController.pid, code: result.code, signal: result.signal, ok: result.code === 0 && result.signal === null });\nawait appendProgressIfConfigured(progressPath, "reaper-clean", { processGroup: process.pid });\nawait appendProgressIfConfigured(progressPath, "completed", { ok: result.code === 0 && result.signal === null, code: result.code, signal: result.signal });\nprocess.exitCode = result.code ?? (result.signal ? 1 : 1);\n`;
   await writeFile(rejectedBootstrapPath, rejectedBootstrap, { mode: 0o600 });
   runGit(rejected, ["add", "scripts/test-controller-bootstrap.mjs"]);
   runGit(rejected, ["commit", "--quiet", "-m", "rejected inherited-stream bootstrap"]);
@@ -2734,16 +2674,7 @@ test("the real command-five test path rejects detached inherited-pipe descendant
 });
 
 test("the real command-five test path rejects a same-group inherited descendant before terminal release", async (context) => {
-  const source = [
-    'import { spawn } from "node:child_process";',
-    'import { writeFileSync } from "node:fs";',
-    'import test from "node:test";',
-    'const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;',
-    'const child = spawn(process.execPath, ["--eval", "const { existsSync } = require(\\\"node:fs\\\"); const lock = process.argv[1]; const timer = setInterval(() => { if (!existsSync(lock)) { clearInterval(timer); process.exit(0); } }, 10);", lockPath], { stdio: "inherit" });',
-    'writeFileSync(process.env.TCRN_TASK_PIPE_HOLDER_PID_PATH, String(child.pid) + "\\n");',
-    'test("the controller exits while its same-group descendant awaits cleanup", () => {});',
-    "",
-  ].join("\n");
+  const source = inheritedPipeSource({ detached: false, testName: "the controller exits while its same-group descendant awaits cleanup" });
   const root = await taskEntrypointFixture(context, source);
   const holderPath = resolve(root, "pipe-holder.pid");
   const result = await startTaskEntrypoint(root, { TCRN_TASK_PIPE_HOLDER_PID_PATH: holderPath }).result;
@@ -3015,6 +2946,7 @@ test("the controller child policy refuses a fork that inherits through its defau
   ].join("\n");
   const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
   assert.deepEqual(JSON.parse(result.stdout), ["refused", "refused", "refused", "refused", "admitted", "admitted"]);
 });
 
@@ -3055,6 +2987,7 @@ test("the controller child policy propagates through exec command lines no parse
   ].join("\n");
   const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
   const refusals = Array(5).fill("TEST_CONTROLLER_DETACHED_DESCENDANT_FORBIDDEN");
   assert.deepEqual(JSON.parse(result.stdout), { asynchronous: refusals, synchronous: refusals });
 });
@@ -3096,6 +3029,7 @@ test("the task entrypoint exemption is anchored on the path segment, not a leadi
   ].join("\n");
   const result = spawnSync(process.execPath, ["--import", policy, "--input-type=module", "--eval", source], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stderr, "");
   assert.deepEqual(JSON.parse(result.stdout), {
     directAbsolute: "unpreloaded",
     directDotSlash: "unpreloaded",

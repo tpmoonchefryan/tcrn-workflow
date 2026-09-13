@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
-import { appendProgressEvent } from "./lib/incremental-output.mjs";
+import { appendProgressIfConfigured, delay } from "./lib/incremental-output.mjs";
 
 const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;
 const outerPid = Number(process.env.TCRN_TEST_CONTROLLER_OUTER_PID);
@@ -29,10 +29,6 @@ function validAbsolutePath(path) {
   return typeof path === "string" && path.startsWith("/") && !path.includes("\0");
 }
 
-function delay(milliseconds) {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
 function parentIsGone() {
   if (process.ppid !== outerPid) return true;
   try {
@@ -48,11 +44,6 @@ async function testWindowRecord(path, value) {
   if (!path) return;
   if (!validAbsolutePath(path)) throw new Error("TEST_CONTROLLER_BIND_WINDOW_PATH_INVALID");
   await writeFile(path, `${JSON.stringify(value)}\n`, { mode: 0o600, flag: "wx" });
-}
-
-async function progressRecord(type, fields = {}) {
-  if (!progressPath) return;
-  await appendProgressEvent(progressPath, { type, ...fields });
 }
 
 function abort() {
@@ -132,7 +123,7 @@ if (!validAbsolutePath(lockPath) || !Number.isSafeInteger(outerPid) || outerPid 
 
 if (!await waitForDurableGroupBinding()) {
   await testWindowRecord(orphanPath, { processGroup: process.pid, outerPid, state: "orphaned-before-bind" });
-  await progressRecord("orphaned-before-bind", { processGroup: process.pid, outerPid });
+  await appendProgressIfConfigured(progressPath, "orphaned-before-bind", { processGroup: process.pid, outerPid });
   if (Number.isSafeInteger(orphanDelay) && orphanDelay > 0 && orphanDelay <= 10_000) await delay(orphanDelay);
   // No `node --test` process has been spawned in this branch.
   process.exit(0);
@@ -166,17 +157,17 @@ try {
   // the policy's stdio allowlist cannot tell the difference without an fstat on a hot
   // path, so it would refuse this spawn. The allowlist stays fail-closed deliberately;
   // the detached reaper spawn above proves this file runs unpreloaded.
-  await progressRecord("bound-before-controller", { processGroup: process.pid, outerPid });
+  await appendProgressIfConfigured(progressPath, "bound-before-controller", { processGroup: process.pid, outerPid });
   const testController = spawn(process.execPath, ["--import", childPolicyImport, ...testArguments], {
     stdio: ["ignore", stdoutFile.fd, stderrFile.fd],
     env: { ...process.env, TCRN_TEST_CONTROLLER_PROCESS_GROUP: String(process.pid) },
   });
-  await progressRecord("controller-started", { pid: testController.pid, processGroup: process.pid });
+  await appendProgressIfConfigured(progressPath, "controller-started", { pid: testController.pid, processGroup: process.pid });
   const result = await new Promise((resolveResult, rejectResult) => {
     testController.once("error", rejectResult);
     testController.once("exit", (code, signal) => resolveResult({ code, signal }));
   });
-  await progressRecord("controller-exited", {
+  await appendProgressIfConfigured(progressPath, "controller-exited", {
     pid: testController.pid,
     code: result.code,
     signal: result.signal,
@@ -189,7 +180,7 @@ try {
   const [stdout, stderr] = await Promise.all([readFile(stdoutPath), readFile(stderrPath)]);
   process.stdout.write(stdout);
   process.stderr.write(stderr);
-  await progressRecord("completed", {
+  await appendProgressIfConfigured(progressPath, "completed", {
     ok: result.code === 0 && result.signal === null,
     code: result.code,
     signal: result.signal,
@@ -201,7 +192,7 @@ try {
   await reaperExit;
   process.exitCode = result.code ?? (result.signal ? 1 : 1);
 } catch (error) {
-  await progressRecord("error", { reasonCode: error?.code ?? error?.message ?? "TEST_CONTROLLER_FAILED" }).catch(() => undefined);
+  await appendProgressIfConfigured(progressPath, "error", { reasonCode: error?.code ?? error?.message ?? "TEST_CONTROLLER_FAILED" }).catch(() => undefined);
   await stdoutFile.close().catch(() => undefined);
   await stderrFile.close().catch(() => undefined);
   reaper.kill("SIGTERM");

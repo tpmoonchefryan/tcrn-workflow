@@ -51,6 +51,15 @@ export async function appendProgressEvent(path, event) {
   return value;
 }
 
+export function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function appendProgressIfConfigured(path, type, fields = {}) {
+  if (!path) return;
+  await appendProgressEvent(path, { type, ...fields });
+}
+
 /**
  * Read only complete NDJSON records after a byte cursor. A partial trailing line
  * remains unread so the next call can finish it; a malformed complete line is an
@@ -149,6 +158,7 @@ export async function waitForProgress(path, {
   timeoutMs = 5_000,
   pollMs = 25,
   maxPollMs = 1_000,
+  counters: initialCounters = {},
   signal,
 } = {}) {
   assertProgressPath(path);
@@ -161,9 +171,9 @@ export async function waitForProgress(path, {
   }
   let nextCursor = startCursor;
   let allEvents = mergeEvents([], initialEvents);
-  let polls = 0;
-  let unchangedPolls = 0;
-  let bytesRead = 0;
+  let polls = initialCounters.polls ?? 0;
+  let unchangedPolls = initialCounters.unchangedPolls ?? 0;
+  let bytesRead = initialCounters.bytesRead ?? 0;
   let delayMs = pollMs;
   const startedAt = Date.now();
   const snapshot = (status, extra = {}) => ({

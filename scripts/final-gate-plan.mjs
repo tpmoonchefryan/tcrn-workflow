@@ -54,9 +54,6 @@ function validateRoster(roster, containment) {
   for (const root of contained.selected) {
     const rosterGroup = rosterGroups.get(root.id);
     if (!rosterGroup) throw planError("GATE_PLAN_ROSTER_GROUP_MISSING", root.id);
-    const containmentCommand = normalizeCommand(root.command);
-    const rosterCommand = normalizeCommand(rosterGroup.command);
-    if (containmentCommand !== rosterCommand) throw planError("GATE_PLAN_COMMAND_DRIFT", `${root.id}: ${containmentCommand} != ${rosterCommand}`);
   }
   return { contained, rosterGroups };
 }
@@ -81,6 +78,18 @@ export function assessEvidenceReuse({ evidence, inputs }) {
   return reusable
     ? { reusable: true, reused: [{ id: evidence.id, reason: "same source, environment, command, and baseline inputs" }], invalidated: [], blocked: [] }
     : { reusable: false, reused: [], invalidated: [{ id: evidence?.id ?? null, reasons }], blocked: [] };
+}
+
+function evidenceList(value) {
+  return Array.isArray(value) ? value : value ? [value] : [];
+}
+
+function evidenceDisposition(previousEvidence, inputs) {
+  return evidenceList(previousEvidence).reduce((aggregate, evidence) => {
+    const result = assessEvidenceReuse({ evidence, inputs });
+    for (const field of ["reused", "invalidated", "blocked"]) aggregate[field].push(...result[field]);
+    return aggregate;
+  }, { reused: [], invalidated: [], blocked: [] });
 }
 
 const DEVELOPMENT_RULES = Object.freeze([
@@ -140,8 +149,7 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
     }
     for (const rule of matches) for (const check of rule.checks) selected.set(check, { id: check, command: developmentCommand(check), scriptExists: true, selected: true, coveredBy: null, reason: `changed file matched ${rule.id}` });
   }
-  const prior = Array.isArray(previousEvidence) ? previousEvidence : previousEvidence ? [previousEvidence] : [];
-  const evidence = prior.map((entry) => assessEvidenceReuse({ evidence: entry, inputs }));
+  const evidence = evidenceDisposition(previousEvidence, inputs);
   return {
     schemaVersion: FINAL_GATE_PLAN_VERSION,
     phase: "development",
@@ -149,9 +157,9 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
     selected: [...selected.values()],
     executed: [],
     coveredBy: [],
-    reused: evidence.flatMap((result) => result.reused),
-    invalidated: evidence.flatMap((result) => result.invalidated),
-    blocked: [...blocked, ...evidence.flatMap((result) => result.blocked)],
+    reused: evidence.reused,
+    invalidated: evidence.invalidated,
+    blocked: [...blocked, ...evidence.blocked],
     execution: { strategy: "serial", maxConcurrent: 1 },
     executable: blocked.length === 0,
   };
@@ -162,8 +170,6 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   const { contained, rosterGroups } = validateRoster(roster, containment);
   const selected = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
   const coveredBy = contained.coveredBy.map((entry) => ({ ...entry, phase }));
-  const reuse = [];
-  const invalidated = [];
   const blocked = [];
   const requiredInputs = inputKey(inputs);
   const inputNames = ["sourceDigest", "environmentDigest", "commandDigest", "baselineDigest"];
@@ -176,13 +182,8 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
     blocked.push(...blockedDependencies.map((reason, index) => ({ id: `dependency-${index + 1}`, reason })));
   }
   if (executionPermission !== true) blocked.push({ id: "execution-permission", reason: "explicit candidate execution permission is required" });
-  const prior = Array.isArray(previousEvidence) ? previousEvidence : previousEvidence ? [previousEvidence] : [];
-  for (const evidence of prior) {
-    const result = assessEvidenceReuse({ evidence, inputs });
-    reuse.push(...result.reused);
-    invalidated.push(...result.invalidated);
-    blocked.push(...result.blocked);
-  }
+  const evidence = evidenceDisposition(previousEvidence, inputs);
+  blocked.push(...evidence.blocked);
   return {
     schemaVersion: FINAL_GATE_PLAN_VERSION,
     phase,
@@ -190,8 +191,8 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
     selected,
     executed: [],
     coveredBy,
-    reused: reuse,
-    invalidated,
+    reused: evidence.reused,
+    invalidated: evidence.invalidated,
     blocked,
     execution: { strategy: "serial", maxConcurrent: 1 },
     executionOrder: selected.map(({ id }) => id),

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
-import { appendProgressEvent } from "./lib/incremental-output.mjs";
+import { appendProgressIfConfigured, delay } from "./lib/incremental-output.mjs";
 
 const [parentPidText, processGroupText, outputDirectory] = process.argv.slice(2);
 const parentPid = Number(parentPidText);
@@ -14,10 +14,6 @@ const progressPath = process.env.TCRN_TEST_CONTROLLER_PROGRESS_PATH;
 if (!Number.isSafeInteger(parentPid) || parentPid <= 0 || !Number.isSafeInteger(processGroup) || processGroup <= 0 ||
     typeof outputDirectory !== "string" || !outputDirectory.startsWith("/") || !basename(outputDirectory).startsWith("tcrn-test-controller-")) {
   process.exit(1);
-}
-
-function delay(milliseconds) {
-  return new Promise((resolveDelay) => setTimeout(resolveDelay, milliseconds));
 }
 
 function parentAlive() {
@@ -53,11 +49,6 @@ function signal(pids, signal) {
   }
 }
 
-async function progressRecord(type, fields = {}) {
-  if (!progressPath) return;
-  await appendProgressEvent(progressPath, { type, ...fields });
-}
-
 async function removeOutputDirectory() {
   const path = resolve(outputDirectory);
   if (basename(path) !== basename(outputDirectory) || !basename(path).startsWith("tcrn-test-controller-")) {
@@ -75,7 +66,7 @@ async function terminateGroup() {
     await delay(20);
     members = groupMembers();
     if (members.length === 0) {
-      await progressRecord("reaper-clean", { processGroup });
+      await appendProgressIfConfigured(progressPath, "reaper-clean", { processGroup });
       process.send?.({ type: "clean" });
       groupClean = true;
       return;
