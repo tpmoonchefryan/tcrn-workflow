@@ -120,6 +120,12 @@ export const HARNESS_CAPABILITIES = Object.freeze([
     codex: { mechanism: "hook", event: "SubagentStop", matcher: null, handler: "scripts/dispatch-telemetry-hook.mjs", timeout: 10 },
   },
   {
+    id: "subagent-task-context-injection",
+    purpose: "an explicitly bound subagent receives only its task context at start; unbound children receive no generic knowledge injection",
+    claude: { mechanism: "hook", event: "SubagentStart", matcher: null, handler: "scripts/knowledge-inject-hook.mjs", timeout: 30 },
+    codex: { mechanism: "hook", event: "SubagentStart", matcher: null, handler: "scripts/knowledge-inject-hook.mjs", timeout: 30 },
+  },
+  {
     id: "stop-response-style-check",
     purpose: "a response that violates the platform output-contract rules is caught and fed back before the turn stops",
     claude: { mechanism: "hook", event: "Stop", matcher: null, handler: "tools/stop-pact/response-style-hook.mjs", timeout: 10 },

@@ -67,6 +67,16 @@ test("STORY-372 both hosts receive generated SubagentStart and SubagentStop tele
   }
 });
 
+test("STORY-418 both hosts register the bound subagent context path separately from telemetry", () => {
+  for (const host of HOSTS) {
+    const entries = hookEntriesFor(host).filter((entry) => entry.id === "subagent-task-context-injection");
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].event, "SubagentStart");
+    assert.equal(entries[0].handler, "scripts/knowledge-inject-hook.mjs");
+    assert.equal(entries[0].timeout, 30);
+  }
+});
+
 test("INC-220 the two renderings carry the same handlers for the same capabilities", () => {
   // Rendering differences are legitimate — file shape, command form, one host-specific
   // Stop handler. A capability present on one host and absent on the other is not.

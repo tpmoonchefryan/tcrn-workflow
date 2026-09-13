@@ -14,8 +14,9 @@ import { mkdir, mkdtemp, realpath, rm, writeFile, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  extractQueryTokens, promptTriggers, matchedTriggerKeywords, runInjection, truncateToBudget
+  extractQueryTokens, promptTriggers, matchedTriggerKeywords, parseInjectionProtocol, runInjection, serializeInjectionProtocol, truncateToBudget
 } from "../scripts/knowledge-inject.mjs";
+import { filterCandidatesByDispatchContext, normalizeDispatchContext } from "../scripts/injection-session.mjs";
 import {
   acquireWorkspaceLease,
   createKnowledgeUnit,
@@ -227,4 +228,26 @@ test("truncateToBudget never grows the output past the budget", () => {
   const cjk = "探针".repeat(300); // 600 CJK chars = 1800 bytes
   const cut = truncateToBudget(cjk, 500);
   assert.ok(Buffer.byteLength(cut.text, "utf8") <= 500 + 3); // allow a split multibyte char
+});
+
+test("STORY-418 recall is filtered by an explicit workId and Pack binding", () => {
+  const binding = normalizeDispatchContext({ role: "subagent", workId: "work:bound", pack: "EPIC135/HC1" }, { env: {} });
+  const result = filterCandidatesByDispatchContext([
+    { id: "knowledge:bound", workId: "work:bound", pack: "EPIC135/HC1" },
+    { id: "knowledge:wrong-work", workId: "work:other", pack: "EPIC135/HC1" },
+    { id: "knowledge:unbound", title: "same prompt words" },
+  ], binding);
+  assert.equal(result.reasonCode, "DISPATCH_CONTEXT_MATCHED");
+  assert.deepEqual(result.records.map((record) => record.id), ["knowledge:bound"]);
+  assert.equal(result.excluded, 2);
+});
+
+test("STORY-419 protocol truncation is explicit and never looks like delivered context", () => {
+  const oversized = serializeInjectionProtocol({ ok: true, injected: true, injection: "z".repeat(600_000) });
+  const parsed = parseInjectionProtocol(oversized.text);
+  assert.equal(oversized.truncated, true);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.value.ok, false);
+  assert.equal(parsed.value.reasonCode, "INJECT_OUTPUT_TRUNCATED");
+  assert.equal(parsed.value.injected, undefined);
 });

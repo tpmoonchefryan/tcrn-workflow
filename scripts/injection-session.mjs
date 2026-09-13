@@ -26,6 +26,25 @@ export const MAX_INJECTION_ROWS = 8;
 export const MAX_INJECTION_ROW_BYTES = 200;
 export const DEFAULT_STATE_DIRECTORY = join(homedir(), ".tcrn-injection");
 
+// TCRN-CROSS-STORY-418: a hook payload is not a work assignment.  The three
+// values below are the minimum binding an injection is allowed to trust.  They
+// deliberately live on this small, host-neutral module so Claude and Codex use
+// the same parser and the same refusal reasons.
+export const DISPATCH_CONTEXT_SCHEMA_VERSION = "tcrn.dispatch-context.v1";
+export const DISPATCH_ROLES = Object.freeze(["main", "subagent"]);
+export const DISPATCH_CONTEXT_FIELD_BYTES = Object.freeze({ role: 64, workId: 256, pack: 256, dispatchId: 256, parentSession: 256, dependency: 256 });
+
+const ROLE_ALIASES = Object.freeze({
+  main: "main",
+  orchestrator: "main",
+  parent: "main",
+  "main-agent": "main",
+  subagent: "subagent",
+  "sub-agent": "subagent",
+  child: "subagent",
+  worker: "subagent",
+});
+
 const LOCK_WAIT_MS = 5;
 const LOCK_STALE_MS = 60_000;
 const MAX_HISTORY = 256;
@@ -58,6 +77,183 @@ export function recordIdentity(record) {
   if (typeof record?.id === "string" && record.id.length > 0) return record.id;
   if (typeof record?.key === "string" && record.key.length > 0) return `${record.kind ?? "record"}:${record.key}`;
   return null;
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function boundedContextText(value, maximumBytes) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (text.length === 0 || text.includes("\u0000") || !text.isWellFormed()) return null;
+  const bounded = boundedUtf8(text, maximumBytes);
+  return bounded === text ? text : null;
+}
+
+function contextScopes(input) {
+  if (!isObject(input)) return [];
+  return [
+    input,
+    input.context,
+    input.dispatchContext,
+    input.dispatch,
+    input.task,
+    input.subagent,
+    input.agent,
+  ].filter(isObject);
+}
+
+function contextValues(scopes, names) {
+  return scopes.flatMap((scope) => names.map((name) => scope[name]))
+    .filter((value) => value !== undefined && value !== null && value !== "");
+}
+
+function oneContextValue(values) {
+  const strings = values.map((value) => typeof value === "string" ? value.trim() : value);
+  const unique = [];
+  for (const value of strings) {
+    if (!unique.some((entry) => JSON.stringify(entry) === JSON.stringify(value))) unique.push(value);
+  }
+  return { value: unique[0], conflict: unique.length > 1 };
+}
+
+function contextEnvironmentValues(env, names) {
+  return names.map((name) => env?.[name]).filter((value) => value !== undefined && value !== null && value !== "");
+}
+
+function normaliseRole(value) {
+  if (typeof value !== "string") return null;
+  return ROLE_ALIASES[value.trim().toLowerCase()] ?? null;
+}
+
+function contextPackValue(value) {
+  if (isObject(value)) return value.id ?? value.packId ?? value.pack_id ?? value.key ?? null;
+  return value;
+}
+
+function contextDependencyValues(scopes, env) {
+  const values = contextValues(scopes, ["dependencies", "dependencyIds", "dependency_ids", "dependsOn"])
+    .flatMap((value) => Array.isArray(value) ? value : String(value).split(","));
+  values.push(...contextEnvironmentValues(env, ["TCRN_DISPATCH_DEPENDENCIES", "TCRN_CONTEXT_DEPENDENCIES"]));
+  return [...new Set(values.map((value) => boundedContextText(String(value), DISPATCH_CONTEXT_FIELD_BYTES.dependency)).filter(Boolean))].slice(0, 16);
+}
+
+/**
+ * Resolve the host supplied dispatch binding without consulting prompt text.
+ *
+ * A binding is intentionally all-or-nothing: role, workId and pack must arrive
+ * together.  Treating a missing field as a default would let an unbound child
+ * inherit whichever active item happened to win the old L0 ordering.
+ */
+export function normalizeDispatchContext(input = {}, { env = process.env, requireBinding = true } = {}) {
+  const scopes = contextScopes(input);
+  const roleValues = [...contextValues(scopes, ["role", "taskRole", "task_role", "agentRole", "agent_role", "dispatchRole", "dispatch_role"]), ...contextEnvironmentValues(env, ["TCRN_DISPATCH_ROLE", "TCRN_CONTEXT_ROLE"])];
+  const workValues = [...contextValues(scopes, ["workId", "workID", "work_id", "workItemId", "work_item_id", "taskId", "task_id"]), ...contextEnvironmentValues(env, ["TCRN_DISPATCH_WORK_ID", "TCRN_WORK_ID", "TCRN_CONTEXT_WORK_ID"])];
+  const packValues = [...contextValues(scopes, ["pack", "packId", "packID", "pack_id", "taskPack", "task_pack", "taskPackId", "task_pack_id", "batch", "batchId", "batchID", "batch_id"]), ...contextEnvironmentValues(env, ["TCRN_DISPATCH_PACK", "TCRN_PACK_ID", "TCRN_CONTEXT_PACK"])];
+  const dispatchValues = [...contextValues(scopes, ["dispatchId", "dispatch_id"]), ...contextEnvironmentValues(env, ["TCRN_DISPATCH_ID"])];
+  const parentValues = [...contextValues(scopes, ["parentSession", "parent_session", "parentSessionId", "parent_session_id"]), ...contextEnvironmentValues(env, ["TCRN_PARENT_SESSION", "TCRN_TELEMETRY_PARENT_SESSION"])]
+    .map((value) => String(value));
+  const role = oneContextValue(roleValues.map(normaliseRole));
+  const workId = oneContextValue(workValues.map((value) => typeof value === "string" ? boundedContextText(value, DISPATCH_CONTEXT_FIELD_BYTES.workId) : null));
+  const pack = oneContextValue(packValues.map(contextPackValue).map((value) => typeof value === "string" ? boundedContextText(value, DISPATCH_CONTEXT_FIELD_BYTES.pack) : null));
+  const dispatchId = oneContextValue(dispatchValues.map((value) => typeof value === "string" ? boundedContextText(value, DISPATCH_CONTEXT_FIELD_BYTES.dispatchId) : null));
+  const parentSession = oneContextValue(parentValues.map((value) => boundedContextText(value, DISPATCH_CONTEXT_FIELD_BYTES.parentSession)));
+  const hasAny = roleValues.length > 0 || workValues.length > 0 || packValues.length > 0;
+  const base = {
+    schemaVersion: DISPATCH_CONTEXT_SCHEMA_VERSION,
+    bound: false,
+    role: role.value ?? null,
+    workId: workId.value ?? null,
+    pack: pack.value ?? null,
+    dependencies: contextDependencyValues(scopes, env),
+    dispatchId: dispatchId.value ?? null,
+    parentSession: parentSession.value ?? null,
+  };
+  if (!hasAny && !requireBinding) return { ok: true, ...base, mode: "legacy" };
+  if (role.conflict || workId.conflict || pack.conflict || dispatchId.conflict || parentSession.conflict) {
+    return { ok: false, reasonCode: "DISPATCH_CONTEXT_BINDING_CONFLICT", ...base };
+  }
+  if (role.value == null || !DISPATCH_ROLES.includes(role.value)) {
+    const missing = roleValues.length === 0 ? ["role"] : [];
+    if (workId.value == null) missing.push("workId");
+    if (pack.value == null) missing.push("pack");
+    return { ok: false, reasonCode: roleValues.length === 0 ? "DISPATCH_CONTEXT_BINDING_MISSING" : "DISPATCH_CONTEXT_ROLE_INVALID", missing, ...base };
+  }
+  const missing = [];
+  if (workId.value == null) missing.push("workId");
+  if (pack.value == null) missing.push("pack");
+  if (missing.length > 0) return { ok: false, reasonCode: "DISPATCH_CONTEXT_BINDING_MISSING", missing, ...base };
+  return { ok: true, ...base, bound: true, mode: role.value };
+}
+
+// American spelling is kept as a small compatibility alias for callers that
+// use the surrounding Workflow vocabulary.
+export const normalizeDispatchBinding = normalizeDispatchContext;
+
+function extensionContextValue(record, key) {
+  const raw = record?.extensions?.[key];
+  return isObject(raw) && Object.hasOwn(raw, "value") ? raw.value : raw;
+}
+
+function contextWorkIds(record) {
+  const values = [
+    ["Initiative", "Epic", "Story", "Subtask", "Incident", "Release", "work"].includes(record?.kind) ? record?.id : null,
+    record?.workId,
+    record?.work_id,
+    ...(Array.isArray(record?.workIds) ? record.workIds : []),
+    ...(Array.isArray(record?.linkedWorkIds) ? record.linkedWorkIds : []),
+    ...(Array.isArray(record?.relatedWorkIds) ? record.relatedWorkIds : []),
+    record?.sourceWorkId,
+    record?.taskWorkId,
+    record?.context?.workId,
+    record?.metadata?.workId,
+    extensionContextValue(record, "advisory:workId"),
+    extensionContextValue(record, "advisory:work-id"),
+    extensionContextValue(record, "advisory:workIds"),
+    extensionContextValue(record, "advisory:linkedWorkIds"),
+  ];
+  return new Set(values.flatMap((value) => Array.isArray(value) ? value : [value]).filter((value) => typeof value === "string"));
+}
+
+function contextPacks(record) {
+  const values = [
+    record?.pack,
+    record?.packId,
+    record?.pack_id,
+    record?.taskPack,
+    record?.packKey,
+    record?.batch,
+    record?.batchId,
+    record?.context?.pack,
+    record?.metadata?.pack,
+    extensionContextValue(record, "advisory:pack"),
+    extensionContextValue(record, "advisory:packId"),
+    extensionContextValue(record, "advisory:sprint"),
+    ...(Array.isArray(record?.labels) ? record.labels : []),
+    ...(Array.isArray(record?.tags) ? record.tags : []),
+  ];
+  return new Set(values.flatMap((value) => Array.isArray(value) ? value : [value]).filter((value) => typeof value === "string"));
+}
+
+/** Return true only when a candidate carries the bound work or pack identity. */
+export function matchesDispatchContext(record, context) {
+  if (!context?.ok || context.bound !== true) return false;
+  const workIds = contextWorkIds(record);
+  const packs = contextPacks(record);
+  const workMatch = workIds.has(context.workId);
+  const packMatch = packs.has(context.pack);
+  // A bound work record normally has no pack field; its id is sufficient.  A
+  // knowledge/minutes row may carry either explicit link.  Unbound rows are not
+  // admitted merely because their prose happens to mention the prompt.
+  return (workIds.size === 0 || workMatch) && (packs.size === 0 || packMatch) && (workIds.size > 0 || packs.size > 0);
+}
+
+export function filterCandidatesByDispatchContext(records, context) {
+  if (!context?.ok || context.bound !== true) return { records: [], excluded: Array.isArray(records) ? records.length : 0, reasonCode: context?.reasonCode ?? "DISPATCH_CONTEXT_BINDING_MISSING" };
+  const input = Array.isArray(records) ? records : [];
+  const filtered = input.filter((record) => matchesDispatchContext(record, context));
+  return { records: filtered, excluded: input.length - filtered.length, reasonCode: filtered.length > 0 ? "DISPATCH_CONTEXT_MATCHED" : "DISPATCH_CONTEXT_NO_MATCH" };
 }
 
 /**
@@ -170,6 +366,20 @@ function workRow(record, workById) {
   return boundedUtf8(`[${kind} ${key} ${status}] ${title} ${summary} · ${parentLabel} · ${ruling}`.replace(/[ \t]+/gu, " ").trim(), MAX_INJECTION_ROW_BYTES);
 }
 
+function ancestorsFor(workById, record) {
+  const parents = [];
+  let cursor = record;
+  const visited = new Set();
+  while (cursor?.parentId && !visited.has(cursor.parentId)) {
+    visited.add(cursor.parentId);
+    const parent = workById.get(cursor.parentId);
+    if (parent === undefined) break;
+    parents.push(parent);
+    cursor = parent;
+  }
+  return parents;
+}
+
 function minutesRow(minutes, conferences) {
   if (minutes === null) return "纪要 —";
   const conference = conferences.find((entry) => entry.id === minutes.conferenceId);
@@ -203,7 +413,8 @@ function compareWork(left, right, sequences) {
  * Render the six-line L0 frame.  The summary is a replacement for the sixth slot, so the
  * record displaced by it is deliberately included in the omitted count.
  */
-export function buildL0Injection(state, { maxLines = 6 } = {}) {
+export function buildL0Injection(state, { maxLines = 6, context = null } = {}) {
+  if (context !== null) return buildBoundedTaskContext(state, context, { maxLines, maxBytes: DEFAULT_PER_PROMPT_BYTES });
   const allWork = (state?.work ?? []).filter((record) => !record.tombstone);
   const workById = new Map(allWork.map((record) => [record.id, record]));
   const activeReady = allWork.filter((record) => ACTIVE_READY.has(record.status));
@@ -269,10 +480,64 @@ export function buildBoundedCandidateContext(candidates, { maxRows = MAX_INJECTI
   return { text: rows.join("\n"), rows, bytes, ids: (candidates ?? []).slice(0, rows.length).map(recordIdentity).filter(Boolean) };
 }
 
+/**
+ * Build the small work frame allowed for an explicitly bound dispatch.
+ *
+ * Main/orchestrator work gets the records carrying the same Pack plus its
+ * ancestry.  A subagent gets only its own record and ancestry.  In particular,
+ * this never falls back to the global active/ready ordering used by legacy L0.
+ */
+export function buildBoundedTaskContext(state, context, { maxLines = 6, maxBytes = DEFAULT_PER_PROMPT_BYTES } = {}) {
+  if (!context?.ok || context.bound !== true) {
+    return { ok: false, reasonCode: context?.reasonCode ?? "DISPATCH_CONTEXT_BINDING_MISSING", text: "", lines: [], ids: [], bytes: 0, omittedCount: 0 };
+  }
+  const allWork = (state?.work ?? []).filter((record) => !record.tombstone);
+  const workById = new Map(allWork.map((record) => [record.id, record]));
+  const target = workById.get(context.workId);
+  if (target === undefined) {
+    return { ok: false, reasonCode: "DISPATCH_CONTEXT_WORK_NOT_FOUND", workId: context.workId, pack: context.pack, text: "", lines: [], ids: [], bytes: 0, omittedCount: 0 };
+  }
+  if (!matchesDispatchContext(target, context)) {
+    return { ok: false, reasonCode: "DISPATCH_CONTEXT_PACK_MISMATCH", workId: context.workId, pack: context.pack, text: "", lines: [], ids: [], bytes: 0, omittedCount: 0 };
+  }
+  const selected = [];
+  const add = (record) => {
+    if (record !== undefined && !selected.some((entry) => entry.id === record.id)) selected.push(record);
+  };
+  add(target);
+  for (const parent of ancestorsFor(workById, target).reverse()) add(parent);
+  if (context.role === "main") {
+    // A Pack is a declared batch identity, not a substring query.  Only exact
+    // labels/extension values are admitted, so an unrelated active item cannot
+    // enter because its title happens to share a word with the task.
+    for (const record of allWork) if (matchesDispatchContext(record, context)) add(record);
+  }
+  const bounded = buildBoundedCandidateContext(selected, { maxRows: maxLines, maxBytes, workById });
+  const visibleIds = new Set(bounded.ids);
+  return {
+    ok: true,
+    reasonCode: "DISPATCH_CONTEXT_READY",
+    role: context.role,
+    workId: context.workId,
+    pack: context.pack,
+    text: bounded.text,
+    lines: bounded.rows,
+    ids: bounded.ids,
+    bytes: bounded.bytes,
+    omittedCount: selected.filter((record) => !visibleIds.has(record.id)).length,
+    recordCount: selected.length,
+  };
+}
+
 function emptySession(sessionId) {
   return {
     sessionId,
     emittedIds: [],
+    // `pendingIds` are generated but not acknowledged by the hook wrapper yet.
+    // Keeping them separate prevents a failed wrapper parse from turning a
+    // later retry into ALREADY_INJECTED_SKIPPED.
+    pendingIds: [],
+    deliveryAttempts: 0,
     emittedBytes: 0,
     l1Bytes: 0,
     lastL0: null,
@@ -291,6 +556,8 @@ function normaliseSession(sessionId, value) {
   return {
     ...emptySession(sessionId),
     emittedIds: list("emittedIds"),
+    pendingIds: list("pendingIds").filter((id) => !list("emittedIds").includes(id)),
+    deliveryAttempts: Number.isSafeInteger(source.deliveryAttempts) && source.deliveryAttempts >= 0 ? source.deliveryAttempts : 0,
     emittedBytes: Number.isSafeInteger(source.emittedBytes) && source.emittedBytes >= 0 ? source.emittedBytes : 0,
     l1Bytes: Number.isSafeInteger(source.l1Bytes) && source.l1Bytes >= 0 ? source.l1Bytes : 0,
     lastL0: typeof source.lastL0 === "string" ? source.lastL0 : null,
@@ -433,6 +700,42 @@ export class InjectionSessionStore {
   readSession(sessionId) {
     return normaliseSession(String(sessionId ?? ""), readDocument(this.statePath).sessions[String(sessionId ?? "")]);
   }
+}
+
+/**
+ * A wrapper calls this only after it has parsed a successful production result.
+ * The state file is outside the governed control tree and is protected by the
+ * same session lock as generation, so acknowledgement is atomic with respect
+ * to a concurrent hook invocation.
+ */
+export function acknowledgeInjection(sessionId, ids, { directory = DEFAULT_STATE_DIRECTORY } = {}) {
+  const requested = [...new Set((ids ?? []).filter((id) => typeof id === "string" && id.length > 0))];
+  const store = new InjectionSessionStore({ directory });
+  const lease = store.acquire(sessionId);
+  try {
+    const pending = new Set(lease.session.pendingIds);
+    const acknowledged = requested.filter((id) => pending.has(id));
+    for (const id of acknowledged) {
+      pending.delete(id);
+      if (!lease.session.emittedIds.includes(id)) lease.session.emittedIds.push(id);
+    }
+    lease.session.pendingIds = [...pending];
+    lease.session.deliveryAttempts += 1;
+    lease.commit();
+    return {
+      ok: true,
+      reasonCode: acknowledged.length > 0 ? "INJECTION_DELIVERY_ACKNOWLEDGED" : "INJECTION_DELIVERY_ALREADY_ACKNOWLEDGED",
+      acknowledgedIds: acknowledged,
+      pendingIds: [...pending],
+      emittedIds: [...lease.session.emittedIds],
+    };
+  } finally {
+    lease.release();
+  }
+}
+
+export function pendingInjectionIds(sessionId, { directory = DEFAULT_STATE_DIRECTORY } = {}) {
+  return new InjectionSessionStore({ directory }).readSession(sessionId).pendingIds;
 }
 
 function parseJsonLines(text) {

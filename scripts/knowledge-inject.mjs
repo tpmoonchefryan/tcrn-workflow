@@ -10,7 +10,7 @@
 // relevance machine (the `recall` verb — never a second relevance routine written
 // here), applies a HARD byte budget, and emits a metadata-level injection (never full
 // bodies). The hook side registers it on SessionStart (baseline, once) and
-// UserPromptSubmit (every prompt).
+// UserPromptSubmit (every prompt) and explicitly bound SubagentStart (task frame).
 //
 // THE DIVISION OF LABOUR IS THE ENGINE'S, NOT MINE. Relevance selection = the
 // recall verb. Budget / freshness / authority = context-route, which in
@@ -44,8 +44,11 @@ import {
   InjectionSessionStore,
   UninjectedModelCall,
   buildBoundedCandidateContext,
+  buildBoundedTaskContext,
   buildL0Injection,
   deduplicateCandidates,
+  filterCandidatesByDispatchContext,
+  normalizeDispatchContext,
   pullCorrelation,
   temporaryEmptyDirectory,
   removeTemporaryDirectory,
@@ -122,6 +125,13 @@ export const DEFAULT_PER_PROMPT = DEFAULT_PER_PROMPT_BYTES;
 // actually decides how much of it is spoken.
 export const DEFAULT_RECALL_LIMIT = 8;
 export const MAX_TOKENS_IN_QUERY = 6;
+// The hook protocol is a bounded, single-document JSON exchange.  This ceiling
+// applies to the child-process result, not to the smaller additionalContext
+// budget; a result beyond it is a visible transport failure and is retriable.
+export const INJECTION_PROTOCOL_VERSION = "tcrn.injection-protocol.v2";
+export const MAX_INJECTION_PROTOCOL_BYTES = 512_000;
+export const MAX_INJECTION_PROTOCOL_ERROR_BYTES = 512;
+export const DEFAULT_INJECTION_RETRIES = 1;
 
 const STOPWORDS = new Set([
   "怎么", "应该", "没有", "为什么", "如果", "可以", "一个", "这个", "那个",
@@ -141,6 +151,68 @@ function parseFlags(argv) {
     else { flags[key] = next; i += 1; }
   }
   return flags;
+}
+
+function protocolObject(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, reasonCode: "INJECT_OUTPUT_INVALID" };
+  const output = { ...value };
+  // The wrapper only needs metadata-level rows.  Keeping a whole recall result
+  // (and especially an accidental body field) in argv/stdout makes transport
+  // size depend on store contents and can reproduce INC318 under ARG_MAX.
+  if (Array.isArray(output.candidates)) {
+    output.candidates = output.candidates.map((candidate) => {
+      if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) return candidate;
+      const safe = {};
+      for (const key of ["id", "kind", "key", "status", "title", "subject", "summary", "score", "workId", "workIds", "linkedWorkIds", "pack", "packId", "labels", "tags"]) {
+        if (candidate[key] !== undefined) safe[key] = candidate[key];
+      }
+      return safe;
+    });
+  }
+  if (typeof output.error === "string") output.error = output.error.slice(-MAX_INJECTION_PROTOCOL_ERROR_BYTES);
+  return output;
+}
+
+/** Serialize one bounded protocol document for the production CLI. */
+export function serializeInjectionProtocol(value, { maxBytes = MAX_INJECTION_PROTOCOL_BYTES } = {}) {
+  const projected = { ...protocolObject(value), protocolVersion: INJECTION_PROTOCOL_VERSION };
+  const text = JSON.stringify(projected);
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes <= maxBytes) return { text, bytes, truncated: false, value: projected };
+  const failure = {
+    protocolVersion: INJECTION_PROTOCOL_VERSION,
+    ok: false,
+    reasonCode: "INJECT_OUTPUT_TRUNCATED",
+    truncated: true,
+    outputBytes: bytes,
+    maximumBytes: maxBytes,
+  };
+  return { text: JSON.stringify(failure), bytes: Buffer.byteLength(JSON.stringify(failure), "utf8"), truncated: true, value: failure };
+}
+
+/** Parse either the current one-document protocol or a legacy pretty JSON result. */
+export function parseInjectionProtocol(stdout, { maxBytes = MAX_INJECTION_PROTOCOL_BYTES } = {}) {
+  const source = String(stdout ?? "");
+  const bytes = Buffer.byteLength(source, "utf8");
+  if (bytes > maxBytes) return { ok: false, reasonCode: "INJECT_OUTPUT_TRUNCATED", outputBytes: bytes, maximumBytes: maxBytes };
+  const text = source.trim();
+  if (text.length === 0) return { ok: false, reasonCode: "INJECT_OUTPUT_UNPARSEABLE", outputBytes: bytes };
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+    // A legacy one-line response is accepted, but a mixture of logs and JSON
+    // is not: taking the last line was the INC318 failure mode in reverse.
+    if (lines.length === 1) {
+      try { parsed = JSON.parse(lines[0]); } catch { parsed = null; }
+    }
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return { ok: false, reasonCode: "INJECT_OUTPUT_UNPARSEABLE", outputBytes: bytes };
+  if (parsed.protocolVersion !== undefined && parsed.protocolVersion !== INJECTION_PROTOCOL_VERSION) {
+    return { ok: false, reasonCode: "INJECT_PROTOCOL_VERSION_UNSUPPORTED", protocolVersion: parsed.protocolVersion, outputBytes: bytes };
+  }
+  return { ok: true, value: parsed, outputBytes: bytes, legacy: parsed.protocolVersion === undefined };
 }
 
 /** Meaningful query tokens: ASCII words and contiguous CJK phrases. */
@@ -492,8 +564,17 @@ export async function runInjection({
   settings = null,
   recall = null,
   telemetry = null,
+  dispatchContext = null,
+  context = null,
 } = {}) {
   void triggerKeywords;
+  const suppliedContext = dispatchContext ?? context;
+  const boundContext = suppliedContext === null
+    ? null
+    : normalizeDispatchContext(suppliedContext, { env: {}, requireBinding: true });
+  if (boundContext !== null && boundContext.ok !== true) {
+    return { ok: true, injected: false, reason: boundContext.reasonCode, reasonCode: boundContext.reasonCode, candidates: [], injectedBytes: 0, dispatchContext: boundContext };
+  }
   const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
   // The emptiness gate, not the query: a prompt with no meaningful token buys nothing
   // from a chain read, and the whole prompt is what recall ranks against.
@@ -509,6 +590,16 @@ export async function runInjection({
     "allow-trailing": true,
     at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
   }, { containerRoot, withPartitionFlag: true });
+  const invokeRecall = async (query) => {
+    try {
+      return typeof recall === "function" ? await recall(query, {
+        limit: recallLimit,
+        ...(boundContext?.bound === true ? { role: boundContext.role, workId: boundContext.workId, pack: boundContext.pack } : {}),
+      }) : await askRecall(query);
+    } catch (error) {
+      return { ok: false, reasonCode: "RECALL_FAILED", error: String(error?.reasonCode ?? error?.message ?? error) };
+    }
+  };
   const retrievalSource = "knowledge-inject:retrieval";
   await emitTelemetry(telemetry, { kind: "retrieval", observationPhase: "start", observationSource: retrievalSource, payload: { stage: "start" } });
   const originalPrompt = String(prompt ?? "");
@@ -517,6 +608,13 @@ export async function runInjection({
   let owed = null;
   let queryTranslations = 0;
   let translationFailure = null;
+  const invokeTranslator = async (original, owedLanguage) => {
+    try {
+      return await translate(original, owedLanguage);
+    } catch (error) {
+      return { text: null, reasonCode: "UNINJECTED_MODEL_FAILED", error: String(error?.message ?? error) };
+    }
+  };
   // R6: use the engine's language policy before recall. The old post-recall path remains
   // as a fail-open compatibility branch for callers that do not have a settings catalog.
   if (typeof translate === "function") {
@@ -524,7 +622,7 @@ export async function runInjection({
     const languageAnswer = await queryLanguageAnswer(originalPrompt, catalogSettings);
     owed = languageAnswer.queryTranslation ?? null;
     if (owed !== null) {
-      const answer = await translate(originalPrompt, owed);
+      const answer = await invokeTranslator(originalPrompt, owed);
       const text = typeof answer === "string" ? answer : answer?.text;
       if (typeof text === "string" && text.length > 0 && text !== originalPrompt) {
         query = text;
@@ -535,7 +633,7 @@ export async function runInjection({
       }
     }
   }
-  const call = typeof recall === "function" ? await recall(query, { limit: recallLimit }) : await askRecall(query);
+  const call = await invokeRecall(query);
   if (!call.ok) {
     await emitTelemetry(telemetry, { kind: "retrieval", observationPhase: "stop", observationSource: retrievalSource, payload: { stage: "stop" } });
     return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
@@ -547,10 +645,10 @@ export async function runInjection({
   // is worse than an answer ranked in the wrong language. No translator, a bundle without
   // this prompt, or a second recall that errors -- each keeps the first answer and says so.
   if (translatedQuery === null && owed !== null && typeof translate === "function") {
-    const answer = await translate(originalPrompt, owed);
+    const answer = await invokeTranslator(originalPrompt, owed);
     const text = typeof answer === "string" ? answer : answer?.text;
     if (typeof text === "string" && text.length > 0) {
-      const second = typeof recall === "function" ? await recall(text, { limit: recallLimit }) : await askRecall(text);
+      const second = await invokeRecall(text);
       if (second.ok) {
         translatedQuery = text;
         payload = recallPayload(second);
@@ -558,7 +656,12 @@ export async function runInjection({
       }
     }
   }
-  const candidates = payload.records ?? [];
+  const rawCandidates = Array.isArray(payload.records) ? payload.records : [];
+  const scoped = boundContext === null
+    ? { records: rawCandidates, excluded: 0, reasonCode: "DISPATCH_CONTEXT_UNSCOPED" }
+    : filterCandidatesByDispatchContext(rawCandidates, boundContext);
+  const candidates = scoped.records;
+  payload = { ...payload, records: candidates };
   await emitTelemetry(telemetry, {
     kind: "retrieval-hit",
     observationPhase: "stop",
@@ -592,10 +695,12 @@ export async function runInjection({
   return {
     ok: true,
     injected: true,
-    reason: budgetExceeded ? "INJECTION_BUDGET_EXCEEDED" : "INJECTION_PRODUCED",
+    reason: budgetExceeded ? "INJECTION_BUDGET_EXCEEDED" : candidates.length === 0 && boundContext !== null ? scoped.reasonCode : "INJECTION_PRODUCED",
+    reasonCode: budgetExceeded ? "INJECTION_BUDGET_EXCEEDED" : candidates.length === 0 && boundContext !== null ? scoped.reasonCode : "INJECTION_PRODUCED",
     ...(budgetExceeded ? { reasonCode: "INJECTION_BUDGET_EXCEEDED", warning: { reasonCode: "INJECTION_BUDGET_EXCEEDED", actualBytes: injectedBytes, budget: effectiveBudget } } : {}),
     queryTokens: tokens,
     candidateCount: candidates.length,
+    excludedCandidateCount: scoped.excluded,
     candidates,
     injectedBytes,
     truncated: false,
@@ -605,6 +710,7 @@ export async function runInjection({
     queryTranslation: owed,
     translatedQuery,
     telemetry: { queryTranslations, ...(translationFailure === null ? {} : { translationFailure }) },
+    ...(boundContext === null ? {} : { dispatchContext: boundContext }),
     injection: joined.length === 0 ? null : joined
   };
 }
@@ -706,6 +812,17 @@ export async function runSessionInjection({
   judgeEnabled = true,
   host = process.env.TCRN_HOST ?? "claude",
   recall = null,
+  dispatchContext = null,
+  context = null,
+  role = undefined,
+  workId = undefined,
+  pack = undefined,
+  dependencies = undefined,
+  dispatchId = undefined,
+  parentSession = undefined,
+  enforceBinding = false,
+  deliveryMode = "immediate",
+  retryPending = false,
 } = {}) {
   const store = new InjectionSessionStore({ directory: stateDirectory });
   const lease = await store.acquireAsync(sessionId);
@@ -718,38 +835,65 @@ export async function runSessionInjection({
   let decisionReason = "NO_CONTEXT";
   let retirementSweep = null;
   let observationCoverage = null;
+  let contextFailure = false;
+  const explicitBinding = dispatchContext ?? context ?? {
+    ...hookInput,
+    ...(role === undefined ? {} : { role }),
+    ...(workId === undefined ? {} : { workId }),
+    ...(pack === undefined ? {} : { pack }),
+    ...(dependencies === undefined ? {} : { dependencies }),
+    ...(dispatchId === undefined ? {} : { dispatchId }),
+    ...(parentSession === undefined ? {} : { parentSession }),
+  };
+  const bindingRequested = enforceBinding || dispatchContext !== null || context !== null || role !== undefined || workId !== undefined || pack !== undefined || dependencies !== undefined || dispatchId !== undefined || parentSession !== undefined || event === "SubagentStart" || (event !== "PostToolUse" && Object.keys(hookInput ?? {}).length > 0);
+  const dispatch = normalizeDispatchContext(explicitBinding, { requireBinding: bindingRequested });
+  const pendingMode = deliveryMode === "pending";
   try {
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
     const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
     const observationBoundary = event === "SessionStart" ? await recordObservationBoundary({ partition, containerRoot, sessionId, host, workspaceState, phase: "start" }) : null;
     observationCoverage = await sessionObservationCoverage(event, partition, containerRoot, workspaceState);
     retirementSweep = await sessionRetirementSweep(event, partition, containerRoot);
-    calls = await productionModelCalls({
+    // A malformed or unbound hook payload receives a stable refusal and no
+    // context/model work.  Direct library callers with no hook payload retain
+    // the legacy main-session behaviour for compatibility.
+    if (dispatch.ok !== true) {
+      decisionReason = dispatch.reasonCode;
+    }
+    const subagent = dispatch.ok === true && dispatch.bound === true && dispatch.role === "subagent";
+    const auxiliaryModelsAllowed = !subagent;
+    calls = auxiliaryModelsAllowed ? await productionModelCalls({
       host,
       model: settingValue(effectiveSettings, "model.economyTier"),
       translate,
       judgeEnabled,
       judge,
-    });
+    }) : { translate: null, judge: null, cleanup: () => {} };
     const effectiveBudget = Number.isSafeInteger(budget) && budget > 0 ? budget : await configuredInjectionBudget(partition, containerRoot);
     const effectivePerPrompt = Number.isSafeInteger(perPromptBytes) && perPromptBytes > 0 ? perPromptBytes : await configuredPerPromptBytes(partition, containerRoot);
-    const shouldReadL0 = event === "SessionStart" || event === "PostCompact" || event === "UserPromptSubmit";
+    const shouldReadL0 = dispatch.ok === true && (event === "SessionStart" || event === "PostCompact" || event === "UserPromptSubmit" || event === "SubagentStart");
     if (shouldReadL0) {
       const state = workspaceState ?? await workspaceStateForInjection(partition, containerRoot);
       if (state !== null) {
-        l0 = buildL0Injection(state);
+        l0 = dispatch.bound === true ? buildBoundedTaskContext(state, dispatch, { maxLines: 6, maxBytes: effectivePerPrompt }) : buildL0Injection(state);
+        if (l0.ok === false) {
+          contextFailure = true;
+          decisionReason = l0.reasonCode;
+        }
         const changed = l0.text !== lease.session.lastL0;
-        if (event === "SessionStart" || event === "PostCompact" || changed) {
+        const allowSubagentL0 = subagent && event === "SubagentStart";
+        const retryPendingL0 = retryPending && lease.session.pendingIds.some((id) => l0.ids.includes(id));
+        if (event === "SessionStart" || event === "PostCompact" || changed || allowSubagentL0 || retryPendingL0) {
           if (l0.text.length > 0) parts.push(l0.text);
           emittedIds.push(...l0.ids);
           lease.session.lastL0 = l0.text;
           lease.session.lastL0Ids = l0.ids;
-          decisionReason = event === "PostCompact" ? "POST_COMPACT_L0" : changed ? "L0_CHANGED" : "SESSION_START_L0";
+          decisionReason = event === "SubagentStart" ? "SUBAGENT_TASK_CONTEXT" : event === "PostCompact" ? "POST_COMPACT_L0" : changed ? "L0_CHANGED" : "SESSION_START_L0";
         }
       }
     }
 
-    if (event === "PostToolUse") {
+    if (dispatch.ok === true && event === "PostToolUse") {
       const referenceSource = "knowledge-inject:reference";
       await emitTelemetry(telemetry, { kind: "reference", observationPhase: "start", observationSource: referenceSource, payload: { stage: "start" } });
       const correlation = pullCorrelation(hookInput, lease.session.emittedIds, lease.session.pulledIds);
@@ -762,7 +906,9 @@ export async function runSessionInjection({
         await emitTelemetry(telemetry, { kind: "reference", observationPhase: "stop", observationSource: referenceSource, payload: { stage: "stop" } });
         decisionReason = "PULL_IGNORED";
       }
-    } else if (event === "UserPromptSubmit") {
+    } else if (dispatch.ok === true && event === "SubagentStop") {
+      decisionReason = "SUBAGENT_STOP_NO_INJECTION";
+    } else if (dispatch.ok === true && !contextFailure && event === "UserPromptSubmit") {
       if (lease.session.l1Bytes >= effectiveBudget) {
         decisionReason = parts.length > 0 ? "BUDGET_SATURATED_L0_ONLY" : "BUDGET_SATURATED";
       } else {
@@ -775,20 +921,25 @@ export async function runSessionInjection({
             limit,
             containerRoot,
             settings: effectiveSettings,
-            translate: calls.translate,
+            translate: subagent ? null : calls.translate,
             recall,
             telemetry,
+            dispatchContext: dispatch.bound === true ? dispatch : null,
           });
         } finally {
           await emitTelemetry(telemetry, { kind: "trigger", observationPhase: "stop", observationSource: "knowledge-inject:trigger", payload: { event: "UserPromptSubmit", stage: "stop" } });
         }
-        const fresh = deduplicateCandidates(recallResult.candidates, lease.session.emittedIds);
+        const dedupeIds = [
+          ...lease.session.emittedIds,
+          ...(retryPending ? [] : lease.session.pendingIds),
+        ];
+        const fresh = deduplicateCandidates(recallResult.candidates, dedupeIds);
         const allowance = Math.min(effectivePerPrompt, effectiveBudget - lease.session.l1Bytes);
         const candidateContext = buildBoundedCandidateContext(fresh, { maxBytes: allowance });
         if (candidateContext.text.length > 0) {
           parts.push(candidateContext.text);
           emittedIds.push(...candidateContext.ids);
-          lease.session.l1Bytes += candidateContext.bytes;
+          if (!pendingMode) lease.session.l1Bytes += candidateContext.bytes;
           decisionReason = "INJECTION_EMITTED";
         } else if (recallResult.candidates.length > 0) {
           decisionReason = "ALREADY_INJECTED_SKIPPED";
@@ -797,14 +948,20 @@ export async function runSessionInjection({
         } else {
           decisionReason = recallResult.reason ?? "NO_CANDIDATES";
         }
-        if (judgeEnabled && calls.judge !== null) {
-          const judgement = await calls.judge(prompt, fresh, recallResult);
+        if (!subagent && judgeEnabled && calls.judge !== null) {
+          let judgement;
+          try {
+            judgement = await calls.judge(prompt, fresh, recallResult);
+          } catch (error) {
+            judgement = { judgment: null, reasonCode: "UNINJECTED_MODEL_FAILED", error: String(error?.message ?? error) };
+          }
           const judgment = typeof judgement === "boolean" ? judgement : judgement?.judgment;
           lease.session.judgments.push({
             prompt: promptDigest(prompt),
             candidateIds: fresh.map(recordIdentity).filter(Boolean),
             judgment: typeof judgment === "boolean" ? judgment : null,
             model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
+            ...(judgement?.reasonCode ? { reasonCode: judgement.reasonCode } : {}),
             at: new Date().toISOString(),
           });
           await emitTelemetry(telemetry, {
@@ -813,6 +970,7 @@ export async function runSessionInjection({
               candidateCount: fresh.length,
               judgment: typeof judgment === "boolean" ? judgment : null,
               model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
+              ...(judgement?.reasonCode ? { reasonCode: judgement.reasonCode } : {}),
             },
           });
         }
@@ -822,24 +980,39 @@ export async function runSessionInjection({
 
     const injection = parts.join("\n");
     const injectedBytes = Buffer.byteLength(injection, "utf8");
-    lease.session.emittedBytes += injectedBytes;
-    for (const id of emittedIds) if (!lease.session.emittedIds.includes(id)) lease.session.emittedIds.push(id);
+    const uniqueInjectedIds = [...new Set(emittedIds.filter((id) => typeof id === "string"))];
+    const deliveryState = pendingMode && uniqueInjectedIds.length > 0 ? "pending" : "acknowledged";
+    if (deliveryState === "pending") {
+      for (const id of uniqueInjectedIds) {
+        if (!lease.session.pendingIds.includes(id) && !lease.session.emittedIds.includes(id)) lease.session.pendingIds.push(id);
+      }
+    } else {
+      lease.session.emittedBytes += injectedBytes;
+      for (const id of uniqueInjectedIds) {
+        lease.session.pendingIds = lease.session.pendingIds.filter((pending) => pending !== id);
+        if (!lease.session.emittedIds.includes(id)) lease.session.emittedIds.push(id);
+      }
+    }
+    if (pendingMode) lease.session.deliveryAttempts += 1;
     lease.session.decisions.push({
       prompt: promptDigest(prompt),
       event,
       reason: decisionReason,
       ...(recallResult.telemetry?.translationFailure ? { translationFailure: recallResult.telemetry.translationFailure } : {}),
-      injectedIds: [...new Set(emittedIds)],
+      injectedIds: uniqueInjectedIds,
       injectedBytes,
       cumulativeBytes: lease.session.emittedBytes,
       cumulativeL1Bytes: lease.session.l1Bytes,
+      delivery: { mode: pendingMode ? "pending" : "immediate", state: deliveryState, attempt: lease.session.deliveryAttempts },
+      ...(dispatch.bound === true ? { dispatch: { role: dispatch.role, workId: dispatch.workId, pack: dispatch.pack } } : {}),
       at: new Date().toISOString(),
       elapsedMs: Date.now() - started,
     });
     lease.commit();
     return {
       ...recallResult,
-      ok: recallResult.ok !== false,
+      ok: dispatch.ok !== true || contextFailure ? false : recallResult.ok !== false,
+      ...(dispatch.ok !== true ? { reasonCode: dispatch.reasonCode } : contextFailure ? { reasonCode: l0?.reasonCode } : {}),
       injected: injection.length > 0,
       injection: injection.length > 0 ? injection : null,
       injectedBytes,
@@ -847,6 +1020,8 @@ export async function runSessionInjection({
       cumulativeL1Bytes: lease.session.l1Bytes,
       decision: decisionReason,
       l0,
+      delivery: { mode: pendingMode ? "pending" : "immediate", state: deliveryState, ids: uniqueInjectedIds, attempt: lease.session.deliveryAttempts },
+      ...(dispatch.bound === true || dispatch.ok !== true ? { dispatchContext: dispatch } : {}),
       sessionId,
       ...(observationCoverage === null ? {} : { observationCoverage }),
       ...(observationBoundary === null ? {} : { observationBoundary }),
@@ -887,6 +1062,10 @@ function parseArgv(argv) {
   if (typeof flags["hook-input"] === "string") {
     try { hookInput = JSON.parse(flags["hook-input"]); } catch { hookInput = {}; }
   }
+  let context = null;
+  if (typeof flags.context === "string") {
+    try { context = JSON.parse(flags.context); } catch { context = { role: "invalid-context" }; }
+  }
   return {
     prompt: typeof flags.prompt === "string" ? flags.prompt : "",
     partition: typeof flags.partition === "string" ? flags.partition : DEFAULT_PARTITION,
@@ -899,6 +1078,7 @@ function parseArgv(argv) {
     event: typeof flags.event === "string" ? flags.event : "UserPromptSubmit",
     stateDirectory: typeof flags["state-dir"] === "string" ? flags["state-dir"] : undefined,
     hookInput,
+    context,
     judgeEnabled: flags["judge-enabled"] !== "false",
     host: typeof flags.host === "string" ? flags.host : (process.env.TCRN_HOST ?? "claude"),
     selfTest: flags["self-test"] === true,
@@ -906,35 +1086,54 @@ function parseArgv(argv) {
     observationBoundary: typeof flags["observation-boundary"] === "string" ? flags["observation-boundary"] : null,
     at: typeof flags.at === "string" ? flags.at : undefined,
     containerRoot: typeof flags["container-root"] === "string" ? flags["container-root"] : PLATFORM_ROOT,
+    role: typeof flags.role === "string" ? flags.role : undefined,
+    workId: typeof flags["work-id"] === "string" ? flags["work-id"] : undefined,
+    pack: typeof flags.pack === "string" ? flags.pack : undefined,
+    dispatchId: typeof flags["dispatch-id"] === "string" ? flags["dispatch-id"] : undefined,
+    parentSession: typeof flags["parent-session"] === "string" ? flags["parent-session"] : undefined,
+    enforceBinding: flags["enforce-binding"] === true,
+    deliveryMode: flags["delivery-mode"] === "pending" ? "pending" : "immediate",
+    retryPending: flags["retry-pending"] === true,
   };
 }
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   const options = parseArgv(process.argv.slice(2));
-  const out = (value) => { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`); };
-  if (options.observationBoundary !== null) {
-    out(await recordObservationBoundary({ partition: options.partition, containerRoot: options.containerRoot, sessionId: options.sessionId ?? "anonymous", host: options.host, phase: options.observationBoundary, at: options.at }));
-  } else if (options.verifyChannel) {
-    // Red surfaces: registration missing / command cannot start / chain returns nothing.
-    const registered = registeredHookCommands();
-    if (registered.length === 0) { out({ ok: false, reasonCode: "REGISTRATION_MISSING", detail: "no knowledge-inject hook is registered in the platform .claude/settings.json" }); process.exitCode = 1; }
-    else {
-      const start = await runInjection({ prompt: "hook", partition: options.partition, budget: options.budget, triggerKeywords: "" });
-      if (start.ok !== true) { out(start); process.exitCode = 1; }
-      else if (start.injected !== true || start.candidateCount === 0) { out({ ok: false, reasonCode: "RETRIEVAL_CHAIN_NO_RETURN", detail: "the chain produced no candidates for a known keyword", observed: start }); process.exitCode = 1; }
-      else out({ ok: true, reasonCode: "INJECTION_CHANNEL_LIVE", registered: registered.length, ...start });
+  const out = (value) => {
+    const serialized = serializeInjectionProtocol(value);
+    process.stdout.write(`${serialized.text}\n`);
+    return serialized;
+  };
+  try {
+    if (options.observationBoundary !== null) {
+      out(await recordObservationBoundary({ partition: options.partition, containerRoot: options.containerRoot, sessionId: options.sessionId ?? "anonymous", host: options.host, phase: options.observationBoundary, at: options.at }));
+    } else if (options.verifyChannel) {
+      // Red surfaces: registration missing / command cannot start / chain returns nothing.
+      const registered = registeredHookCommands();
+      if (registered.length === 0) { out({ ok: false, reasonCode: "REGISTRATION_MISSING", detail: "no knowledge-inject hook is registered in the platform .claude/settings.json" }); process.exitCode = 1; }
+      else {
+        const start = await runInjection({ prompt: "hook", partition: options.partition, budget: options.budget, triggerKeywords: "" });
+        if (start.ok !== true) { out(start); process.exitCode = 1; }
+        else if (start.injected !== true || start.candidateCount === 0) { out({ ok: false, reasonCode: "RETRIEVAL_CHAIN_NO_RETURN", detail: "the chain produced no candidates for a known keyword", observed: start }); process.exitCode = 1; }
+        else out({ ok: true, reasonCode: "INJECTION_CHANNEL_LIVE", registered: registered.length, ...start });
+      }
+      process.exitCode = process.exitCode ?? 0;
+    } else if (options.selfTest) {
+      // self-test must NOT be green on zero retrieval (恒绿门, INC-044): a retrieval
+      // chain that produces no candidates for a known curated term is a broken chain.
+      // Predicate aligned with verify-channel.
+      const result = await runInjection({ prompt: "hook 没有生效", partition: options.partition, budget: options.budget, triggerKeywords: "" });
+      out(result);
+      if (result.ok !== true || result.injected !== true || result.candidateCount === 0) process.exitCode = 1;
+    } else {
+      const result = options.sessionId === null
+        ? await runInjection(options)
+        : await runSessionInjection(options);
+      out(result);
+      if (result?.ok === false) process.exitCode = 1;
     }
-    process.exitCode = process.exitCode ?? 0;
-  } else if (options.selfTest) {
-    // self-test must NOT be green on zero retrieval (恒绿门, INC-044): a retrieval
-    // chain that produces no candidates for a known curated term is a broken chain.
-    // Predicate aligned with verify-channel.
-    const result = await runInjection({ prompt: "hook 没有生效", partition: options.partition, budget: options.budget, triggerKeywords: "" });
-    out(result);
-    if (result.ok !== true || result.injected !== true || result.candidateCount === 0) process.exitCode = 1;
-  } else {
-    out(options.sessionId === null
-      ? await runInjection(options)
-      : await runSessionInjection(options));
+  } catch (error) {
+    out({ ok: false, reasonCode: error?.reasonCode ?? "INJECT_PROCESS_FAILED", error: String(error?.message ?? error) });
+    process.exitCode = 1;
   }
 }

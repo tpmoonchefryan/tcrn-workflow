@@ -5,13 +5,15 @@
       "SessionStart",
       "UserPromptSubmit",
       "PostCompact",
-      "PostToolUse"
+      "PostToolUse",
+      "SubagentStart"
     ],
     "codex": [
       "SessionStart",
       "UserPromptSubmit",
       "PostCompact",
-      "PostToolUse"
+      "PostToolUse",
+      "SubagentStart"
     ]
   },
   "commands": {
@@ -23,13 +25,26 @@
     "translator": "independent-uninjected-call-before-recall",
     "judge": "independent-uninjected-call-after-recall",
     "maxCallsPerPrompt": 1,
-    "timeoutMs": 10000
+    "timeoutMs": 10000,
+    "subagentAuxiliaryModels": false,
+    "contextBinding": [
+      "role",
+      "workId",
+      "pack"
+    ]
+  },
+  "protocol": {
+    "version": "tcrn.injection-protocol.v2",
+    "maxBytes": 512000,
+    "acknowledgement": "wrapper-after-parse",
+    "retryLimit": 1
   },
   "runtimeState": {
     "path": "~/.tcrn-injection/state.json",
     "lock": "~/.tcrn-injection/state.lock",
     "persisted": [
       "emittedIds",
+      "pendingIds",
       "byteAccounting",
       "promptDecisions",
       "pullCorrelations",
