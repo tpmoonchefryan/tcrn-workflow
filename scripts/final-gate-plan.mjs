@@ -1184,13 +1184,13 @@ export async function executeOperationalBatch(input = {}, runner, { readNative =
   };
   const qualification = qualifyBatch({ ...acquired, runtimeObserver: acquired.runtimeObserver, requireRuntimeObservation: true, trigger: acquired.trigger ?? "formal-batch-gate" });
   if (qualification.eligible !== true || qualification.formalGateAllowed !== true) return { ...qualification, schemaVersion: OPERATIONAL_BATCH_VERSION, executed: [], formalGateExecutions: 0 };
-  const result = await executeQualifiedBatch({ qualification }, runner, {
-    recheck: recheck === null ? undefined : async () => {
+  const refresh = async () => {
+      if (recheck !== null) return recheck(input);
       const next = await acquireOperationalBatchInput(input, { readNative, observeRuntime });
       if (next.ok === false) return { idempotencyKey: null, reasonCode: next.reasonCode, eligible: false, formalGateAllowed: false };
       return qualifyBatch({ ...next, runtimeObserver: next.runtimeObserver, requireRuntimeObservation: true, trigger: "formal-batch-gate" });
-    },
-  });
+  };
+  const result = await executeQualifiedBatch({ qualification }, runner, { recheck: refresh });
   return { ...result, schemaVersion: OPERATIONAL_BATCH_VERSION };
 }
 
