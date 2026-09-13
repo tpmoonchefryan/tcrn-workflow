@@ -308,7 +308,7 @@
       "rationale": "Managed ownership includes the host, event and complete group structure. Reducing identity to hooks alone makes a same-script user group appear managed and permits its removal.",
       "file": "scripts/host-render.mjs",
       "find": "  return stableJson({ host, event, group });",
-      "replace": "  return stableJson({ host, event, group: group?.hooks });",
+      "replace": "  return stableJson({ host, event, group: group?.hooks?.map((hook) => ({ type: hook?.type })) });",
       "expectedMatches": 1,
       "test": "tests/host-render.test.mjs",
       "testName": "TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved"
