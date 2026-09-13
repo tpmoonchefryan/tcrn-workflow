@@ -67,6 +67,31 @@ The local instance may include exact paths and command output. Those details
 must stay in the local instance and must not be copied into this public
 document.
 
+## Rule residence and on-demand loading
+
+The platform-level `AGENTS.md` is a resident, path-bearing index. It keeps the
+identity, security, permissions, true-address table, and the entry points that
+every repository needs. Detailed topology history, archive inventory, and
+Owner-facing presentation rules may live in path-free companion documents and
+are loaded only when their audience or task requires them.
+
+The audience boundary is part of the contract: an Owner-facing response may
+load its presentation rules, while an internal subagent loads only its bound
+brief, role/Pack contract, applicable safety rules, and relevant source
+pointers. A subagent must not receive Owner presentation prose or unrelated
+archive history by default. A missing or broken entry is a discovery failure,
+not permission to infer a replacement.
+
+The migration proof for a local instance must retain a reachable mapping from
+each resident rule to either its retained root text or its named companion
+document. It must include a true negative for an omitted or broken entry and a
+fixed semantic comparison covering identity, permissions, security, true
+addresses, engine-only control-tree writes, actor/CAS attestation, workflow
+governance, and audience boundaries. Byte counts are documentation metrics;
+they do not prove that historical context was cleared or that a session cost
+less. A same-input new-session comparison that was not directly measured is
+`unknown`/`not-verifiable`.
+
 ## Evidence residence
 
 Public evidence is a redacted, reviewable summary and starts with an explicit
