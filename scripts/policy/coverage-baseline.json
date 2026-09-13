@@ -285,8 +285,8 @@
       ]
     },
     "tests/codex-stop-pact.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 56,
+      "testCount": 10,
+      "assertionCount": 59,
       "testNames": [
         "Codex and Claude judge the same shared pact state, with no second status source",
         "missing or unidentifiable Codex facts fail toward allow",
@@ -2037,6 +2037,7 @@
         "TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved",
         "TCRN-CROSS-STORY-417: duplicate exact managed identities refuse before write",
         "TCRN-CROSS-STORY-417: generated event shape is not coerced when the target is incompatible",
+        "TCRN-CROSS-STORY-417: duplicate nonmatching user groups and unknown event values remain intact",
         "STORY-371: an empty main tier is an explicit no-write plan",
         "STORY-371: a target change between planning and writing is refused before any host write"
       ]

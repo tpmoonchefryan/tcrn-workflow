@@ -211,6 +211,31 @@ test("TCRN-CROSS-STORY-417: generated event shape is not coerced when the target
   }
 });
 
+test("TCRN-CROSS-STORY-417: duplicate nonmatching user groups and unknown event values remain intact", async (t) => {
+  for (const host of ["claude-code", "codex"]) {
+    const root = await scratch(`tcrn-host-render-structural-${host}-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const generated = generatedHooks(host);
+    const userGroup = {
+      matcher: "UserOwnedStructural",
+      timeout: null,
+      metadata: { unknown: [null, "value", { array: [1, 2] }] },
+      hooks: [{ type: "command", command: `${generated.SubagentStop[0].hooks[0].command} --user-owned-extra`, timeout: "17" }],
+    };
+    const hooks = structuredClone(generated);
+    hooks.SubagentStop = [userGroup, structuredClone(userGroup), ...hooks.SubagentStop];
+    hooks.UserOwnedUnknownEvent = { value: [null, { keep: true }] };
+    const existing = new Map([[hookFilePath(host), JSON.stringify({ hooks })]]);
+    const plan = renderHostPlan({ host, settings: settings(host), root, repoRoot, existing });
+    const file = plan.files.find((entry) => entry.path === hookFilePath(host));
+    const document = JSON.parse(file.content);
+    assert.deepEqual(document.hooks.SubagentStop.slice(0, 2), [userGroup, userGroup], `${host} duplicate user groups preserve multiplicity and all types`);
+    assert.deepEqual(document.hooks.UserOwnedUnknownEvent, hooks.UserOwnedUnknownEvent, `${host} unknown event value is unchanged`);
+    const actualHooks = host === "codex" ? file.actualManaged : file.actualManaged.hooks;
+    assert.equal(actualHooks.SubagentStop.length, generated.SubagentStop.length, `${host} managed projection excludes duplicate user groups`);
+  }
+});
+
 test("STORY-371: an empty main tier is an explicit no-write plan", async (t) => {
   const root = await scratch("tcrn-host-render-empty-");
   t.after(() => rm(root, { recursive: true, force: true }));
