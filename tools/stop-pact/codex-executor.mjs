@@ -15,6 +15,9 @@ import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode } from "./mode.mjs";
 import { bindingFailure, recordVerificationObservation, recordVerificationTelemetry, runVerification, runVerificationSync, verifyPactBinding } from "./verify.mjs";
+import { qualifyBatch } from "../../scripts/final-gate-plan.mjs";
+
+export { assessBatchQualification, evaluateBatchQualification, executeBatchGate, executeFormalBatchGate, executeQualifiedBatch, qualifyBatch } from "../../scripts/final-gate-plan.mjs";
 
 export const CODEX_STOP_PACT_EXECUTION_VERSION = "tcrn.codex-stop-pact-execution.v1";
 const DEFAULT_CLI = "node <tcrn-workflow>/tools/stop-pact/cli.mjs";
@@ -57,6 +60,34 @@ function contextResult(reasonCode, details = {}) {
 
 function firstDefined(...values) {
   return values.find((value) => value !== undefined);
+}
+
+function batchPayload(input, pact) {
+  if (input?.batchQualification !== undefined) return input.batchQualification;
+  if (input?.batch !== undefined) return input.batch;
+  if (pact?.batchQualification !== undefined) return pact.batchQualification;
+  if (pact?.batch !== undefined) return pact.batch;
+  return undefined;
+}
+
+/** Inspect batch readiness from a Stop event without allowing a formal run. */
+export function qualifyCodexStopBatch(input, pact) {
+  const payload = batchPayload(input, pact);
+  if (payload === undefined) return null;
+  const value = payload && typeof payload === "object" ? payload : {};
+  return qualifyBatch({ ...value, trigger: "stop-hook" });
+}
+
+function batchGuardResult(input, pact) {
+  const qualification = qualifyCodexStopBatch(input, pact);
+  if (qualification === null) return null;
+  return contextResult(qualification.reasonCode, {
+    action: "allow",
+    mode: "observe",
+    message: qualification.reasons.join("; "),
+    batchQualification: qualification,
+    formalGateExecutions: 0,
+  });
 }
 
 /**
@@ -227,6 +258,8 @@ export function executeCodexStop(input, { path } = {}) {
     const pact = readPact(path);
     const normalized = normalizeCodexStopInput(input, pact);
     if (!normalized.ok) return contextResult(normalized.reasonCode);
+    const batchGuard = batchGuardResult(input, pact);
+    if (batchGuard !== null) return batchGuard;
     const verification = runBoundVerification(pact, normalized, runVerificationSync);
     const verified = verificationResult(pact, verification);
     if (verified !== null) return { ...verified, wrotePact: false };
@@ -253,6 +286,8 @@ export async function executeCodexStopAsync(input, { path } = {}) {
     const pact = readPact(path);
     const normalized = normalizeCodexStopInput(input, pact);
     if (!normalized.ok) return contextResult(normalized.reasonCode);
+    const batchGuard = batchGuardResult(input, pact);
+    if (batchGuard !== null) return batchGuard;
     const binding = pact && pact.active === true && pact.status === "running" && !normalized.value.stopHookActive
       ? verifyPactBinding(pact, normalized.value.sessionId)
       : null;

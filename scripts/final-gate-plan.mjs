@@ -12,6 +12,9 @@ import { buildContainedExecutionPlan } from "./lib/push-gate-children.mjs";
 
 export const FINAL_GATE_PLAN_VERSION = "tcrn.gate-execution-plan.v1";
 export const FINAL_GATE_PHASES = Object.freeze(["candidate-final", "publication", "merge-sensitive"]);
+export const DYNAMIC_GATE_PLAN_VERSION = "tcrn.dynamic-gate-plan.v1";
+export const BATCH_QUALIFICATION_VERSION = "tcrn.batch-qualification.v1";
+export const BATCH_PHASES = Object.freeze(["development", "candidate-final", "publication", "merge-sensitive"]);
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultRosterPath = resolve(repositoryRoot, "../../platform-docs/acceptance-gate-groups.json");
 const containmentPath = resolve(repositoryRoot, "scripts/policy/gate-containment.json");
@@ -64,7 +67,7 @@ function inputKey(input) {
 }
 
 /** A prior result is reusable only when every declared input and the result agree. */
-export function assessEvidenceReuse({ evidence, inputs }) {
+export function assessEvidenceReuse({ evidence, inputs, gateId, phase } = {}) {
   const expected = inputKey(inputs);
   const actual = inputKey(evidence?.inputs);
   const missing = expected.map((value, index) => value === null || actual[index] === null).filter(Boolean).length;
@@ -73,7 +76,10 @@ export function assessEvidenceReuse({ evidence, inputs }) {
   if (missing > 0) reasons.push("required input digest missing");
   if (JSON.stringify(expected) !== JSON.stringify(actual)) reasons.push("input digest changed");
   if (evidence?.ok !== true) reasons.push("previous result was not successful");
-  if (evidence?.status !== undefined && evidence.status !== "completed") reasons.push("evidence is not terminal");
+  if (!new Set(["completed", "passed", "success", "satisfied", "done"]).has(evidence?.status) && evidence?.terminal !== true) reasons.push("evidence is not terminal");
+  if (gateId !== undefined && evidenceGateId(evidence) !== gateId) reasons.push("evidence is bound to a different gate");
+  // The phase is part of the plan record, not an extra digest. Exact reuse is
+  // decided by the four declared inputs and a successful terminal result.
   const reusable = reasons.length === 0;
   return reusable
     ? { reusable: true, reused: [{ id: evidence.id, reason: "same source, environment, command, and baseline inputs" }], invalidated: [], blocked: [] }
@@ -91,6 +97,800 @@ function evidenceDisposition(previousEvidence, inputs) {
     return aggregate;
   }, { reused: [], invalidated: [], blocked: [] });
 }
+
+const GATE_INPUT_NAMES = Object.freeze(["sourceDigest", "environmentDigest", "commandDigest", "baselineDigest"]);
+const TERMINAL_EVIDENCE_STATES = new Set(["completed", "passed", "success", "satisfied", "done"]);
+
+function arrayValue(value) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null || value === "") return [];
+  return [value];
+}
+
+function normalizedPath(value) {
+  if (typeof value !== "string") return null;
+  const path = value.trim().replaceAll("\\", "/").replace(/^\.\//u, "");
+  return path.length > 0 ? path : null;
+}
+
+function normalizedPathList(value) {
+  return [...new Set(arrayValue(value).flatMap((entry) => {
+    if (typeof entry === "string") return [normalizedPath(entry)].filter(Boolean);
+    if (entry && typeof entry === "object") return [normalizedPath(entry.path ?? entry.file ?? entry.name)].filter(Boolean);
+    return [];
+  }))].sort();
+}
+
+function normalizedRepository(value) {
+  if (typeof value !== "string") return null;
+  const repository = value.trim().replaceAll("\\", "/");
+  return repository.length > 0 ? repository : null;
+}
+
+function normalizedRepositoryList(value) {
+  return [...new Set(arrayValue(value).flatMap((entry) => {
+    if (typeof entry === "string") return [normalizedRepository(entry)].filter(Boolean);
+    if (entry && typeof entry === "object") return [normalizedRepository(entry.repository ?? entry.repo ?? entry.project)].filter(Boolean);
+    return [];
+  }))].sort();
+}
+
+function normalizedDigestInput(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const aliases = {
+    sourceDigest: ["sourceDigest", "source", "sourceSha256", "sourceHash"],
+    environmentDigest: ["environmentDigest", "environment", "environmentSha256", "environmentHash"],
+    commandDigest: ["commandDigest", "command", "commandSha256", "commandHash"],
+    baselineDigest: ["baselineDigest", "baseline", "baselineSha256", "baselineHash"],
+  };
+  const result = {};
+  for (const [name, names] of Object.entries(aliases)) {
+    const candidate = names.map((key) => value[key]).find((entry) => typeof entry === "string" && entry.trim().length > 0);
+    if (candidate !== undefined) result[name] = candidate.trim();
+  }
+  return result;
+}
+
+function completeInputKey(value) {
+  const normalized = normalizedDigestInput(value);
+  return GATE_INPUT_NAMES.map((name) => normalized[name] ?? null);
+}
+
+function hasCompleteInputKey(value) {
+  return completeInputKey(value).every((entry) => entry !== null);
+}
+
+function inputDifference(expected, actual) {
+  return GATE_INPUT_NAMES.filter((name, index) => {
+    const expectedValue = completeInputKey(expected)[index];
+    const actualValue = completeInputKey(actual)[index];
+    return expectedValue === null || actualValue === null || expectedValue !== actualValue;
+  });
+}
+
+function pathEntry(value, category) {
+  if (typeof value === "string") return { path: normalizedPath(value), category, repository: null, gateIds: [] };
+  if (!value || typeof value !== "object") return { path: null, category, repository: null, gateIds: [] };
+  return {
+    path: normalizedPath(value.path ?? value.file ?? value.name),
+    category: typeof value.category === "string" && value.category.trim().length > 0 ? value.category.trim() : category,
+    repository: normalizedRepository(value.repository ?? value.repo ?? value.project),
+    gateIds: arrayValue(value.gateIds ?? value.gates ?? value.gateId ?? value.gate).filter((entry) => typeof entry === "string" && entry.length > 0),
+    related: value.related,
+  };
+}
+
+function pathEntries(value, category) {
+  if (value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) return [];
+  const entries = value && typeof value === "object" && !Array.isArray(value) && !["path", "file", "name", "gateId", "gate", "gates"].some((key) => Object.hasOwn(value, key))
+    ? value.changed ?? value.files ?? value.paths ?? value.entries ?? value.items ?? value[category] ?? value
+    : value;
+  return arrayValue(entries).map((entry) => pathEntry(entry, category));
+}
+
+function impactInput(options) {
+  const impact = options.impact && typeof options.impact === "object" ? options.impact : {};
+  const changes = options.changes && typeof options.changes === "object" ? options.changes : {};
+  const diff = (options.diff ?? options.actualDiff) && typeof (options.diff ?? options.actualDiff) === "object" ? (options.diff ?? options.actualDiff) : {};
+  const changedFilesValue = options.changedFiles !== undefined
+    ? options.changedFiles
+    : diff.changedFiles ?? diff.files ?? impact.changedFiles ?? impact.files ?? impact.source ?? changes.changedFiles ?? changes.files ?? changes.source;
+  const dependenciesValue = options.dependencyFiles ?? options.dependencies ?? options.dependencyGraph ?? diff.dependencies ?? impact.dependencies ?? impact.dependencyFiles ?? impact.dependency ?? changes.dependencies ?? changes.dependency;
+  const configurationValue = options.configurationFiles ?? options.configFiles ?? options.configuration ?? diff.configuration ?? impact.configuration ?? impact.configFiles ?? impact.config ?? changes.configuration ?? changes.config;
+  const generatedValue = options.generatedFiles ?? options.generated ?? diff.generated ?? impact.generated ?? impact.generatedFiles ?? impact.artifacts ?? changes.generated ?? changes.artifacts;
+  const environmentValue = options.environmentChanges ?? diff.environment ?? impact.environment ?? impact.environmentChanges ?? changes.environment ?? changes.environmentChanges;
+  const crossRepoValue = options.crossRepoChanges ?? options.crossRepositoryChanges ?? diff.crossRepoChanges ?? impact.crossRepoChanges ?? impact.crossRepositoryChanges ?? changes.crossRepoChanges ?? changes.crossRepository;
+  const changedFiles = pathEntries(changedFilesValue, "source");
+  const dependencies = pathEntries(dependenciesValue, "dependency");
+  const configuration = pathEntries(configurationValue, "configuration");
+  const generated = pathEntries(generatedValue, "generated");
+  const environment = arrayValue(environmentValue).flatMap((entry) => {
+    if (typeof entry === "string") return [{ name: entry.trim(), known: true, gateIds: [], repository: null }];
+    if (!entry || typeof entry !== "object") return [];
+    return [{
+      name: String(entry.name ?? entry.key ?? entry.kind ?? "").trim(),
+      known: entry.known !== false,
+      gateIds: arrayValue(entry.gateIds ?? entry.gates ?? entry.gateId ?? entry.gate).filter((id) => typeof id === "string" && id.length > 0),
+      repository: normalizedRepository(entry.repository ?? entry.repo ?? entry.project),
+    }];
+  }).filter((entry) => entry.name.length > 0 || entry.gateIds.length > 0);
+  const crossRepoChanges = arrayValue(crossRepoValue).flatMap((entry) => {
+    if (typeof entry === "string") return [{ repository: normalizedRepository(entry), related: undefined, relatedTo: [], gateIds: [], path: null }];
+    if (!entry || typeof entry !== "object") return [];
+    return [{
+      repository: normalizedRepository(entry.repository ?? entry.repo ?? entry.project),
+      related: typeof entry.related === "boolean" ? entry.related : entry.unrelated === true ? false : undefined,
+      relatedTo: normalizedRepositoryList(entry.relatedTo ?? entry.relatedRepositories ?? entry.dependsOn ?? entry.dependencies),
+      gateIds: arrayValue(entry.gateIds ?? entry.gates ?? entry.gateId ?? entry.gate).filter((id) => typeof id === "string" && id.length > 0),
+      path: normalizedPath(entry.path ?? entry.file),
+    }];
+  });
+  const repositories = normalizedRepositoryList(options.repositories ?? impact.repositories ?? changes.repositories);
+  const allEntries = [...changedFiles, ...dependencies, ...configuration, ...generated];
+  const effectiveChanges = options.effectiveChanges !== undefined
+    ? options.effectiveChanges === true
+    : options.hasEffectiveChanges !== undefined
+      ? options.hasEffectiveChanges === true
+      : allEntries.length > 0 || environment.length > 0 || crossRepoChanges.length > 0 || repositories.length > 0;
+  return {
+    changedFiles,
+    dependencies,
+    configuration,
+    generated,
+    environment,
+    crossRepoChanges,
+    repositories,
+    effectiveChanges,
+    explicitChangedFiles: changedFilesValue !== undefined,
+  };
+}
+
+function gateMatchesPattern(path, pattern) {
+  if (typeof pattern !== "string" || typeof path !== "string") return false;
+  const normalizedPattern = normalizedPath(pattern);
+  if (normalizedPattern === null) return false;
+  if (normalizedPattern.endsWith("/**")) return path.startsWith(normalizedPattern.slice(0, -2));
+  if (normalizedPattern.endsWith("*")) return path.startsWith(normalizedPattern.slice(0, -1));
+  return path === normalizedPattern || path.startsWith(`${normalizedPattern}/`);
+}
+
+function gateMappingEntries(value) {
+  if (!value || typeof value !== "object") return [];
+  if (Array.isArray(value)) return value.map((entry) => {
+    if (!entry || typeof entry !== "object") return null;
+    return { gateId: entry.gateId ?? entry.gate ?? entry.id, patterns: entry.patterns ?? entry.paths ?? entry.files ?? [], repositories: entry.repositories ?? entry.repos ?? [], categories: entry.categories ?? [] };
+  }).filter(Boolean);
+  return Object.entries(value).map(([gateId, declaration]) => ({
+    gateId,
+    patterns: Array.isArray(declaration) || typeof declaration === "string" ? declaration : declaration?.patterns ?? declaration?.paths ?? declaration?.files ?? [],
+    repositories: declaration?.repositories ?? declaration?.repos ?? [],
+    categories: declaration?.categories ?? [],
+  }));
+}
+
+function engineRepositoryName(value) {
+  const repository = normalizedRepository(value);
+  return repository !== null && (/tcrn-workflow|engine/u.test(repository) || repository === "engine") ? true : false;
+}
+
+function productRepositoryName(value) {
+  const repository = normalizedRepository(value);
+  return repository !== null && (/design-system|product/u.test(repository) || repository === "TCRN-Design-System") ? true : false;
+}
+
+function platformRepositoryName(value) {
+  const repository = normalizedRepository(value);
+  return repository !== null && (/platform|container|chain|cross-project/u.test(repository) || repository === "platform") ? true : false;
+}
+
+function defaultGateForEntry(entry) {
+  const path = entry.path ?? "";
+  const repository = entry.repository;
+  if (productRepositoryName(repository) || path.startsWith("TCRN-Design-System/") || path.startsWith("product/")) return "product-gates";
+  if (platformRepositoryName(repository) || path === "AGENTS.md" || path.startsWith("platform-docs/") || path.startsWith(".tcrn" + "-workspace/") || path.startsWith(".tcrn" + "-artifacts/") || path === "docs/platform-container-layout.md") return "platform-layout";
+  if (entry.category === "environment") {
+    const name = String(entry.name ?? "").toLowerCase();
+    if (/^(?:host|container|partition|chain|platform)(?:[-_:].*)?$/u.test(name)) return "platform-layout";
+    if (/^(?:node|pnpm|engine|runtime|toolchain|dependency)(?:[-_:].*)?$/u.test(name)) return "engine-release";
+    return null;
+  }
+  if (entry.category === "dependency") return "engine-release";
+  const knownEnginePath = path.startsWith("packages/") || path.startsWith("scripts/") || path.startsWith("tests/") || path.startsWith("tools/") || path.startsWith("portal/") || path.startsWith("docs/") || path.startsWith(".github/") || ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "package.json", "pnpm-lock.yaml", "tsconfig.json"].includes(path);
+  return knownEnginePath ? "engine-release" : null;
+}
+
+function entryMatchesMapping(entry, mapping) {
+  const repositoryMatch = arrayValue(mapping.repositories).length === 0 || arrayValue(mapping.repositories).some((repository) => normalizedRepository(repository) === entry.repository);
+  const categoryMatch = arrayValue(mapping.categories).length === 0 || arrayValue(mapping.categories).includes(entry.category);
+  const patternMatch = arrayValue(mapping.patterns).length === 0 || arrayValue(mapping.patterns).some((pattern) => gateMatchesPattern(entry.path, pattern));
+  return repositoryMatch && categoryMatch && patternMatch;
+}
+
+function allTopLevelIds(contained) {
+  return contained.selected.map(({ id }) => id);
+}
+
+export function buildGateImpactMap({ containment, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings } = {}) {
+  if (!containment) throw planError("GATE_PLAN_CONTAINMENT_REQUIRED", "containment is required to map impact");
+  const contained = buildContainedExecutionPlan(containment);
+  const result = dynamicImpact({ changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings }, contained);
+  return {
+    effectiveChanges: result.effectiveChanges,
+    affected: result.affected,
+    forcedInvalidation: result.forcedInvalidation,
+    unknown: result.unknown,
+    changedFiles: result.changedFiles,
+    dependencies: result.dependencies,
+    configuration: result.configuration,
+    generated: result.generated,
+    environment: result.environment,
+    crossRepoChanges: result.crossRepoChanges,
+    repositories: result.repositories,
+    mappings: result.mappings,
+  };
+}
+
+export const mapImpactToGates = buildGateImpactMap;
+export const buildAffectedGateMap = buildGateImpactMap;
+
+function dynamicImpact(options, contained) {
+  const impact = impactInput(options);
+  const roots = allTopLevelIds(contained);
+  const validIds = new Set(contained.all.map(({ id }) => id));
+  const mappings = gateMappingEntries(options.gateMappings ?? options.impact?.gateMappings ?? options.changes?.gateMappings);
+  const explicitMappings = mappings.length > 0;
+  const affected = new Set();
+  const forcedInvalidation = new Set();
+  const unknown = [];
+  const addGate = (id, reason) => {
+    if (typeof id !== "string" || id.length === 0) {
+      unknown.push(reason);
+      return;
+    }
+    if (!validIds.has(id)) {
+      unknown.push(`${reason}: unknown gate ${id}`);
+      return;
+    }
+    affected.add(id);
+  };
+  arrayValue(options.affectedGateIds ?? options.affectedGates ?? options.impact?.affectedGateIds ?? options.impact?.affectedGates)
+    .filter((id) => typeof id === "string")
+    .forEach((id) => addGate(id, "declared affected gate"));
+  const classifyEntry = (entry) => {
+    const explicit = entry.gateIds.length > 0 ? entry.gateIds : [];
+    if (explicit.length > 0) explicit.forEach((id) => addGate(id, `${entry.category}:${entry.path ?? "environment"}`));
+    else if (explicitMappings) {
+      const matched = mappings.filter((mapping) => entryMatchesMapping(entry, mapping)).map((mapping) => mapping.gateId);
+      if (matched.length === 0) unknown.push(`no gate mapping for ${entry.category}:${entry.path ?? "environment"}`);
+      else matched.forEach((id) => addGate(id, `${entry.category}:${entry.path ?? "environment"}`));
+    } else {
+      const id = defaultGateForEntry(entry);
+      if (id === null) unknown.push(`unknown environment impact: ${entry.name ?? entry.path ?? "unknown"}`);
+      else addGate(id, `${entry.category}:${entry.path ?? entry.name}`);
+    }
+  };
+  [...impact.changedFiles, ...impact.dependencies, ...impact.configuration, ...impact.generated].forEach(classifyEntry);
+  impact.environment.forEach((entry) => {
+    if (entry.known === false) unknown.push(`unknown environment impact: ${entry.name || "unknown"}`);
+    else classifyEntry({ ...entry, category: "environment", path: null, gateIds: entry.gateIds ?? [], repository: entry.repository });
+  });
+  for (const change of impact.crossRepoChanges) {
+    if (change.gateIds.length > 0) change.gateIds.forEach((id) => { addGate(id, `cross-repo:${change.repository ?? "unknown"}`); if (change.related === true) forcedInvalidation.add(id); });
+    else if (change.related === false) continue;
+    else {
+      const related = change.related === true || change.relatedTo.some((repository) => engineRepositoryName(repository) || productRepositoryName(repository) || platformRepositoryName(repository));
+      if (!related) {
+        unknown.push(`cross-repo relationship is not declared for ${change.repository ?? "unknown"}`);
+        continue;
+      }
+      const id = productRepositoryName(change.repository) ? "product-gates" : platformRepositoryName(change.repository) ? "platform-layout" : "engine-release";
+      addGate(id, `cross-repo:${change.repository ?? "unknown"}`);
+      forcedInvalidation.add(id);
+    }
+  }
+  for (const repository of impact.repositories) {
+    if (productRepositoryName(repository)) addGate("product-gates", `repository:${repository}`);
+    else if (platformRepositoryName(repository)) addGate("platform-layout", `repository:${repository}`);
+    else if (engineRepositoryName(repository)) addGate("engine-release", `repository:${repository}`);
+    else unknown.push(`unknown repository impact: ${repository}`);
+  }
+  if (unknown.length > 0) roots.forEach((id) => { affected.add(id); forcedInvalidation.add(id); });
+  return {
+    ...impact,
+    affected: [...affected],
+    forcedInvalidation: [...forcedInvalidation],
+    unknown: [...new Set(unknown)],
+    mappings: mappings.map((mapping) => ({ ...mapping, patterns: normalizedPathList(mapping.patterns), repositories: normalizedRepositoryList(mapping.repositories), categories: [...new Set(arrayValue(mapping.categories).filter((category) => typeof category === "string"))].sort() })),
+  };
+}
+
+function gateInputsFor(options, gateId) {
+  const candidates = [
+    options.gateInputs?.[gateId],
+    options.inputsByGate?.[gateId],
+    options.inputs?.gates?.[gateId],
+    options.inputs?.gateInputs?.[gateId],
+  ];
+  const selected = candidates.find((value) => value && typeof value === "object" && !Array.isArray(value));
+  return normalizedDigestInput(selected ?? options.inputs);
+}
+
+function hasGateSpecificInputs(options, gateId) {
+  return [options.gateInputs?.[gateId], options.inputsByGate?.[gateId], options.inputs?.gates?.[gateId], options.inputs?.gateInputs?.[gateId]]
+    .some((value) => value && typeof value === "object" && !Array.isArray(value));
+}
+
+function evidenceGateId(evidence) {
+  const value = evidence?.gateId ?? evidence?.gate ?? evidence?.proofGate ?? evidence?.rootId;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function evidenceValue(evidence, key) {
+  return evidence?.[key] ?? evidence?.result?.[key];
+}
+
+function evidenceRows(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([key, entry]) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    return [{ ...entry, ...(evidenceGateId(entry) === null ? { gateId: key } : {}) }];
+  });
+}
+
+function evidenceForGate(previousEvidence, gateId, gateCount) {
+  const rows = evidenceRows(previousEvidence);
+  const exact = rows.filter((evidence) => {
+    const id = evidenceGateId(evidence);
+    return id === gateId || (Array.isArray(evidence.gateIds) && evidence.gateIds.length === 1 && evidence.gateIds[0] === gateId);
+  });
+  if (exact.length > 0) return exact[0];
+  // A single unlabelled result can be used only for a single-root plan. It is not
+  // safe to apply one command's result to several proof obligations.
+  const unlabeled = rows.filter((evidence) => evidenceGateId(evidence) === null);
+  return gateCount === 1 && unlabeled.length === 1 ? unlabeled[0] : null;
+}
+
+export function assessDynamicEvidenceReuse({ evidence, inputs, phase, gateId } = {}) {
+  const expected = normalizedDigestInput(inputs);
+  const actual = normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs);
+  const reasons = [];
+  if (typeof evidenceValue(evidence, "id") !== "string" || evidenceValue(evidence, "id").trim().length === 0) reasons.push("evidence id missing");
+  if (!hasCompleteInputKey(expected) || !hasCompleteInputKey(actual)) reasons.push("required input digest missing");
+  const changedInputs = inputDifference(expected, actual);
+  if (changedInputs.length > 0) reasons.push(`input digest changed: ${changedInputs.join(", ")}`);
+  if (evidenceValue(evidence, "ok") !== true) reasons.push("previous result was not successful");
+  if (!TERMINAL_EVIDENCE_STATES.has(evidenceValue(evidence, "status")) && evidenceValue(evidence, "terminal") !== true) reasons.push("evidence is not terminal");
+  // `phase` is retained on the plan for audit and selection, but reuse is bound
+  // only to the four measured input digests plus successful terminal state.
+  const evidenceId = evidenceGateId(evidence);
+  if (gateId !== undefined && evidenceId !== null && evidenceId !== gateId && !(Array.isArray(evidence?.gateIds) && evidence.gateIds.includes(gateId))) reasons.push("evidence is bound to a different gate");
+  if (reasons.length === 0) return { reusable: true, disposition: "reused", gateId: gateId ?? evidenceId, evidenceId: evidenceValue(evidence, "id"), reason: "same source, environment, command, and baseline inputs with successful terminal evidence", reasons: [] };
+  return { reusable: false, disposition: "invalidated", gateId: gateId ?? evidenceId, evidenceId: evidenceValue(evidence, "id") ?? null, reason: reasons.join("; "), reasons };
+}
+
+function proofObligationRows(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).map(([id, entry]) => ({ ...(entry && typeof entry === "object" ? entry : {}), id: entry?.id ?? id }));
+}
+
+function buildDynamicObligations(options, gateRows, containment) {
+  const source = options.proofObligations ?? options.obligations;
+  const explicit = source !== undefined;
+  const rows = explicit ? proofObligationRows(source) : gateRows.map((gate) => ({ id: `obligation:${gate.id}`, gateId: gate.id, title: gate.title ?? gate.id, source: "acceptance roster" }));
+  const valid = new Set(containment.all.map(({ id }) => id));
+  const blocked = [];
+  if (explicit && rows.length === 0) blocked.push({ id: "proof-obligations", reason: "proof obligation list is empty" });
+  const obligations = rows.map((obligation, index) => {
+    const gateIds = arrayValue(obligation.gateIds ?? obligation.gates ?? obligation.gateId ?? obligation.gate ?? obligation.rootId)
+      .filter((id) => typeof id === "string" && id.length > 0);
+    if (gateIds.length === 0) {
+      blocked.push({ id: obligation.id ?? `obligation-${index + 1}`, reason: "proof obligation has no gate mapping" });
+      return { ...obligation, id: obligation.id ?? `obligation-${index + 1}`, gateIds: [], disposition: "not-verifiable", status: "not-verifiable", source: obligation.source ?? "caller" };
+    }
+    const unknown = gateIds.filter((id) => !valid.has(id));
+    if (unknown.length > 0) {
+      blocked.push({ id: obligation.id ?? `obligation-${index + 1}`, reason: `proof obligation names unknown gate(s): ${unknown.join(", ")}` });
+      return { ...obligation, id: obligation.id ?? `obligation-${index + 1}`, gateIds, disposition: "not-verifiable", status: "not-verifiable", source: obligation.source ?? "caller" };
+    }
+    const gates = gateIds.map((id) => {
+      const direct = gateRows.find((gate) => gate.id === id);
+      if (direct !== undefined) return direct;
+      const containedGate = containment.all.find((entry) => entry.id === id);
+      return containedGate === undefined ? undefined : gateRows.find((gate) => gate.id === containedGate.rootId);
+    }).filter(Boolean);
+    const dispositions = new Set(gates.map((gate) => gate.disposition));
+    const disposition = dispositions.has("not-verifiable") ? "not-verifiable" : dispositions.has("run") ? "run" : dispositions.has("reused") ? "reused" : "not-applicable";
+    return { ...obligation, id: obligation.id ?? `obligation-${index + 1}`, gateIds, disposition, status: disposition, source: obligation.source ?? "caller" };
+  });
+  const mappedRoots = new Set(obligations.flatMap((obligation) => obligation.gateIds.map((id) => containment.all.find((entry) => entry.id === id)?.rootId ?? id)));
+  for (const gate of gateRows) {
+    if ((gate.disposition === "run" || gate.disposition === "reused") && !mappedRoots.has(gate.id)) {
+      blocked.push({ id: `coverage:${gate.id}`, reason: `proof obligations do not cover affected gate ${gate.id}` });
+    }
+  }
+  return { obligations, blocked };
+}
+
+/**
+ * Select final gates from measured impact. The returned `selected` list contains
+ * executable top-level roots only; every contained child is represented once in
+ * `coveredBy` and is never launched independently.
+ */
+export function buildDynamicGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, gateInputs, inputsByGate, previousEvidence = [], readiness = {}, blockedDependencies = readiness.blockedDependencies ?? [], executionPermission = readiness.executionPermission ?? readiness.formalGateAllowed, candidateReady = readiness.ready ?? readiness.eligible ?? readiness.candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations } = {}) {
+  if (!FINAL_GATE_PHASES.includes(phase)) throw planError("GATE_PLAN_PHASE_INVALID", phase);
+  const { contained, rosterGroups } = validateRoster(roster, containment);
+  const dynamic = dynamicImpact({ changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings }, contained);
+  const roots = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
+  const rootIds = new Set(roots.map(({ id }) => id));
+  const gateEvidenceCount = rootIds.size;
+  const rows = [];
+  const blocked = [];
+  if (dynamic.unknown.length > 0) blocked.push({ id: "unknown-impact", reason: dynamic.unknown.join("; ") });
+  const effective = dynamic.effectiveChanges;
+  const impactedRoots = new Set(dynamic.affected.map((id) => {
+    const entry = contained.all.find((candidate) => candidate.id === id);
+    return entry?.rootId ?? id;
+  }));
+  const forcedRoots = new Set(dynamic.forcedInvalidation.map((id) => {
+    const entry = contained.all.find((candidate) => candidate.id === id);
+    return entry?.rootId ?? id;
+  }));
+  // A gate-specific input mismatch is itself evidence that this gate changed. It
+  // must not be hidden by a path classifier that happened to miss its source.
+  for (const root of roots) {
+    const expectedInputs = gateInputsFor({ inputs, gateInputs, inputsByGate }, root.id);
+    const evidence = evidenceForGate(previousEvidence, root.id, gateEvidenceCount);
+    const reuse = evidence === null ? null : assessDynamicEvidenceReuse({ evidence, inputs: expectedInputs, phase, gateId: root.id });
+    if (effective && reuse !== null && !reuse.reusable && hasGateSpecificInputs({ inputs, gateInputs, inputsByGate }, root.id) && inputDifference(expectedInputs, evidenceValue(evidence, "inputs")).length > 0) impactedRoots.add(root.id);
+    let disposition;
+    let reason;
+    if (forcedRoots.has(root.id) && !hasCompleteInputKey(expectedInputs)) {
+      disposition = "not-verifiable";
+      reason = "affected gate is missing one or more source/environment/command/baseline digests";
+      blocked.push({ id: root.id, reason });
+    } else if (forcedRoots.has(root.id)) {
+      disposition = "run";
+      reason = "related cross-repository impact invalidates prior evidence";
+    } else if (!effective && reuse?.reusable === true) {
+      disposition = "reused";
+      reason = reuse.reason;
+    } else if (!effective && evidence === null) {
+      disposition = "not-verifiable";
+      reason = "no effective change but no successful terminal evidence is available";
+      blocked.push({ id: root.id, reason });
+    } else if (!impactedRoots.has(root.id) && effective) {
+      disposition = "not-applicable";
+      reason = "impact mapping does not include this gate";
+    } else if (!hasCompleteInputKey(expectedInputs)) {
+      disposition = "not-verifiable";
+      reason = "affected gate is missing one or more source/environment/command/baseline digests";
+      blocked.push({ id: root.id, reason });
+    } else if (reuse?.reusable === true) {
+      disposition = "reused";
+      reason = reuse.reason;
+    } else {
+      disposition = "run";
+      reason = reuse?.reason ?? "affected gate has no reusable terminal evidence";
+    }
+    rows.push({
+      ...root,
+      disposition,
+      status: disposition,
+      action: disposition,
+      evidenceId: reuse?.evidenceId ?? null,
+      inputs: expectedInputs,
+      reason,
+      basis: {
+        changedFiles: dynamic.changedFiles.map(({ path }) => path).filter(Boolean),
+        dependencies: dynamic.dependencies.map(({ path }) => path).filter(Boolean),
+        configuration: dynamic.configuration.map(({ path }) => path).filter(Boolean),
+        generated: dynamic.generated.map(({ path }) => path).filter(Boolean),
+        environment: dynamic.environment.map(({ name }) => name).filter(Boolean),
+        crossRepoChanges: dynamic.crossRepoChanges.map(({ repository, path }) => path ?? repository).filter(Boolean),
+      },
+    });
+  }
+  if (candidateReady !== true && effective) blocked.push({ id: "candidate-readiness", reason: candidateReady === false ? "candidate is not ready" : "candidateReady must be explicitly true" });
+  if (!Array.isArray(blockedDependencies) || blockedDependencies.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+    blocked.push({ id: "blocked-dependencies", reason: "blockedDependencies must be an array of non-empty strings or an empty list" });
+  } else if (blockedDependencies.length > 0) {
+    blocked.push(...blockedDependencies.map((reason, index) => ({ id: `dependency-${index + 1}`, reason })));
+  }
+  if (executionPermission !== true && (effective || rows.some(({ disposition }) => disposition === "run"))) blocked.push({ id: "execution-permission", reason: "explicit candidate execution permission is required" });
+  const selected = rows.filter(({ disposition }) => disposition === "run");
+  const selectedIds = new Set(selected.map(({ id }) => id));
+  const coveredBy = contained.coveredBy
+    .filter((entry) => selectedIds.has(entry.rootId))
+    .map((entry) => ({ ...entry, phase, disposition: "covered", status: "covered" }));
+  const obligationResult = buildDynamicObligations({ proofObligations, obligations }, rows, contained);
+  blocked.push(...obligationResult.blocked);
+  const reused = rows.filter(({ disposition }) => disposition === "reused").map(({ id, evidenceId, reason }) => ({ id, evidenceId, reason }));
+  const invalidated = rows.filter(({ id, disposition }) => disposition === "run" && evidenceForGate(previousEvidence, id, gateEvidenceCount) !== null).map(({ id, evidenceId, reason }) => ({ id, evidenceId, reasons: [reason] }));
+  const notApplicable = rows.filter(({ disposition }) => disposition === "not-applicable").map(({ id, reason }) => ({ id, reason }));
+  const notVerifiable = rows.filter(({ disposition }) => disposition === "not-verifiable").map(({ id, reason }) => ({ id, reason }));
+  const uniqueBlocked = blocked.filter((entry, index, all) => all.findIndex((candidate) => candidate.id === entry.id && candidate.reason === entry.reason) === index);
+  const executable = uniqueBlocked.length === 0 && executionPermission === true && (candidateReady === true || !effective);
+  const mappedObligationIds = new Set(obligationResult.obligations.flatMap((obligation) => obligation.gateIds));
+  return {
+    schemaVersion: FINAL_GATE_PLAN_VERSION,
+    plannerVersion: DYNAMIC_GATE_PLAN_VERSION,
+    phase,
+    dynamic: true,
+    changedFiles: dynamic.changedFiles.map(({ path }) => path).filter(Boolean).sort(),
+    impact: {
+      effectiveChanges: effective,
+      dependencies: dynamic.dependencies.map(({ path }) => path).filter(Boolean).sort(),
+      configuration: dynamic.configuration.map(({ path }) => path).filter(Boolean).sort(),
+      generated: dynamic.generated.map(({ path }) => path).filter(Boolean).sort(),
+      environment: dynamic.environment.map(({ name }) => name).filter(Boolean).sort(),
+      repositories: dynamic.repositories,
+      crossRepoChanges: dynamic.crossRepoChanges,
+      unknown: dynamic.unknown,
+      mappings: dynamic.mappings,
+    },
+    inputs,
+    selected,
+    gates: rows,
+    obligations: obligationResult.obligations,
+    coverage: {
+      allRootsReported: rows.length === roots.length,
+      allObligationsMapped: obligationResult.obligations.every((obligation) => obligation.gateIds.length > 0),
+      unmappedObligations: obligationResult.obligations.filter((obligation) => obligation.gateIds.length === 0).map(({ id }) => id),
+      mappedGateIds: [...mappedObligationIds],
+      selectedRoots: selected.map(({ id }) => id),
+      coveredChildren: coveredBy.map(({ id }) => id),
+      duplicateExecutionIds: [...new Set(selected.map(({ id }) => id))].length !== selected.length,
+    },
+    executed: [],
+    coveredBy,
+    reused,
+    invalidated,
+    notApplicable,
+    notVerifiable,
+    blocked: uniqueBlocked,
+    execution: { strategy: "serial", maxConcurrent: 1 },
+    executionOrder: selected.map(({ id }) => id),
+    executionPermission: executable ? "granted" : "denied",
+    executable,
+    rule: "apply the same impact and evidence predicate at candidate-final, publication, and merge-sensitive; execute only selected top-level roots",
+  };
+}
+
+const BATCH_FORMAL_TRIGGERS = new Set(["formal-batch-gate", "formal-gate"]);
+const BATCH_RUNNING_STATES = new Set(["running", "active", "in-progress", "in_progress"]);
+const BATCH_EXECUTABLE_STATES = new Set(["planned", "ready", "active", "running", "queued", "pending", "in-progress", "in_progress"]);
+const BATCH_COMPLETE_STATES = new Set(["done", "completed", "satisfied", "success", "passed"]);
+const BATCH_BLOCKED_STATES = new Set(["blocked", "not-verifiable", "not_verifiable"]);
+
+function batchString(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function batchArray(value) {
+  return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+}
+
+function batchBinding(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    series: batchString(source.series ?? source.seriesId ?? source.seriesID ?? source.batchSeries),
+    pack: batchString(source.pack ?? source.packId ?? source.packID ?? source.batchPack),
+    stage: batchString(source.stage ?? source.phase ?? source.batchStage),
+  };
+}
+
+function bindingComplete(binding) {
+  return [binding.series, binding.pack, binding.stage].every((value) => value !== null);
+}
+
+function normalizedBatchTask(value, index) {
+  if (typeof value === "string") return { id: value, status: "unknown", dependencies: [], postAction: false, raw: value };
+  if (!value || typeof value !== "object") return { id: `task-${index + 1}`, status: "unknown", dependencies: [], postAction: false, raw: value };
+  const status = batchString(value.status ?? value.state) ?? "unknown";
+  const dependencies = batchArray(value.dependencies ?? value.dependsOn ?? value.prerequisites).map((entry) => {
+    if (typeof entry === "string") return entry;
+    return entry && typeof entry === "object" ? batchString(entry.id ?? entry.workId ?? entry.taskId) : null;
+  }).filter(Boolean);
+  const stage = String(value.stage ?? value.phase ?? "").toLowerCase();
+  const kind = String(value.kind ?? value.type ?? value.category ?? "").toLowerCase();
+  const postAction = value.postAction === true || value.postApproved === true || value.approvedPostAction === true || (value.approved === true && /publish|release|install|measure|metric|publication/u.test(`${stage} ${kind}`));
+  const blockedReason = batchString(value.blockedReason ?? value.blockReason ?? value.reason ?? value.reasonCode);
+  const realBlocked = BATCH_BLOCKED_STATES.has(status.toLowerCase()) && blockedReason !== null;
+  return {
+    id: batchString(value.id ?? value.workId ?? value.taskId ?? value.key) ?? `task-${index + 1}`,
+    status,
+    dependencies,
+    postAction,
+    executable: value.executable === true || value.runnable === true,
+    running: value.running === true,
+    realBlocked,
+    blockedReason,
+    raw: value,
+  };
+}
+
+function batchCandidate(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { stable: false, id: null, digest: null, revision: null };
+  const digest = batchString(value.digest ?? value.sourceDigest ?? value.treeDigest ?? value.commitDigest ?? value.sha256 ?? value.hash);
+  const id = batchString(value.id ?? value.commit ?? value.commitId ?? value.ref);
+  const status = String(value.status ?? value.state ?? "").toLowerCase();
+  const stable = value.stable === true || value.stableCandidate === true || ["stable", "candidate", "final", "ready"].includes(status);
+  return { stable: stable && digest !== null, id, digest, revision: Number.isSafeInteger(value.revision) ? value.revision : null };
+}
+
+function batchPostAction(value) {
+  if (!value || typeof value !== "object") return false;
+  const stage = String(value.stage ?? value.phase ?? "").toLowerCase();
+  const kind = String(value.kind ?? value.type ?? value.category ?? "").toLowerCase();
+  return value.postAction === true || value.approved === true && /publish|release|install|measure|metric|publication/u.test(`${stage} ${kind}`);
+}
+
+function batchIdempotencyKey(binding, candidate, queueDigest) {
+  return [binding.series, binding.pack, binding.stage, candidate.digest ?? candidate.id ?? "candidate-unknown", batchString(queueDigest) ?? "queue-unknown"].join("|");
+}
+
+function batchPriorRun(input, key) {
+  const runs = batchArray(input.previousRuns ?? input.priorRuns ?? input.batchRuns ?? input.runs);
+  return runs.find((run) => run && typeof run === "object" && (run.idempotencyKey === key || run.batchKey === key) && (run.status === "completed" || run.status === "passed" || run.status === "succeeded" || run.terminal === true)) ?? null;
+}
+
+function batchRunningRun(input, key) {
+  const runs = batchArray(input.previousRuns ?? input.priorRuns ?? input.batchRuns ?? input.runs);
+  return runs.find((run) => run && typeof run === "object" && (run.idempotencyKey === key || run.batchKey === key) && (run.status === "running" || run.status === "active")) ?? null;
+}
+
+/**
+ * Decide whether a stable batch may enter the sole formal gate entry point.
+ * Hook callers receive the same factual qualification but can never authorize a
+ * formal run; only `trigger: formal-batch-gate` does that.
+ */
+export function qualifyBatch(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const expectedBinding = batchBinding(source.expectedBinding ?? source.binding ?? source);
+  const actualBinding = batchBinding(source.currentBinding ?? source.actualBinding ?? source.state?.binding ?? {
+    series: source.currentSeries ?? source.observedSeries ?? expectedBinding.series,
+    pack: source.currentPack ?? source.observedPack ?? expectedBinding.pack,
+    stage: source.currentStage ?? source.observedStage ?? expectedBinding.stage,
+  });
+  const base = {
+    schemaVersion: BATCH_QUALIFICATION_VERSION,
+    binding: { expected: expectedBinding, actual: actualBinding },
+    stage: actualBinding.stage,
+    trigger: batchString(source.trigger ?? source.triggerKind ?? source.source) ?? "unknown",
+    eligible: false,
+    qualified: false,
+    ready: false,
+    canEvaluate: false,
+    formalGateAllowed: false,
+    formalGateExecutions: 0,
+    safetyChecks: { preserved: true, permissionAndSecurityRefusal: "immediate" },
+    executableWork: [],
+    runningAgents: [],
+    runningWrites: false,
+    postActions: [],
+    remainingPrerequisites: [],
+    reasons: [],
+  };
+  if (!bindingComplete(expectedBinding) || !bindingComplete(actualBinding)) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BINDING_NOT_VERIFIABLE", reasons: ["series, Pack, and stage are required from the bound batch"] };
+  const bindingMismatch = ["series", "pack", "stage"].filter((key) => expectedBinding[key] !== actualBinding[key]);
+  if (bindingMismatch.length > 0) return { ...base, status: "rejected", reasonCode: "BATCH_BINDING_MISMATCH", reasons: bindingMismatch.map((key) => `${key} binding changed`) };
+  if (!BATCH_PHASES.includes(actualBinding.stage) && actualBinding.stage !== "development") return { ...base, status: "rejected", reasonCode: "BATCH_STAGE_UNKNOWN", reasons: [`unsupported stage ${actualBinding.stage}`] };
+
+  const expectedQueueDigest = batchString(source.expectedQueueDigest ?? source.queueDigest ?? source.state?.queueDigest);
+  const actualQueueDigest = batchString(source.currentQueueDigest ?? source.observedQueueDigest ?? source.state?.currentQueueDigest ?? expectedQueueDigest);
+  if (expectedQueueDigest === null && actualQueueDigest !== null) return { ...base, status: "not-verifiable", reasonCode: "BATCH_QUEUE_DIGEST_NOT_VERIFIABLE", queueDigest: { expected: null, actual: actualQueueDigest }, reasons: ["the current task queue has no stable comparison digest"] };
+  if (expectedQueueDigest !== null && actualQueueDigest !== expectedQueueDigest) return { ...base, status: "rejected", reasonCode: "BATCH_QUEUE_STALE", queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the task queue changed while qualification was being evaluated"] };
+  const expectedCandidateRevision = source.expectedCandidateRevision ?? source.candidateRevision;
+  const actualCandidateRevision = source.currentCandidateRevision ?? source.state?.candidateRevision ?? expectedCandidateRevision;
+  if (expectedCandidateRevision !== undefined && expectedCandidateRevision !== actualCandidateRevision) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", candidateRevision: { expected: expectedCandidateRevision, actual: actualCandidateRevision }, reasons: ["candidate revision changed during qualification"] };
+
+  const taskSource = source.tasks ?? source.workItems ?? source.queue?.tasks ?? source.state?.tasks;
+  if (!Array.isArray(taskSource)) return { ...base, status: "not-verifiable", reasonCode: "BATCH_TASK_INVENTORY_NOT_VERIFIABLE", reasons: ["a caller-ready flag cannot replace the real stage task inventory"] };
+  const tasks = taskSource.map(normalizedBatchTask);
+  const activeTasks = tasks.filter((task) => !task.postAction);
+  const postActions = tasks.filter((task) => task.postAction || batchPostAction(task.raw));
+  const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const missingDependencies = [];
+  const unfinishedDependencies = [];
+  for (const task of activeTasks) {
+    for (const dependency of task.dependencies) {
+      const target = taskMap.get(dependency);
+      if (!target) missingDependencies.push(`${task.id}->${dependency}`);
+      else if (!target.postAction && !BATCH_COMPLETE_STATES.has(target.status.toLowerCase()) && !target.realBlocked) unfinishedDependencies.push(`${task.id}->${dependency}`);
+    }
+  }
+  if (missingDependencies.length > 0 || unfinishedDependencies.length > 0) {
+    return { ...base, status: "not-verifiable", reasonCode: "BATCH_DEPENDENCY_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: [...missingDependencies, ...unfinishedDependencies], reasons: [
+      ...(missingDependencies.length > 0 ? [`missing dependencies: ${missingDependencies.join(", ")}`] : []),
+      ...(unfinishedDependencies.length > 0 ? [`unfinished dependencies: ${unfinishedDependencies.join(", ")}`] : []),
+    ] };
+  }
+  const remainingTasks = activeTasks.filter((task) => !BATCH_COMPLETE_STATES.has(task.status.toLowerCase()) && !task.realBlocked);
+  const executableWork = remainingTasks.filter((task) => task.executable || task.running || BATCH_EXECUTABLE_STATES.has(task.status.toLowerCase()) || task.status.toLowerCase() === "unknown");
+  const runningAgents = batchArray(source.runningAgents ?? source.runningSubagents ?? source.inFlightAgents ?? source.activeSubagents ?? source.subagents ?? source.state?.runningAgents).filter((agent) => {
+    if (typeof agent === "string") return true;
+    if (!agent || typeof agent !== "object") return false;
+    return agent.running === true || BATCH_RUNNING_STATES.has(String(agent.status ?? agent.state ?? "").toLowerCase());
+  });
+  const writes = batchArray(source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions).filter((write) => write === true || write?.running === true || BATCH_RUNNING_STATES.has(String(write?.status ?? write?.state ?? "").toLowerCase()));
+  const writeStatus = String(source.writeStatus ?? source.writeState ?? source.transactionStatus ?? "").toLowerCase();
+  const runningWrites = source.writeInProgress === true || source.writing === true || BATCH_RUNNING_STATES.has(writeStatus) || writes.length > 0;
+  const remainingPrerequisites = activeTasks.filter((task) => !BATCH_COMPLETE_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
+  const blockedWithoutEvidence = activeTasks.filter((task) => BATCH_BLOCKED_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
+  if (blockedWithoutEvidence.length > 0) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BLOCKED_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: blockedWithoutEvidence, reasons: [`blocked task lacks a real reason/evidence: ${blockedWithoutEvidence.join(", ")}`] };
+  if (remainingTasks.length > 0 || runningAgents.length > 0 || runningWrites) {
+    return { ...base, status: "not-ready", reasonCode: remainingTasks.length > 0 ? "BATCH_WORK_REMAINING" : runningAgents.length > 0 ? "BATCH_SUBAGENTS_RUNNING" : "BATCH_WRITE_IN_PROGRESS", tasks, postActions, executableWork: executableWork.length > 0 ? executableWork : remainingTasks, runningAgents, runningWrites, remainingPrerequisites: remainingTasks.map((task) => task.id), reasons: ["formal batch gates stay at zero while executable work, a subagent, or a write is in flight"] };
+  }
+  const candidate = batchCandidate(source.stableCandidate ?? source.candidate ?? source.state?.candidate);
+  if (!candidate.stable) return { ...base, status: "not-verifiable", reasonCode: "BATCH_CANDIDATE_NOT_STABLE", tasks, postActions, remainingPrerequisites, candidate, reasons: ["a stable candidate identity and digest are required"] };
+  const idempotencyKey = batchIdempotencyKey(actualBinding, candidate, actualQueueDigest);
+  const running = batchRunningRun(source, idempotencyKey);
+  if (running !== null) return { ...base, status: "rejected", reasonCode: "BATCH_ALREADY_RUNNING", tasks, postActions, candidate, idempotencyKey, queueDigest: actualQueueDigest, priorRun: running, reasons: ["the same stable batch is already in flight"] };
+  const prior = batchPriorRun(source, idempotencyKey);
+  if (prior !== null) return { ...base, status: "idempotent", reasonCode: "BATCH_ALREADY_COMPLETED", eligible: true, qualified: true, ready: true, canEvaluate: true, tasks, postActions, candidate, idempotencyKey, queueDigest: actualQueueDigest, priorRun: prior, reasons: ["the same stable batch already completed"] };
+  if (source.candidateReady === false || source.ready === false) return { ...base, status: "not-ready", reasonCode: "BATCH_CALLER_NOT_READY", tasks, postActions, candidate, idempotencyKey, queueDigest: actualQueueDigest, reasons: ["caller readiness is a veto, but caller readiness alone is never qualification"] };
+  const eligible = {
+    ...base,
+    status: "eligible",
+    reasonCode: BATCH_FORMAL_TRIGGERS.has(base.trigger) ? "BATCH_FORMAL_GATE_ELIGIBLE" : "BATCH_FORMAL_TRIGGER_REQUIRED",
+    eligible: true,
+    qualified: true,
+    ready: true,
+    canEvaluate: true,
+    formalGateAllowed: BATCH_FORMAL_TRIGGERS.has(base.trigger),
+    tasks,
+    postActions,
+    candidate,
+    idempotencyKey,
+    queueDigest: actualQueueDigest,
+    remainingPrerequisites,
+    reasons: BATCH_FORMAL_TRIGGERS.has(base.trigger) ? ["all current-stage prerequisites are complete or real-blocked and the candidate is stable"] : ["hooks perform notification/qualification only; the sole formal trigger is required"],
+  };
+  return eligible;
+}
+
+export const assessBatchQualification = qualifyBatch;
+export const evaluateBatchQualification = qualifyBatch;
+
+function qualificationRequest(input) {
+  const qualification = input?.qualification;
+  if (!qualification || qualification.schemaVersion !== BATCH_QUALIFICATION_VERSION) return input;
+  const expected = qualification.binding?.expected ?? {};
+  const actual = qualification.binding?.actual ?? expected;
+  return {
+    ...expected,
+    currentBinding: actual,
+    tasks: qualification.tasks,
+    candidate: qualification.candidate,
+    queueDigest: qualification.queueDigest,
+    currentQueueDigest: qualification.queueDigest,
+    trigger: input.trigger ?? qualification.trigger,
+    previousRuns: qualification.status === "completed" ? [qualification] : input.previousRuns,
+  };
+}
+
+/** Execute the only formal batch entry point after a fresh qualification. */
+export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}) {
+  const initial = qualifyBatch(qualificationRequest(input));
+  if (initial.formalGateAllowed !== true || initial.eligible !== true || initial.status === "idempotent") return { ...initial, executed: [], formalGateExecutions: 0 };
+  if (typeof recheck === "function") {
+    let refreshed;
+    try { refreshed = await recheck(input); } catch { refreshed = null; }
+    if (!refreshed || refreshed.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "rejected", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["batch binding, queue, candidate, or stage changed before formal execution"] };
+  }
+  if (typeof runner !== "function") return { ...initial, status: "not-verifiable", reasonCode: "BATCH_FORMAL_RUNNER_REQUIRED", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["formal batch execution requires the registered runner"] };
+  let result;
+  try { result = await runner(initial); } catch (error) {
+    return { ...initial, status: "failed", reasonCode: error?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: [], formalGateExecutions: 1, reasons: [String(error?.message ?? error)] };
+  }
+  const ok = result?.ok === true || result?.status === "completed" || result?.status === "passed";
+  return { ...initial, status: ok ? "completed" : "failed", reasonCode: ok ? "BATCH_FORMAL_GATE_COMPLETED" : result?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: ok ? [result ?? { ok: true }] : [], formalGateExecutions: 1, result: result ?? null, reasons: ok ? ["formal batch runner completed once"] : ["formal batch runner did not report success"] };
+}
+
+export const executeBatchGate = executeQualifiedBatch;
+export const executeFormalBatchGate = executeQualifiedBatch;
 
 const DEVELOPMENT_RULES = Object.freeze([
   { id: "docs", match: (path) => path.startsWith("docs/") || path.endsWith(".md"), checks: ["format-check", "links"] },
@@ -134,9 +934,32 @@ function developmentCommand(check) {
 
 export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inputs = {} }) {
   if (!Array.isArray(changedFiles) || changedFiles.length === 0) {
+    const evidence = evidenceRows(previousEvidence).map((entry) => assessDynamicEvidenceReuse({ evidence: entry, inputs, gateId: evidenceGateId(entry) ?? undefined }));
+    const allReusable = evidence.length > 0 && evidence.every(({ reusable }) => reusable);
+    if (Array.isArray(changedFiles) && changedFiles.length === 0 && allReusable) {
+      return {
+        schemaVersion: FINAL_GATE_PLAN_VERSION,
+        plannerVersion: DYNAMIC_GATE_PLAN_VERSION,
+        phase: "development",
+        dynamic: true,
+        changedFiles: [],
+        selected: [],
+        gates: evidence.map(({ gateId, evidenceId, reason }) => ({ id: gateId ?? evidenceId, disposition: "reused", status: "reused", evidenceId, reason })),
+        executed: [],
+        coveredBy: [],
+        reused: evidence.map(({ gateId, evidenceId, reason }) => ({ id: gateId ?? evidenceId, evidenceId, reason })),
+        invalidated: [],
+        notApplicable: [],
+        notVerifiable: [],
+        blocked: [],
+        execution: { strategy: "serial", maxConcurrent: 1 },
+        executionOrder: [],
+        executable: true,
+      };
+    }
     return { schemaVersion: FINAL_GATE_PLAN_VERSION, phase: "development", selected: [], executed: [], coveredBy: [], reused: [], invalidated: [], blocked: [{ id: null, reason: "changed file list is required" }] };
   }
-  const normalized = [...new Set(changedFiles.map((path) => String(path).replaceAll("\\", "/").replace(/^\.\//u, "")).filter(Boolean))].sort();
+  const normalized = [...new Set(changedFiles.map((path) => normalizedPath(typeof path === "string" ? path : path?.path ?? path?.file)).filter(Boolean))].sort();
   const selected = new Map();
   const blocked = [];
   for (const path of normalized) {
@@ -150,14 +973,26 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
     for (const rule of matches) for (const check of rule.checks) selected.set(check, { id: check, command: developmentCommand(check), scriptExists: true, selected: true, coveredBy: null, reason: `changed file matched ${rule.id}` });
   }
   const evidence = evidenceDisposition(previousEvidence, inputs);
+  const explicitEvidence = evidenceRows(previousEvidence);
+  const reusableByCheck = new Map();
+  for (const check of selected.keys()) {
+    const matching = explicitEvidence.find((entry) => evidenceGateId(entry) === check);
+    if (matching !== undefined) {
+      const assessed = assessDynamicEvidenceReuse({ evidence: matching, inputs, gateId: check });
+      if (assessed.reusable) reusableByCheck.set(check, assessed);
+    }
+  }
+  const selectedRows = [...selected.values()].filter((entry) => !reusableByCheck.has(entry.id));
+  const reused = [...reusableByCheck.entries()].map(([id, assessed]) => ({ id, evidenceId: assessed.evidenceId, reason: assessed.reason }));
   return {
     schemaVersion: FINAL_GATE_PLAN_VERSION,
     phase: "development",
     changedFiles: normalized,
-    selected: [...selected.values()],
+    selected: selectedRows,
+    gates: [...selected.values()].map((entry) => ({ ...entry, disposition: reusableByCheck.has(entry.id) ? "reused" : "run", status: reusableByCheck.has(entry.id) ? "reused" : "run", evidenceId: reusableByCheck.get(entry.id)?.evidenceId ?? null })),
     executed: [],
     coveredBy: [],
-    reused: evidence.reused,
+    reused: [...evidence.reused, ...reused],
     invalidated: evidence.invalidated,
     blocked: [...blocked, ...evidence.blocked],
     execution: { strategy: "serial", maxConcurrent: 1 },
@@ -165,7 +1000,11 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
   };
 }
 
-export function buildFinalGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, previousEvidence = [], readiness = {}, blockedDependencies = readiness.blockedDependencies, executionPermission = readiness.executionPermission, candidateReady = readiness.ready }) {
+export function buildFinalGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, gateInputs, inputsByGate, previousEvidence = [], readiness = {}, blockedDependencies = readiness.blockedDependencies ?? [], executionPermission = readiness.executionPermission ?? readiness.formalGateAllowed, candidateReady = readiness.ready ?? readiness.eligible ?? readiness.candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations } = {}) {
+  const dynamicRequested = changedFiles !== undefined || diff !== undefined || actualDiff !== undefined || changes !== undefined || impact !== undefined || dependencies !== undefined || dependencyFiles !== undefined || dependencyGraph !== undefined || configuration !== undefined || configurationFiles !== undefined || configFiles !== undefined || generated !== undefined || generatedFiles !== undefined || environment !== undefined || environmentChanges !== undefined || crossRepoChanges !== undefined || crossRepositoryChanges !== undefined || repositories !== undefined || affectedGateIds !== undefined || affectedGates !== undefined || effectiveChanges !== undefined || hasEffectiveChanges !== undefined || gateMappings !== undefined || proofObligations !== undefined || obligations !== undefined || gateInputs !== undefined || inputsByGate !== undefined;
+  if (dynamicRequested) {
+    return buildDynamicGatePlan({ roster, containment, phase, inputs, gateInputs, inputsByGate, previousEvidence, readiness, blockedDependencies, executionPermission, candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations });
+  }
   if (!FINAL_GATE_PHASES.includes(phase)) throw planError("GATE_PLAN_PHASE_INVALID", phase);
   const { contained, rosterGroups } = validateRoster(roster, containment);
   const selected = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
@@ -211,19 +1050,42 @@ export function recordExecution(plan, results) {
   const unselected = executedIds.filter((id) => !selectedIds.has(id));
   const missing = [...selectedIds].filter((id) => !executedIds.includes(id));
   if (duplicate || unselected.length > 0 || missing.length > 0) throw planError("GATE_PLAN_EXECUTION_MISMATCH", JSON.stringify({ duplicate, unselected, missing }));
-  return { ...plan, executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })) };
+  const failed = rows.some((entry) => entry?.ok !== true);
+  return { ...plan, executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })), executable: failed ? false : plan.executable, executionPermission: failed ? "denied" : plan.executionPermission };
 }
 
 /** Execute only the selected roots, in declaration order, and retain measured rows. */
-export async function executeSelectedRoots(plan, runner) {
+export async function executeSelectedRoots(plan, runner, { getInputs, currentInputs } = {}) {
   if (plan?.execution?.strategy !== "serial" || plan?.execution?.maxConcurrent !== 1) {
     throw planError("GATE_PLAN_SERIAL_POLICY_INVALID", "same-repository roots must execute serially");
   }
   if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
   if (plan?.executable !== true || (plan?.blocked ?? []).length > 0) return { ...plan, executed: [] };
+  const inputReader = typeof getInputs === "function" ? getInputs : currentInputs === undefined ? null : async () => currentInputs;
+  const expectedPlanInputs = normalizedDigestInput(plan.inputs);
+  const readCurrentInputs = async () => {
+    if (inputReader === null) return null;
+    try { return normalizedDigestInput(await inputReader()); } catch { return null; }
+  };
+  const initialInputs = await readCurrentInputs();
+  if (inputReader !== null && (!hasCompleteInputKey(expectedPlanInputs) || JSON.stringify(completeInputKey(initialInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs)))) {
+    return {
+      ...plan,
+      executed: [],
+      blocked: [...(plan.blocked ?? []), { id: "input-drift", reason: "gate inputs changed before execution" }],
+      invalidated: [...(plan.invalidated ?? []), { id: null, evidenceId: null, reasons: ["gate inputs changed before execution"] }],
+      executable: false,
+      executionPermission: "denied",
+    };
+  }
   const rows = [];
   const blocked = [...(plan.blocked ?? [])];
   for (const entry of plan.selected ?? []) {
+    const beforeInputs = await readCurrentInputs();
+    if (inputReader !== null && JSON.stringify(completeInputKey(beforeInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs))) {
+      blocked.push({ id: entry.id, reason: "gate inputs changed before this root started" });
+      return { ...plan, executed: rows, blocked, invalidated: [...(plan.invalidated ?? []), { id: entry.id, evidenceId: entry.evidenceId ?? null, reasons: ["gate inputs changed before this root started"] }], executable: false, executionPermission: "denied" };
+    }
     const startedAt = Date.now();
     let result;
     try {
@@ -236,10 +1098,26 @@ export async function executeSelectedRoots(plan, runner) {
       ...(result && typeof result === "object" ? result : { ok: false, reasonCode: "GATE_ROOT_RESULT_INVALID" }),
       elapsedMs: Math.max(0, Date.now() - startedAt),
     };
+    const resultInputs = result?.inputs ?? result?.inputDigests;
+    const afterInputs = await readCurrentInputs();
+    const drifted = (inputReader !== null && JSON.stringify(completeInputKey(afterInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs)))
+      || (resultInputs !== undefined && JSON.stringify(completeInputKey(resultInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs)));
+    if (drifted) {
+      row.ok = false;
+      row.reasonCode = "GATE_PLAN_INPUT_DRIFT";
+      row.invalidated = true;
+      blocked.push({ id: entry.id, reason: "gate inputs changed while the root was running" });
+    }
     if (row.ok !== true) blocked.push({ id: entry.id, reason: row.reasonCode ?? "root execution failed" });
     rows.push(row);
+    if (drifted) return { ...plan, executed: rows, blocked, invalidated: [...(plan.invalidated ?? []), { id: entry.id, evidenceId: entry.evidenceId ?? null, reasons: ["gate inputs changed while the root was running"] }], executable: false, executionPermission: "denied" };
   }
-  return recordExecution({ ...plan, blocked }, rows);
+  const recorded = recordExecution({ ...plan, blocked }, rows);
+  return {
+    ...recorded,
+    executable: blocked.length === 0,
+    executionPermission: blocked.length === 0 ? plan.executionPermission : "denied",
+  };
 }
 
 export const executePlan = executeSelectedRoots;
@@ -250,11 +1128,11 @@ async function main() {
   const rosterIndex = process.argv.indexOf("--roster");
   const rosterPath = rosterIndex >= 0 ? resolve(process.argv[rosterIndex + 1]) : defaultRosterPath;
   const changedIndex = process.argv.indexOf("--changed-files");
-  const changedFiles = changedIndex >= 0 ? process.argv[changedIndex + 1].split(",") : [];
+  const changedFiles = changedIndex >= 0 ? process.argv[changedIndex + 1].split(",") : undefined;
   const [roster, containment] = await Promise.all([JSON.parse(await readFile(rosterPath, "utf8")), JSON.parse(await readFile(containmentPath, "utf8"))]);
   const result = phase === "development"
-    ? buildDevelopmentPlan({ changedFiles })
-    : buildFinalGatePlan({ roster, containment, phase });
+    ? buildDevelopmentPlan({ changedFiles: changedFiles ?? [] })
+    : buildFinalGatePlan({ roster, containment, phase, changedFiles });
   const executable = result.executable !== false && (result.blocked ?? []).length === 0;
   process.stdout.write(`${JSON.stringify({ ok: true, reasonCode: executable ? "GATE_PLAN_READY" : "GATE_PLAN_PREVIEW_ONLY", ...result })}\n`);
 }

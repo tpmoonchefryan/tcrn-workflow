@@ -26,12 +26,21 @@ import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "./mode.mjs";
 import { notify } from "./notify.mjs";
 import { bindingFailure, recordVerificationObservation, recordVerificationTelemetry, runVerification, verifyPactBinding } from "./verify.mjs";
+import { qualifyBatch } from "../../scripts/final-gate-plan.mjs";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "cli.mjs");
 const CLI_INVOCATION = `node ${CLI}`;
 
 function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
+}
+
+function batchPayload(input, pact) {
+  if (input?.batchQualification !== undefined) return input.batchQualification;
+  if (input?.batch !== undefined) return input.batch;
+  if (pact?.batchQualification !== undefined) return pact.batchQualification;
+  if (pact?.batch !== undefined) return pact.batch;
+  return undefined;
 }
 
 async function main() {
@@ -44,6 +53,15 @@ async function main() {
 
   const sessionId = typeof hookInput.session_id === "string" ? hookInput.session_id : "";
   const transcriptPath = typeof hookInput.transcript_path === "string" ? hookInput.transcript_path : "";
+
+  // Batch-aware Stop events only perform the cheap factual qualification. The
+  // formal gate has one entry point and is never launched by a hook firing.
+  const batch = batchPayload(hookInput, pact);
+  if (batch !== undefined) {
+    qualifyBatch({ ...(batch && typeof batch === "object" ? batch : {}), trigger: "stop-hook" });
+    process.exit(0);
+    return;
+  }
 
   // A host continuation and an already terminal pact are explicit stop/cancel
   // priority. The verify branch is only for a live, owning running pact; legacy

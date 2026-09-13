@@ -16,6 +16,11 @@ const SYNC_SUPERVISOR_ARG = "--sync-supervisor";
 const ENGINE_CLI = fileURLToPath(new URL("../../scripts/tcrn-workflow.mjs", import.meta.url));
 const WORK_ID_PATTERN = /^work:[a-z0-9][a-z0-9._-]{0,127}$/u;
 
+// Batch qualification is pure and shared by the formal gate runner and both
+// host adapters. Re-exporting it here keeps the stop-pact integration surface
+// discoverable without giving this advisory verifier a second implementation.
+export { assessBatchQualification, evaluateBatchQualification, executeBatchGate, executeFormalBatchGate, executeQualifiedBatch, qualifyBatch } from "../../scripts/final-gate-plan.mjs";
+
 function text(value) {
   return typeof value === "string" ? value : "";
 }

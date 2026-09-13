@@ -11,9 +11,12 @@ import { fileURLToPath } from "node:url";
 import {
   CODEX_STOP_PACT_EXECUTION_VERSION,
   decideCodexStop,
+  executeQualifiedBatch,
   executeCodexStop,
   hostStopResponse,
   normalizeCodexStopInput,
+  qualifyBatch,
+  qualifyCodexStopBatch,
 } from "../tools/stop-pact/codex-executor.mjs";
 import {
   buildPact,
@@ -231,4 +234,65 @@ test("a real-host block is emitted as exactly the Codex decision object", () => 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("STORY-421: batch qualification uses real work state, keeps hooks light, and runs the formal entry once", async () => {
+  const stable = {
+    series: "EPIC135",
+    pack: "HC2",
+    stage: "candidate-final",
+    tasks: [],
+    candidate: { id: "candidate-421", status: "stable", digest: "tree-421" },
+    queueDigest: "queue-421",
+  };
+  const pending = qualifyBatch({ ...stable, trigger: "formal-batch-gate", tasks: [{ id: "420", status: "active" }], candidateReady: true });
+  assert.equal(pending.eligible, false);
+  assert.equal(pending.reasonCode, "BATCH_WORK_REMAINING");
+  assert.equal(pending.formalGateExecutions, 0);
+
+  const callerReadyIsNotEnough = qualifyBatch({ ...stable, trigger: "formal-batch-gate", tasks: [{ id: "420", status: "ready" }], candidateReady: true });
+  assert.equal(callerReadyIsNotEnough.formalGateAllowed, false);
+  assert.equal(callerReadyIsNotEnough.reasonCode, "BATCH_WORK_REMAINING");
+
+  const blocked = qualifyBatch({
+    ...stable,
+    trigger: "formal-batch-gate",
+    tasks: [
+      { id: "420", status: "blocked", blockedReason: "upstream evidence is unavailable" },
+      { id: "post-release", status: "ready", stage: "publication", kind: "release", approved: true },
+    ],
+  });
+  assert.equal(blocked.eligible, true);
+  assert.equal(blocked.formalGateAllowed, true);
+  assert.equal(blocked.postActions.length, 1);
+  assert.deepEqual(blocked.remainingPrerequisites, []);
+
+  const missingDependency = qualifyBatch({ ...stable, trigger: "formal-batch-gate", tasks: [{ id: "421", status: "done", dependencies: ["missing"] }] });
+  assert.equal(missingDependency.reasonCode, "BATCH_DEPENDENCY_NOT_VERIFIABLE");
+  assert.equal(missingDependency.formalGateExecutions, 0);
+
+  const mismatched = qualifyBatch({ ...stable, trigger: "formal-batch-gate", expectedBinding: { series: "EPIC135", pack: "HC2", stage: "candidate-final" }, currentBinding: { series: "EPIC135", pack: "HC1", stage: "candidate-final" } });
+  assert.equal(mismatched.reasonCode, "BATCH_BINDING_MISMATCH");
+  assert.equal(mismatched.formalGateAllowed, false);
+
+  const hookInput = { batch: { ...stable, tasks: [{ id: "421", status: "active" }] } };
+  const hookQualification = qualifyCodexStopBatch(hookInput, pact());
+  assert.equal(hookQualification.reasonCode, "BATCH_WORK_REMAINING");
+  assert.equal(hookQualification.formalGateExecutions, 0);
+
+  let runs = 0;
+  const completed = await executeQualifiedBatch({ ...stable, trigger: "formal-batch-gate" }, async () => { runs += 1; return { ok: true, id: "formal-root" }; });
+  assert.equal(runs, 1);
+  assert.equal(completed.reasonCode, "BATCH_FORMAL_GATE_COMPLETED");
+  assert.equal(completed.formalGateExecutions, 1);
+  const duplicate = await executeQualifiedBatch({ qualification: completed }, async () => { runs += 1; return { ok: true }; });
+  assert.equal(runs, 1);
+  assert.equal(duplicate.formalGateExecutions, 0);
+
+  const prior = qualifyBatch({ ...stable, trigger: "formal-batch-gate", previousRuns: [{ idempotencyKey: "EPIC135|HC2|candidate-final|tree-421|queue-421", status: "completed" }] });
+  assert.equal(prior.reasonCode, "BATCH_ALREADY_COMPLETED");
+  assert.equal(prior.formalGateExecutions, 0);
+  const concurrent = qualifyBatch({ ...stable, trigger: "formal-batch-gate", previousRuns: [{ idempotencyKey: "EPIC135|HC2|candidate-final|tree-421|queue-421", status: "running" }] });
+  assert.equal(concurrent.reasonCode, "BATCH_ALREADY_RUNNING");
+  assert.equal(concurrent.formalGateAllowed, false);
 });

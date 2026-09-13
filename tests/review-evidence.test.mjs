@@ -14,7 +14,7 @@ import {
   diffEvidence,
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
-import { assessEvidenceReuse, buildDevelopmentPlan, buildFinalGatePlan, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, recordExecution } from "../scripts/final-gate-plan.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 
 const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -216,6 +216,64 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   const unknown = buildDevelopmentPlan({ changedFiles: ["generated/unknown.bin"] });
   assert.ok(unknown.blocked.some(({ id }) => id === "generated/unknown.bin"));
   assert.deepEqual(unknown.selected.map(({ id }) => id), ["typecheck", "test"]);
+});
+
+test("STORY-420: dynamic impact selects affected roots, reuses only bound terminal evidence, and fails closed on unknown impact", async () => {
+  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
+  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const inputs = { sourceDigest: "source-420", environmentDigest: "environment-420", commandDigest: "command-420", baselineDigest: "baseline-420" };
+  const options = { roster, containment, inputs, candidateReady: true, executionPermission: true };
+
+  const engine = buildDynamicGatePlan({ ...options, changedFiles: ["scripts/final-gate-plan.mjs"] });
+  assert.deepEqual(engine.selected.map(({ id }) => id), ["engine-release"]);
+  assert.deepEqual(engine.gates.map(({ id, disposition }) => ({ id, disposition })), [
+    { id: "engine-release", disposition: "run" },
+    { id: "platform-layout", disposition: "not-applicable" },
+    { id: "product-gates", disposition: "not-applicable" },
+  ]);
+  assert.equal(engine.coveredBy.some(({ id }) => id === "engine-p1"), true);
+  assert.equal(engine.selected.some(({ id }) => id === "engine-p1"), false);
+
+  const evidence = ["engine-release", "platform-layout", "product-gates"].map((gateId, index) => ({
+    id: `evidence-420-${index}`,
+    gateId,
+    phase: "candidate-final",
+    status: "completed",
+    ok: true,
+    inputs,
+  }));
+  const unchanged = buildDynamicGatePlan({ ...options, changedFiles: [], previousEvidence: evidence });
+  assert.deepEqual(unchanged.selected, []);
+  assert.deepEqual(unchanged.reused.map(({ id }) => id), ["engine-release", "platform-layout", "product-gates"]);
+  assert.deepEqual(unchanged.notVerifiable, []);
+
+  const unrelated = buildDynamicGatePlan({ ...options, changedFiles: [], crossRepoChanges: [{ repository: "TCRN-Design-System", related: false }], previousEvidence: evidence });
+  assert.deepEqual(unrelated.selected, []);
+  assert.equal(unrelated.blocked.length, 0);
+  assert.ok(unrelated.notApplicable.some(({ id }) => id === "product-gates"));
+
+  const related = buildDynamicGatePlan({ ...options, changedFiles: [], crossRepoChanges: [{ repository: "TCRN-Design-System", related: true }], previousEvidence: evidence });
+  assert.deepEqual(related.selected.map(({ id }) => id), ["product-gates"]);
+  assert.ok(related.invalidated.some(({ id, evidenceId }) => id === "product-gates" && evidenceId === "evidence-420-2"));
+
+  const unknown = buildDynamicGatePlan({ ...options, changedFiles: [], environmentChanges: ["unregistered-runtime"] });
+  assert.ok(unknown.blocked.some(({ id }) => id === "unknown-impact"));
+  assert.deepEqual(unknown.selected.map(({ id }) => id), ["engine-release", "platform-layout", "product-gates"]);
+
+  const missing = assessDynamicEvidenceReuse({ evidence: { id: "evidence-missing", gateId: "engine-release", phase: "candidate-final", status: "completed", ok: true, inputs: { ...inputs, baselineDigest: undefined } }, inputs, phase: "candidate-final", gateId: "engine-release" });
+  assert.equal(missing.reusable, false);
+  assert.ok(missing.reasons.some((reason) => reason.includes("digest")));
+
+  let calls = 0;
+  const drifted = await executeSelectedRoots(engine, async () => { calls += 1; return { ok: true }; }, { currentInputs: { ...inputs, sourceDigest: "source-drifted" } });
+  assert.equal(calls, 0);
+  assert.equal(drifted.executable, false);
+  assert.ok(drifted.blocked.some(({ id }) => id === "input-drift"));
+
+  for (const phase of ["candidate-final", "publication", "merge-sensitive"]) {
+    const phasePlan = buildDynamicGatePlan({ ...options, phase, changedFiles: ["scripts/final-gate-plan.mjs"] });
+    assert.deepEqual(phasePlan.selected.map(({ id }) => id), ["engine-release"]);
+  }
 });
 
 test("STORY-414: progress waits report cursor deltas, unchanged polls, and terminal failures without false success", async (t) => {

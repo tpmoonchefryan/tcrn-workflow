@@ -36,7 +36,7 @@ export function pactPath() {
 // the model on every block (review finding on the stdout path).
 export const MAX_SCOPE_BYTES = 8192;
 
-export function buildPact({ scope, authorizedBy, now, ttlMs = DEFAULT_TTL_MS, maxConsecutiveBlocks = DEFAULT_MAX_CONSECUTIVE_BLOCKS, boundSession = null, workspace = null, workId = null }) {
+export function buildPact({ scope, authorizedBy, now, ttlMs = DEFAULT_TTL_MS, maxConsecutiveBlocks = DEFAULT_MAX_CONSECUTIVE_BLOCKS, boundSession = null, workspace = null, workId = null, batch = undefined, batchQualification = undefined }) {
   const createdMs = Date.parse(now);
   if (Number.isNaN(createdMs)) throw new Error("buildPact: `now` must be an ISO-8601 instant");
   if (typeof scope !== "string" || scope.length === 0) throw new Error("buildPact: scope is required");
@@ -57,6 +57,8 @@ export function buildPact({ scope, authorizedBy, now, ttlMs = DEFAULT_TTL_MS, ma
     ticket: null,
     runtime: { consecutiveBlocks: 0, lastBlockToolUses: null },
     history: [{ at: new Date(createdMs).toISOString(), event: "started", detail: authorizedBy }],
+    ...(batch === undefined ? {} : { batch }),
+    ...(batchQualification === undefined ? {} : { batchQualification }),
   };
 }
 
