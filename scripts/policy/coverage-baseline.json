@@ -286,7 +286,7 @@
     },
     "tests/codex-stop-pact.test.mjs": {
       "testCount": 10,
-      "assertionCount": 59,
+      "assertionCount": 80,
       "testNames": [
         "Codex and Claude judge the same shared pact state, with no second status source",
         "missing or unidentifiable Codex facts fail toward allow",
@@ -296,7 +296,8 @@
         "Codex terminal and expiry branches are explicit red-leg coverage",
         "executor updates the shared pact only for the owning Codex session",
         "the default stdin bridge speaks only the host protocol; diagnostics are opt-in",
-        "a real-host block is emitted as exactly the Codex decision object"
+        "a real-host block is emitted as exactly the Codex decision object",
+        "STORY-421: batch qualification uses real work state, keeps hooks light, and runs the formal entry once"
       ]
     },
     "tests/conference-execution.test.mjs": {
@@ -1138,7 +1139,7 @@
     },
     "tests/platform-doctor.test.mjs": {
       "testCount": 70,
-      "assertionCount": 288,
+      "assertionCount": 291,
       "testNames": [
         "a complete synthetic platform container is green",
         "STORY-371: Claude's bridge is exact and arbitrary prose is red",
@@ -2027,8 +2028,8 @@
       ]
     },
     "tests/host-render.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 56,
+      "testCount": 10,
+      "assertionCount": 59,
       "testNames": [
         "STORY-371: Claude rendering preserves user fields, writes tier fields, and proves idempotent drift",
         "STORY-371: Codex rendering changes only root model keys and generated hooks",

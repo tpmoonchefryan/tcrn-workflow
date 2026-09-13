@@ -18,6 +18,27 @@ const HEADING = /^\s*#{1,6}\s+/u;
 const TABLE_ROW = /^\s*(?:\|.*\||[^|\n]+\|[^|\n]+)\s*$/u;
 const COMPARISON_WORD = /对比|相比|相较|差异|区别|不同|优于|低于|高于|多于|少于|大于|小于|而不是|代替|替代|前者|后者|\b(?:vs|versus|compared?|difference|instead|rather than|than)\b/iu;
 
+export const RESPONSE_AUDIENCES = Object.freeze(["owner", "internal", "unknown"]);
+
+/** Resolve only host/binding fields; response prose can never select Owner mode. */
+export function resolveResponseAudience(input = {}) {
+  const value = input?.audience ?? input?.outputAudience ?? input?.targetAudience ?? input?.binding?.audience ?? input?.context?.audience;
+  if (typeof value !== "string" || value.trim().length === 0) return "missing";
+  const normalized = value.trim().toLowerCase();
+  if (["owner", "owner-facing", "owner_facing", "owner-facing-output"].includes(normalized)) return "owner";
+  if (["internal", "internal-subagent", "internal-subagent-handoff", "subagent", "main-orchestrator", "acceptance"].includes(normalized)) return "internal";
+  return "unknown";
+}
+
+export function responseAudienceCheck(text, input = {}, { legacyMissing = true } = {}) {
+  const audience = resolveResponseAudience(input);
+  // Existing direct library callers predate the host binding field. Keep that
+  // narrow compatibility path; explicit missing/unknown bindings are never
+  // promoted to Owner-only enforcement.
+  if (audience === "owner" || audience === "missing" && legacyMissing) return { ...checkResponseText(text), audience: audience === "owner" ? "owner" : "legacy-missing" };
+  return { ok: true, skipped: true, violations: [], metrics: { cjkCharacters: 0 }, audience };
+}
+
 function readVocabulary() {
   try {
     const value = JSON.parse(readFileSync(VOCABULARY_PATH, "utf8"));
@@ -118,7 +139,7 @@ export function inspectTranscript(input) {
 export function checkStopInput(input) {
   const inspected = inspectTranscript(input);
   if (inspected.skipped) return { ok: true, skipped: true, violations: [] };
-  return checkResponseText(inspected.text);
+  return responseAudienceCheck(inspected.text, input);
 }
 
 function readStdin() {

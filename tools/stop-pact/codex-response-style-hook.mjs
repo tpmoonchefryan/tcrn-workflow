@@ -26,7 +26,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { checkResponseText, responseStyleReason } from "./response-style-hook.mjs";
+import { responseAudienceCheck, responseStyleReason } from "./response-style-hook.mjs";
 
 /**
  * Codex's real Stop payload carries the assistant text inline, not as a file path.
@@ -43,7 +43,10 @@ export function inspectCodexStopInput(input) {
 export function checkCodexStopInput(input) {
   const inspected = inspectCodexStopInput(input);
   if (inspected.skipped) return { ok: true, skipped: true, violations: [] };
-  return checkResponseText(inspected.text);
+  // An explicit audience is authoritative for routing.  Legacy callers without
+  // a field retain the old direct-library behaviour; internal/unknown bindings
+  // never receive Owner-only lexical enforcement.
+  return responseAudienceCheck(inspected.text, input, { legacyMissing: true });
 }
 
 function readStdin() {

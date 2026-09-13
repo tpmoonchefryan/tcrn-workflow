@@ -241,6 +241,14 @@ test("a missing platform AGENTS.md is named separately", async (context) => {
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   assert.equal(result.ok, false);
   assert.equal(result.reasonCode, "PLATFORM_AGENTS_MISSING");
+  // A present, non-empty file with the marker removed must take the distinct
+  // topology-negative path rather than being conflated with absence.
+  const markerRoot = await fixture(context, { agents: "identity retained but topology omitted\n" });
+  const missingMarker = await inspectPlatform(markerRoot, { includeInstallSurface: false });
+  assert.equal(missingMarker.ok, false);
+  const leg = missingMarker.checks.find((item) => item.name === "platformAgents");
+  assert.equal(leg.reasonCode, "PLATFORM_AGENTS_TOPOLOGY_SECTION_MISSING");
+  assert.equal(leg.marker, topology.trim());
 });
 
 test("a missing chain container is a distinct red leg", async (context) => {
