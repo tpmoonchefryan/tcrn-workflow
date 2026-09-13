@@ -3,13 +3,16 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
-## 1.0.2 — unpublished candidate
+## 1.1.0 — unpublished candidate
 
-This candidate carries the approved INIT-051 repair set: explicit host identity
-injection, paired telemetry coverage for resumed sessions, trusted companion
-verification before test-root execution, and the portal vocabulary and knowledge
-read-surface cleanup. It has not been tagged, published, deployed, or installed
-into a live host.
+This candidate carries the complete unpublished capability delta since 1.0.1,
+including segmented local storage, dispatch settings and host projection,
+knowledge and recall surfaces, telemetry, review evidence, and portal
+capabilities. It also carries the approved INIT-051 repair set: explicit host
+identity injection, paired telemetry coverage for resumed sessions, trusted
+companion verification before test-root execution, and the portal vocabulary
+and knowledge read-surface cleanup. It has not been tagged, published,
+deployed, or installed into a live host.
 
 ## 1.0.1 — 2026-08-20
 
