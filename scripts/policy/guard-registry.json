@@ -302,6 +302,36 @@
       "expectedMatches": 1,
       "test": "tests/inc270-engine-capability-surface.test.mjs",
       "testName": "INC-270 case 5b: installed has extra flag on a verb -> RED PLATFORM_ENGINE_INSTALLED_AHEAD"
+    },
+    {
+      "id": "STORY-417-exact-group-identity",
+      "rationale": "Managed ownership includes the host, event and complete group structure. Reducing identity to hooks alone makes a same-script user group appear managed and permits its removal.",
+      "file": "scripts/host-render.mjs",
+      "find": "  return stableJson({ host, event, group });",
+      "replace": "  return stableJson({ host, event, group: group?.hooks });",
+      "expectedMatches": 1,
+      "test": "tests/host-render.test.mjs",
+      "testName": "TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved"
+    },
+    {
+      "id": "STORY-417-ambiguous-managed-identity",
+      "rationale": "Duplicate exact current or legacy groups cannot be assigned safely. The renderer must refuse before write rather than choose an occurrence.",
+      "file": "scripts/host-render.mjs",
+      "find": "    if (matches.length > 1) {",
+      "replace": "    if (matches.length > 1 && false) {",
+      "expectedMatches": 1,
+      "test": "tests/host-render.test.mjs",
+      "testName": "TCRN-CROSS-STORY-417: duplicate exact managed identities refuse before write"
+    },
+    {
+      "id": "STORY-417-event-array-shape-guard",
+      "rationale": "A generated hook event with a non-array target is incompatible and must fail before any write; coercing it to an empty array would overwrite the user's event shape.",
+      "file": "scripts/host-render.mjs",
+      "find": "  if (actualGroups !== undefined && !Array.isArray(actualGroups)) {",
+      "replace": "  if (false) {",
+      "expectedMatches": 1,
+      "test": "tests/host-render.test.mjs",
+      "testName": "TCRN-CROSS-STORY-417: generated event shape is not coerced when the target is incompatible"
     }
   ]
 }

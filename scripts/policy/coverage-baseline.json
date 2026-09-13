@@ -2027,11 +2027,16 @@
       ]
     },
     "tests/host-render.test.mjs": {
-      "testCount": 4,
-      "assertionCount": 35,
+      "testCount": 9,
+      "assertionCount": 56,
       "testNames": [
         "STORY-371: Claude rendering preserves user fields, writes tier fields, and proves idempotent drift",
         "STORY-371: Codex rendering changes only root model keys and generated hooks",
+        "STORY-391: a mixed managed-looking user group stays whole and ordered",
+        "TCRN-CROSS-STORY-417: exact legacy telemetry groups migrate in place on both hosts",
+        "TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved",
+        "TCRN-CROSS-STORY-417: duplicate exact managed identities refuse before write",
+        "TCRN-CROSS-STORY-417: generated event shape is not coerced when the target is incompatible",
         "STORY-371: an empty main tier is an explicit no-write plan",
         "STORY-371: a target change between planning and writing is refused before any host write"
       ]

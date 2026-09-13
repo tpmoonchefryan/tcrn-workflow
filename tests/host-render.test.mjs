@@ -13,7 +13,7 @@ import {
   inspectHostRenderDrift,
   renderHostPlan,
 } from "../scripts/host-render.mjs";
-import { codexHookDocument } from "../scripts/host-harness.mjs";
+import { claudeHookSettings, codexHookDocument } from "../scripts/host-harness.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const newline = "\n";
@@ -35,6 +35,23 @@ async function existingFor(plan, root) {
 
 async function scratch(prefix) {
   return realpath(await mkdtemp(join(tmpdir(), prefix)));
+}
+
+function generatedHooks(host) {
+  return host === "codex" ? codexHookDocument(repoRoot).hooks : claudeHookSettings();
+}
+
+function hookFilePath(host) {
+  return host === "codex" ? ".codex/hooks.json" : ".claude/settings.json";
+}
+
+function withoutHostSuffix(group, host) {
+  const copy = structuredClone(group);
+  const suffix = ` --host ${host === "codex" ? "codex" : "claude"}`;
+  for (const hook of copy.hooks ?? []) {
+    if (typeof hook?.command === "string" && hook.command.endsWith(suffix)) hook.command = hook.command.slice(0, -suffix.length);
+  }
+  return copy;
 }
 
 test("STORY-371: Claude rendering preserves user fields, writes tier fields, and proves idempotent drift", async (t) => {
@@ -104,7 +121,7 @@ test("STORY-371: Codex rendering changes only root model keys and generated hook
   assert.equal(green.drift.length, 0);
 });
 
-test("STORY-391: a mixed managed hook group keeps user entries and group attributes", async (t) => {
+test("STORY-391: a mixed managed-looking user group stays whole and ordered", async (t) => {
   const root = await scratch("tcrn-host-render-mixed-");
   t.after(() => rm(root, { recursive: true, force: true }));
   const old = codexHookDocument("/old/TCRN Platform/tcrn-workflow").hooks.SessionStart[0];
@@ -115,11 +132,83 @@ test("STORY-391: a mixed managed hook group keeps user entries and group attribu
   const plan = renderHostPlan({ host: "codex", settings: settings("codex"), root, repoRoot, existing });
   const document = JSON.parse(plan.files.find((entry) => entry.path === ".codex/hooks.json").content);
   const userGroup = document.hooks.SessionStart.find((group) => group.matcher === "user-session-start");
-  assert.deepEqual(userGroup, { matcher: "user-session-start", timeout: 30, hooks: [{ type: "command", command: "echo user-owned-hook" }] });
+  assert.deepEqual(userGroup, old, "full user group, including its managed-looking hook, is preserved");
   const managedCommands = document.hooks.SessionStart.flatMap((group) => group.hooks ?? [])
     .filter((hook) => hook.command.includes("scripts/knowledge-inject-hook.mjs"));
-  assert.equal(managedCommands.length, 1);
+  assert.equal(managedCommands.length, 2, "the user hook and canonical generated hook both remain");
+  assert.equal(plan.files.find((entry) => entry.path === ".codex/hooks.json").actualManaged.SessionStart.length, 0, "user group is not classified as managed");
   assert.equal(plan.drift.some((entry) => entry.path === ".codex/hooks.json"), true);
+});
+
+test("TCRN-CROSS-STORY-417: exact legacy telemetry groups migrate in place on both hosts", async (t) => {
+  for (const host of ["claude-code", "codex"]) {
+    const root = await scratch(`tcrn-host-render-legacy-${host}-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const generated = generatedHooks(host);
+    const existingHooks = Object.fromEntries(Object.entries(generated).map(([event, groups]) => [
+      event,
+      groups.map((group) => event === "SubagentStart" || event === "SubagentStop" ? withoutHostSuffix(group, host) : structuredClone(group)),
+    ]));
+    const existing = new Map([[hookFilePath(host), JSON.stringify(host === "codex" ? { hooks: existingHooks } : { hooks: existingHooks })]]);
+    const config = settings(host);
+    const plan = renderHostPlan({ host, settings: config, root, repoRoot, existing });
+    const file = plan.files.find((entry) => entry.path === hookFilePath(host));
+    const document = JSON.parse(file.content);
+    assert.equal(document.hooks.SubagentStart.length, generated.SubagentStart.length);
+    assert.equal(document.hooks.SubagentStop.length, generated.SubagentStop.length);
+    assert.deepEqual(document.hooks.SubagentStart, generated.SubagentStart, `${host} Start legacy replacement is exact`);
+    assert.deepEqual(document.hooks.SubagentStop, generated.SubagentStop, `${host} Stop legacy replacement is exact`);
+    const actualHooks = host === "codex" ? file.actualManaged : file.actualManaged.hooks;
+    assert.equal(actualHooks.SubagentStart[0].hooks[0].command.endsWith(` --host ${host === "codex" ? "codex" : "claude"}`), false, "actual projection records the legacy before state");
+    assert.equal(file.drift, true);
+  }
+});
+
+test("TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved", async (t) => {
+  for (const host of ["claude-code", "codex"]) {
+    const root = await scratch(`tcrn-host-render-user-group-${host}-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const generated = generatedHooks(host);
+    const userGroup = {
+      matcher: "UserOwnedSameScript",
+      timeout: 37,
+      userMetadata: { owner: "user", array: ["keep", { exact: true }] },
+      hooks: [{ type: "command", command: `${generated.SubagentStart[0].hooks[0].command} --user-owned-extra`, userField: null }],
+    };
+    const hooks = structuredClone(generated);
+    hooks.SubagentStart = [userGroup, ...hooks.SubagentStart];
+    const existing = new Map([[hookFilePath(host), JSON.stringify(host === "codex" ? { hooks } : { hooks })]]);
+    const plan = renderHostPlan({ host, settings: settings(host), root, repoRoot, existing });
+    const file = plan.files.find((entry) => entry.path === hookFilePath(host));
+    const document = JSON.parse(file.content);
+    assert.deepEqual(document.hooks.SubagentStart[0], userGroup, `${host} user group is byte-structured intact`);
+    assert.deepEqual(document.hooks.SubagentStart.slice(1), generated.SubagentStart, `${host} generated order follows user group`);
+    const actualHooks = host === "codex" ? file.actualManaged : file.actualManaged.hooks;
+    assert.deepEqual(actualHooks.SubagentStart, generated.SubagentStart, `${host} projection excludes user group`);
+  }
+});
+
+test("TCRN-CROSS-STORY-417: duplicate exact managed identities refuse before write", async (t) => {
+  for (const host of ["claude-code", "codex"]) {
+    const root = await scratch(`tcrn-host-render-duplicate-${host}-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const generated = generatedHooks(host);
+    const hooks = structuredClone(generated);
+    hooks.SubagentStart = [structuredClone(hooks.SubagentStart[0]), structuredClone(hooks.SubagentStart[0]), ...hooks.SubagentStart.slice(1)];
+    const existing = new Map([[hookFilePath(host), JSON.stringify({ hooks })]]);
+    assert.throws(() => renderHostPlan({ host, settings: settings(host), root, repoRoot, existing }), (error) => error?.reasonCode === "HOST_RENDER_MANAGED_IDENTITY_AMBIGUOUS");
+    assert.equal((await readFile(join(root, hookFilePath(host))).catch(() => null)), null, `${host} ambiguity has no write`);
+  }
+});
+
+test("TCRN-CROSS-STORY-417: generated event shape is not coerced when the target is incompatible", async (t) => {
+  for (const value of [null, {}, "wrong", 4, true]) {
+    const root = await scratch("tcrn-host-render-shape-");
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const hooks = { ...generatedHooks("codex"), SubagentStart: value };
+    const existing = new Map([[".codex/hooks.json", JSON.stringify({ hooks })]]);
+    assert.throws(() => renderHostPlan({ host: "codex", settings: settings("codex"), root, repoRoot, existing }), (error) => error?.reasonCode === "HOST_RENDER_TARGET_INVALID");
+  }
 });
 
 test("STORY-371: an empty main tier is an explicit no-write plan", async (t) => {
