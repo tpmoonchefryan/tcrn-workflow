@@ -144,7 +144,7 @@ function evaluateStringLiteral(value) {
 const regexPrefixWords = new Set([
   "await", "case", "delete", "do", "else", "in", "instanceof", "new", "of", "return", "throw", "typeof", "void", "yield",
 ]);
-const regexPrefixPunctuation = new Set(["(", "[", "{", ",", ";", ":", "=", "!", "?", "&", "|", "+", "-", "*", "%", "^", "~", "<", ">"]);
+const regexPrefixPunctuation = new Set(["(", "[", "{", ",", ";", ":", "=", "!", "?", "&", "|", "+", "-", "*", "%", "^", "~", "<", ">", "/"]);
 const regexMetaEscapes = new Set(["A", "B", "b", "D", "d", "G", "K", "k", "p", "P", "s", "S", "W", "w", "Z", "z"]);
 
 function canStartRegex(previous) {
@@ -332,6 +332,11 @@ function normalizeJavascriptRegexLiterals(value) {
       const end = close < 0 ? value.length : close + 2;
       output += value.slice(cursor, end);
       cursor = end;
+      continue;
+    }
+    if (/\s/u.test(character)) {
+      output += character;
+      cursor += 1;
       continue;
     }
     if (character === "/" && canStartRegex(previous)) {
