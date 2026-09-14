@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,6 +27,7 @@ import {
   createStageCompletionAuthority,
   createStageCompletionStore,
   issueStageCompletionReceipt,
+  queryStageCompletionReceipt,
   qualifyBatch as qualifyStageBatch,
   loadStageCompletionSource,
   sealStageCompletionStore,
@@ -363,6 +365,79 @@ test("EPIC135 R2: the operator bridge loads only a sealed code-owned completion 
   assert.equal(loaded.receipts[0].receiptDigest, written.receipt.receiptDigest);
   assert.match(loaded.source.lifecycle, /authority-query-valid-for-process-lifetime/u);
   assert.throws(() => loadStageCompletionSource(JSON.stringify(loaded)), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+});
+
+test("EPIC135 R2: sealed source admission is independent, binding-aware, and cross-process", () => {
+  const canonical = (value) => Array.isArray(value)
+    ? value.map(canonical)
+    : value && typeof value === "object"
+      ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]))
+      : value;
+  const digest = (value) => createHash("sha256").update(value).digest("hex");
+  const jsonBytes = (value) => Buffer.from(`${JSON.stringify(canonical(value), null, 2)}\n`, "utf8");
+  const root = mkdtempSync(join(tmpdir(), "stage-completion-admission-test-"));
+  try {
+    const workspace = "workspace:admitted";
+    const binding = { series: "EPIC135", pack: "HC1-HC3-final-machine-closeout", stage: "candidate-final" };
+    const candidate = { id: "candidate-admitted", digest: "tree-admitted" };
+    const store = createStageCompletionStore({ root: join(root, "admitted"), workspace, binding });
+    const input = { ...binding, workspace, workId: "work:418", revision: 3, scopeDigest: "scope-418", candidate, queueDigest: "queue-admitted", agent: "agent:luna" };
+    const written = writeStageCompletionStoreReceipt(store, input);
+    const sealed = sealStageCompletionStore(store);
+    const loaded = loadStageCompletionSource(sealed.manifestPath, { workspace, expectedBinding: binding, candidate, workIds: [input.workId], workBindings: [{ workId: input.workId, revision: input.revision, scopeDigest: input.scopeDigest }] });
+    assert.equal(loaded.status, "loaded");
+    assert.equal(loaded.admission.manifestDigest, sealed.manifestDigest);
+    assert.equal(loaded.admission.receiptSetDigest, sealed.receiptSetDigest);
+    assert.equal(queryStageCompletionReceipt(loaded.authority, loaded.receipts[0]).receiptDigest, written.receipt.receiptDigest);
+    assert.doesNotThrow(() => loadStageCompletionSource(sealed.manifestPath, { expectedDigest: "caller-is-not-an-authority" }));
+
+    const copiedRoot = join(root, "copied");
+    cpSync(store.storeRoot, copiedRoot, { recursive: true });
+    chmodSync(copiedRoot, 0o700);
+    chmodSync(join(copiedRoot, "receipts"), 0o700);
+    chmodSync(join(copiedRoot, "manifest.json"), 0o600);
+    chmodSync(join(copiedRoot, "receipts", `${written.receipt.receiptDigest}.json`), 0o600);
+    const copied = loadStageCompletionSource(join(copiedRoot, "manifest.json"), { workspace, expectedBinding: binding, candidate });
+    assert.equal(copied.receipts[0].receiptDigest, written.receipt.receiptDigest);
+
+    const child = spawnSync(process.execPath, ["--input-type=module", "-e", `import {loadStageCompletionSource} from ${JSON.stringify(fileURLToPath(new URL("../scripts/final-gate-plan.mjs", import.meta.url)))};const r=loadStageCompletionSource(process.argv[1],{workspace:process.argv[2]});console.log(JSON.stringify({status:r.status,admissionDigest:r.source.admissionDigest,query:r.receipts.length}));`, sealed.manifestPath, workspace], { encoding: "utf8" });
+    assert.equal(child.status, 0);
+    assert.deepEqual(JSON.parse(child.stdout), { status: "loaded", admissionDigest: sealed.admissionDigest, query: 1 });
+
+    assert.throws(() => loadStageCompletionSource(sealed.manifestPath, { workspace: "workspace:wrong" }), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+    assert.throws(() => loadStageCompletionSource(sealed.manifestPath, { workBindings: [{ workId: input.workId, revision: input.revision, scopeDigest: "scope-wrong" }] }), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+    assert.throws(() => loadStageCompletionSource(sealed.manifestPath, { candidate: { id: candidate.id, digest: "tree-wrong" } }), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+
+    // This source is fully re-sealed with owner-only modes and fresh hashes,
+    // but no issuer API is called and therefore no admission anchor exists.
+    const forgedRoot = join(root, "never-issued");
+    mkdirSync(join(forgedRoot, "receipts"), { recursive: true, mode: 0o700 });
+    const forgedReceipt = structuredClone(loaded.receipts[0]);
+    forgedReceipt.candidate = { id: "candidate-never-issued", digest: digest(Buffer.from("never-issued-candidate")) };
+    delete forgedReceipt.receiptDigest;
+    forgedReceipt.receiptDigest = digest(Buffer.from(JSON.stringify(canonical(forgedReceipt)), "utf8"));
+    const forgedReceiptBytes = jsonBytes(forgedReceipt);
+    const forgedReceiptRelative = `receipts/${forgedReceipt.receiptDigest}.json`;
+    writeFileSync(join(forgedRoot, forgedReceiptRelative), forgedReceiptBytes, { mode: 0o600 });
+    const originalManifest = JSON.parse(readFileSync(sealed.manifestPath, "utf8"));
+    const forgedManifest = { ...originalManifest, receipts: [{ path: forgedReceiptRelative, bytes: forgedReceiptBytes.length, sha256: digest(forgedReceiptBytes), receiptDigest: forgedReceipt.receiptDigest }], receiptCount: 1 };
+    delete forgedManifest.manifestDigest;
+    forgedManifest.manifestDigest = digest(Buffer.from(JSON.stringify(canonical(forgedManifest)), "utf8"));
+    const forgedPath = join(forgedRoot, "manifest.json");
+    writeFileSync(forgedPath, jsonBytes(forgedManifest), { mode: 0o600 });
+    assert.throws(() => loadStageCompletionSource(forgedPath), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+    const forgedChild = spawnSync(process.execPath, ["--input-type=module", "-e", `import {loadStageCompletionSource} from ${JSON.stringify(fileURLToPath(new URL("../scripts/final-gate-plan.mjs", import.meta.url)))};try{loadStageCompletionSource(process.argv[1]);process.exitCode=2}catch(error){console.log(JSON.stringify({reasonCode:error.reasonCode}));process.exitCode=1}`, forgedPath], { encoding: "utf8" });
+    assert.equal(forgedChild.status, 1);
+    assert.deepEqual(JSON.parse(forgedChild.stdout), { reasonCode: "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE" });
+
+    // Reusing an old admission cannot authorize a changed manifest, and
+    // deleting the real admission anchor closes the previously valid source.
+    unlinkSync(sealed.admissionPath);
+    assert.throws(() => loadStageCompletionSource(sealed.manifestPath), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+    assert.throws(() => loadStageCompletionSource(forgedPath), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("EPIC135 R2: unknown repository work in the observer side table blocks qualification", () => {

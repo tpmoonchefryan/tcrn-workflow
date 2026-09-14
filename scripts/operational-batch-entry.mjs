@@ -43,14 +43,15 @@ function getProductionReceiptAuthority() {
 }
 
 // The operator bridge is deliberately a code-owned load/create boundary.  A
-// CLI request supplies only the sealed source path; this function creates the
-// fresh opaque authority and receipt view through the validated loader.
-function createStageCompletionAuthorityFromSource(source) {
-  return loadStageCompletionSource(source);
+// CLI request supplies only the sealed source path plus optional expectations;
+// the loader derives the admission record from the manifest digest and creates
+// the fresh opaque authority only after the independent binding is verified.
+function createStageCompletionAuthorityFromSource(source, expectations = {}) {
+  return loadStageCompletionSource(source, expectations);
 }
 
-function loadGateReceiptStore(source) {
-  return createStageCompletionAuthorityFromSource(source);
+function loadGateReceiptStore(source, expectations = {}) {
+  return createStageCompletionAuthorityFromSource(source, expectations);
 }
 
 const text = (value) => typeof value === "string" ? value : "";
@@ -425,9 +426,16 @@ async function executeDynamicRoots(qualification) {
 export async function executeProductionBatch(request = {}) {
   const { nativeState: _native, runtimeObserver: _runtime, observer: _observer, stageCompletionAuthority: _callerAuthority, stageCompletionReceipts: _callerReceipts, ...boundRequest } = request && typeof request === "object" ? request : {};
   const completionSource = boundRequest.stageCompletionSource ?? boundRequest.implementationCompletionSource ?? boundRequest.completionSource;
+  const admissionExpectations = {
+    ...(typeof boundRequest.workspace === "string" ? { workspace: boundRequest.workspace } : {}),
+    expectedBinding: { series: boundRequest.series, pack: boundRequest.pack, stage: boundRequest.stage },
+    ...(boundRequest.candidate && typeof boundRequest.candidate === "object" ? { candidate: boundRequest.candidate } : {}),
+    ...(Array.isArray(boundRequest.workIds) && boundRequest.workIds.length > 0 ? { workIds: boundRequest.workIds } : {}),
+    ...(Array.isArray(boundRequest.workBindings) ? { workBindings: boundRequest.workBindings } : {}),
+  };
   let stageBridge;
   try {
-    stageBridge = loadGateReceiptStore(completionSource);
+    stageBridge = loadGateReceiptStore(completionSource, admissionExpectations);
   } catch (error) {
     return {
       schemaVersion: OPERATIONAL_BATCH_ENTRY_VERSION,
@@ -472,7 +480,11 @@ export async function executeProductionBatch(request = {}) {
       schemaVersion: OPERATOR_STAGE_BRIDGE_VERSION,
       status: "loaded",
       manifestPath: stageBridge.source.manifestPath,
+      admissionPath: stageBridge.source.admissionPath,
       manifestDigest: stageBridge.source.manifestDigest,
+      admissionDigest: stageBridge.source.admissionDigest,
+      receiptSetDigest: stageBridge.source.receiptSetDigest,
+      bindingDigest: stageBridge.source.bindingDigest,
       receiptCount: stageBridge.source.receiptCount,
       lifecycle: stageBridge.source.lifecycle,
     },
