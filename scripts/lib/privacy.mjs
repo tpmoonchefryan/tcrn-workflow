@@ -290,7 +290,15 @@ function regexLiteralText(body) {
       }
       continue;
     }
-    if (character === "}" || character === ")" || character === "(" || character === ":") {
+    if (character === "(" && body[cursor + 1] === "?" && body[cursor + 2] === ":") {
+      // The colon in a non-capturing group is syntax, not pattern text. Only
+      // remove it at the group prefix; colons elsewhere (for example in a
+      // credential URL) are literal evidence and must remain in the projection.
+      output += " ";
+      cursor += 3;
+      continue;
+    }
+    if (character === "}" || character === ")" || character === "(") {
       cursor += 1;
       continue;
     }

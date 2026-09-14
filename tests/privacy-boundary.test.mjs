@@ -352,3 +352,21 @@ test("regex syntax in both historical blobs is not a fake username, while real p
     );
   }
 });
+
+test("regex literal projection preserves literal colons while removing group syntax", () => {
+  const regex = (parts) => joinParts(["const pattern = /", ...parts, "/;"], "");
+  const cases = [
+    ["postgres-credentials-regex", regex(["postgres", ":", "\\/\\/", "alice", ":", "secret@localhost", "\\/db"]), ["AUTHENTICATED_URL"]],
+    ["postgres-escaped-colon-regex", regex(["postgres\\:", "\\/\\/", "alice", ":", "secret@localhost", "\\/db"]), ["AUTHENTICATED_URL"]],
+    ["postgres-noncapturing-regex", regex(["(?:postgres", ":", "\\/\\/", "alice", ":", "secret@localhost", "\\/db)"]), ["AUTHENTICATED_URL"]],
+    ["ssh-regex", regex(["ssh", ":", "\\/\\/localhost", "\\/repo"]), ["PRIVATE_SSH_URL"]],
+    ["ssh-noncapturing-regex", regex(["(?:ssh", ":", "\\/\\/localhost", "\\/repo)"]), ["PRIVATE_SSH_URL"]],
+    ["adjacent-private-values", regex(["(?:https", ":", "\\/\\/alice", ":", "secret@db", ".internal", "\\/db)"]), ["AUTHENTICATED_URL", "PRIVATE_HOSTNAME"]],
+  ];
+  for (const [label, content, reasonCodes] of cases) {
+    const findings = scanPrivacyEntries([{ label, kind: "source", content }], { owner: publicIdentity.login });
+    for (const reasonCode of reasonCodes) {
+      assert.ok(findings.some((finding) => finding.startsWith(`${reasonCode}:`)), `${label}: ${reasonCode}`);
+    }
+  }
+});
