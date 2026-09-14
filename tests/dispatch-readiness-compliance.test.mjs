@@ -299,3 +299,51 @@ test("STORY-424: real spawn plus child turn context is green, while task-id/comp
   assert.ok(oldTask.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_COMPACTION_NOT_INSTANCE"));
   assert.ok(oldTask.unknownReasons.some((problem) => problem.code === "DISPATCH_LIFECYCLE_SPAWN_EVIDENCE_MISSING"));
 });
+
+test("STORY-424 R01: every missing observed identity/fact is structured unknown, never an exception", () => {
+  const declared = {
+    ...freshLifecycle,
+    workId: "work:424",
+    predecessor: { agentId: "terminal-agent", status: "done" },
+  };
+  for (const field of ["agentId", "predecessor", "workId", "model", "effort", "forkTurns", "sourceEvidence"]) {
+    const observed = structuredClone(declared);
+    delete observed[field];
+    let result;
+    assert.doesNotThrow(() => { result = validateAgentLifecycleEvidence(declared, observed); }, field);
+    assert.equal(result.ok, false, field);
+    assert.equal(result.status, "unknown", field);
+    assert.equal(result.reasonCode, "DISPATCH_LIFECYCLE_EVIDENCE_UNKNOWN", field);
+  }
+});
+
+test("STORY-424 R01: outer work binding is retained while explicit inner/source contradictions are red", () => {
+  const nested = { ...freshLifecycle };
+  delete nested.workId;
+  const handoff = validateStructuredHandoff({
+    schemaVersion: "tcrn.structured-handoff.v1",
+    workId: "work:424",
+    role: freshLifecycle.role,
+    pack: freshLifecycle.pack,
+    lifecycle: nested,
+  });
+  assert.equal(handoff.ok, true, JSON.stringify(handoff.problems));
+  assert.equal(handoff.workId, "work:424");
+  assert.equal(handoff.lifecycle.workId, "work:424");
+
+  const contradictory = validateStructuredHandoff({
+    schemaVersion: "tcrn.structured-handoff.v1",
+    workId: "work:424",
+    role: freshLifecycle.role,
+    pack: freshLifecycle.pack,
+    sourceEvidence: [{ kind: "turn_context", locator: "same", digest: "1".repeat(64) }],
+    lifecycle: {
+      ...freshLifecycle,
+      workId: "work:other",
+      sourceEvidence: [{ kind: "turn_context", locator: "same", digest: "2".repeat(64) }],
+    },
+  });
+  assert.equal(contradictory.ok, false);
+  assert.ok(contradictory.problems.some((problem) => problem.code === "DISPATCH_HANDOFF_BINDING_MISMATCH"));
+  assert.ok(contradictory.problems.some((problem) => problem.code === "DISPATCH_HANDOFF_SOURCE_DIGEST_MISMATCH"));
+});
