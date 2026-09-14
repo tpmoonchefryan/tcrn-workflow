@@ -19,6 +19,9 @@
         "DISPATCH-BRIEF-003",
         "DISPATCH-BRIEF-004",
         "DISPATCH-BRIEF-005",
+        "DISPATCH-LIFECYCLE-001",
+        "DISPATCH-LIFECYCLE-002",
+        "DISPATCH-LIFECYCLE-003",
         "CLOSEOUT-001",
         "CLOSEOUT-002",
         "CLOSEOUT-003",
@@ -71,7 +74,10 @@
         "HELPER-002",
         "HELPER-003",
         "HELPER-004",
-        "HELPER-005"
+        "HELPER-005",
+        "DISPATCH-LIFECYCLE-001",
+        "DISPATCH-LIFECYCLE-002",
+        "DISPATCH-LIFECYCLE-003"
       ]
     },
     {
@@ -98,7 +104,10 @@
         "DISPATCH-BRIEF-002",
         "DISPATCH-BRIEF-003",
         "DISPATCH-BRIEF-004",
-        "DISPATCH-BRIEF-005"
+        "DISPATCH-BRIEF-005",
+        "DISPATCH-LIFECYCLE-001",
+        "DISPATCH-LIFECYCLE-002",
+        "DISPATCH-LIFECYCLE-003"
       ]
     },
     {
@@ -116,7 +125,16 @@
         "DISPATCH-BRIEF-002",
         "DISPATCH-BRIEF-003",
         "DISPATCH-BRIEF-004",
-        "DISPATCH-BRIEF-005"
+        "DISPATCH-BRIEF-005",
+        "DISPATCH-LIFECYCLE-001",
+        "DISPATCH-LIFECYCLE-002",
+        "DISPATCH-LIFECYCLE-003"
+      ]
+    },
+    {
+      "source": "scripts/dispatch-telemetry-hook.mjs",
+      "rules": [
+        "DISPATCH-LIFECYCLE-003"
       ]
     },
     {
@@ -232,6 +250,36 @@
       "enforcementHost": "dispatch caller and helper",
       "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
       "redLeg": "omit effectiveEvidenceCommands and reject",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-LIFECYCLE-001",
+      "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
+      "semantics": "fresh task-pack, rework, decision, and acceptance rounds require a new bound instance with forkTurns none",
+      "landing": "scripts/dispatch-readiness-compliance.mjs validateAgentLifecycle",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs fresh round",
+      "redLeg": "newInstance=false or forkTurns=all returns a lifecycle refusal",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-LIFECYCLE-002",
+      "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
+      "semantics": "same-task clarification is the only same-instance exception and requires an explicitly running bounded task",
+      "landing": "scripts/dispatch-readiness-compliance.mjs validateAgentLifecycle",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs clarification round",
+      "redLeg": "missing sameTaskRunning or a restart in clarification returns a lifecycle refusal",
+      "disposition": "retained"
+    },
+    {
+      "id": "DISPATCH-LIFECYCLE-003",
+      "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
+      "semantics": "role/Pack/evidence bindings are explicit; terminal agent reuse and prompt self-claims are rejected while evidence digests may be reused",
+      "landing": "scripts/dispatch-readiness-compliance.mjs validateAgentLifecycle and dispatch-telemetry-hook.mjs",
+      "enforcementHost": "dispatch caller and helper",
+      "positiveLeg": "dispatch-readiness-compliance.test.mjs source evidence and handoff binding",
+      "redLeg": "prompt claim, same predecessor id, or running predecessor returns a lifecycle refusal",
       "disposition": "retained"
     },
     {

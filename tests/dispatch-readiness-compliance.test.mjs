@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DISPATCH_BRIEF_DECLARATIONS, DISPATCH_BRIEF_DECLARATION_FIELDS, DISPATCH_BRIEF_FIELDS, validateDispatchBrief } from "../scripts/dispatch-readiness-compliance.mjs";
+import { DISPATCH_BRIEF_DECLARATIONS, DISPATCH_BRIEF_DECLARATION_FIELDS, DISPATCH_BRIEF_FIELDS, validateAgentLifecycle, validateAgentLifecycleEvidence, validateDispatchBrief, validateStructuredHandoff } from "../scripts/dispatch-readiness-compliance.mjs";
 
 const storyScope = [
   "Goal 为谁：Owner；目的锚：STORY-209；符合性判据：五要素可复跑；判定人：Owner。",
@@ -103,4 +103,128 @@ test("STORY-412 verification cadence is optional for old briefs but strict when 
   const legacy = validateDispatchBrief(brief);
   assert.equal(legacy.ok, true);
   assert.equal(legacy.verificationPlan.checked, false);
+});
+
+const freshLifecycle = {
+  schemaVersion: "tcrn.agent-lifecycle.v1",
+  phase: "rework",
+  role: "implementation",
+  pack: "EPIC135/STORY-424",
+  model: "gpt-5.6-luna",
+  effort: "max",
+  agentId: "01a0a06e-9729-7940-856e-700569fcd1bf",
+  newInstance: true,
+  forkTurns: "none",
+  sameTaskRunning: false,
+  predecessor: { agentId: "01a09cb4-46fb-7390-962d-0971efdf294f", status: "done" },
+  sourceEvidence: [
+    { kind: "spawn_agent", locator: "parent-rollout#ordinal=3799", digest: "a".repeat(64) },
+    { kind: "turn_context", locator: "child-rollout#turn_context", digest: "b".repeat(64) },
+  ],
+};
+
+test("STORY-424: a fresh round binds role, Pack, model, effort, new instance, fork none, and source evidence", () => {
+  const result = validateAgentLifecycle(freshLifecycle);
+  assert.equal(result.ok, true, JSON.stringify(result.problems));
+  assert.equal(result.freshRound, true);
+  assert.equal(result.sourceEvidence.status, "verified");
+  const briefResult = validateDispatchBrief({ ...brief, lifecycleRequired: true, agentLifecycle: freshLifecycle });
+  assert.equal(briefResult.ok, true, JSON.stringify(briefResult.problems));
+  assert.equal(briefResult.lifecycle.reasonCode, "DISPATCH_LIFECYCLE_VALID");
+});
+
+test("STORY-424: missing lifecycle and inherited/old-instance fresh rounds are red", () => {
+  const missing = validateDispatchBrief({ ...brief, lifecycleRequired: true });
+  assert.equal(missing.ok, false);
+  assert.ok(missing.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_REQUIRED"));
+  for (const [field, value, code] of [
+    ["newInstance", false, "DISPATCH_LIFECYCLE_NEW_INSTANCE_REQUIRED"],
+    ["forkTurns", "all", "DISPATCH_LIFECYCLE_FORK_FORBIDDEN"],
+    ["sameTaskRunning", true, "DISPATCH_LIFECYCLE_RUNNING_TASK_REQUIRES_CLARIFICATION"],
+  ]) {
+    const result = validateAgentLifecycle({ ...freshLifecycle, [field]: value });
+    assert.equal(result.ok, false, field);
+    assert.ok(result.problems.some((problem) => problem.code === code), `${field} should carry ${code}`);
+  }
+  const sameAgent = validateAgentLifecycle({ ...freshLifecycle, predecessor: { agentId: freshLifecycle.agentId, status: "done" } });
+  assert.ok(sameAgent.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_AGENT_REUSED"));
+  const runningPredecessor = validateAgentLifecycle({ ...freshLifecycle, predecessor: { agentId: "old-agent", status: "running" } });
+  assert.ok(runningPredecessor.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_RUNNING_PREDECESSOR"));
+});
+
+test("STORY-424: same-task clarification is explicit and does not restart the instance", () => {
+  const clarificationInput = {
+    ...freshLifecycle,
+    phase: "clarification",
+    newInstance: false,
+    forkTurns: "none",
+    sameTaskRunning: true,
+    predecessor: undefined,
+    sourceEvidence: [{ kind: "send_message", locator: "parent-rollout#clarification", digest: "1".repeat(64) }],
+  };
+  const clarification = validateAgentLifecycle(clarificationInput);
+  assert.equal(clarification.ok, true, JSON.stringify(clarification.problems));
+  assert.equal(clarification.freshRound, false);
+  const clarified = validateAgentLifecycleEvidence(clarificationInput, clarificationInput);
+  assert.equal(clarified.ok, true, JSON.stringify(clarified.problems));
+  assert.equal(clarified.status, "green");
+  const ambiguous = validateAgentLifecycle({ ...clarificationInput, sameTaskRunning: undefined });
+  assert.ok(ambiguous.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_CLARIFICATION_BINDING_REQUIRED"));
+  const restart = validateAgentLifecycle({ ...clarificationInput, newInstance: true });
+  assert.ok(restart.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_CLARIFICATION_RESTART_REJECTED"));
+});
+
+test("STORY-424: prompt claims cannot stand in for source evidence and handoff bindings must agree", () => {
+  const claim = validateAgentLifecycle({ ...freshLifecycle, sourceEvidence: [{ kind: "prompt-claim", locator: "prompt" }] });
+  assert.equal(claim.ok, false);
+  assert.ok(claim.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_PROMPT_CLAIM_REJECTED"));
+  const handoff = validateStructuredHandoff({
+    schemaVersion: "tcrn.structured-handoff.v1",
+    workId: "work:62d23a27246cad5bfc78bc17",
+    role: "acceptance",
+    pack: freshLifecycle.pack,
+    lifecycle: freshLifecycle,
+  });
+  assert.equal(handoff.ok, false);
+  assert.ok(handoff.problems.some((problem) => problem.code === "DISPATCH_HANDOFF_BINDING_MISMATCH"));
+});
+
+test("STORY-424: real spawn plus child turn context is green, while task-id/compaction-only reuse is red", () => {
+  const observed = {
+    ...freshLifecycle,
+    sourceEvidence: [
+      { kind: "spawn_agent", locator: "parent-rollout#ordinal=3799", digest: "c".repeat(64) },
+      { kind: "turn_context", locator: "child-rollout#turn_context", digest: "d".repeat(64) },
+    ],
+  };
+  const green = validateAgentLifecycleEvidence(freshLifecycle, observed);
+  assert.equal(green.ok, true, JSON.stringify(green.problems));
+  assert.equal(green.status, "green");
+  const digestReuse = validateAgentLifecycleEvidence(freshLifecycle, {
+    ...observed,
+    sourceEvidence: [
+      { kind: "spawn_agent", locator: "retained-evidence#spawn", digest: "f".repeat(64) },
+      { kind: "turn_context", locator: "retained-evidence#turn", digest: "0".repeat(64) },
+    ],
+  });
+  assert.equal(digestReuse.ok, true, "digest-bound evidence may be reused without reusing the agent");
+  assert.equal(digestReuse.status, "green");
+  const unavailableEvidence = validateAgentLifecycleEvidence(freshLifecycle, {
+    ...observed,
+    sourceEvidence: ["host did not expose a digest"],
+  });
+  assert.equal(unavailableEvidence.ok, false);
+  assert.equal(unavailableEvidence.status, "unknown");
+  assert.equal(unavailableEvidence.reasonCode, "DISPATCH_LIFECYCLE_EVIDENCE_UNKNOWN");
+  const oldTask = validateAgentLifecycleEvidence(freshLifecycle, {
+    ...freshLifecycle,
+    agentId: undefined,
+    taskId: "old-task-id",
+    sourceEvidence: [{ kind: "compaction", locator: "old-session#compaction", digest: "e".repeat(64) }],
+  });
+  assert.equal(oldTask.ok, false);
+  assert.equal(oldTask.status, "red");
+  assert.ok(oldTask.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_OLD_TASK_ID_ONLY"));
+  assert.ok(oldTask.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_COMPACTION_NOT_INSTANCE"));
+  assert.ok(oldTask.unknownReasons.some((problem) => problem.code === "DISPATCH_LIFECYCLE_SPAWN_EVIDENCE_MISSING"));
 });

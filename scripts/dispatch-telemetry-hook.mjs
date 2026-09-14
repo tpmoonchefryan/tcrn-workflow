@@ -48,7 +48,15 @@ function firstDefined(...values) {
 }
 
 function inputScopes(input) {
-  return [input, input?.payload, input?.subagent, input?.agent].filter(isRecord);
+  return [
+    input,
+    input?.payload,
+    input?.subagent,
+    input?.agent,
+    input?.lifecycle,
+    input?.agentLifecycle,
+    input?.structuredHandoff,
+  ].filter(isRecord);
 }
 
 function inputField(input, names, env, envName, maximum = 256) {
@@ -63,6 +71,36 @@ function inputField(input, names, env, envName, maximum = 256) {
 function numeric(value) {
   if (typeof value === "string" && value.trim().length > 0) value = Number(value);
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function booleanValue(input, env, names, envNames) {
+  const values = [];
+  for (const scope of inputScopes(input)) for (const name of names) values.push(scope[name]);
+  for (const name of Array.isArray(envNames) ? envNames : [envNames]) values.push(env?.[name]);
+  const value = firstDefined(...values);
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function sourceEvidence(input, env) {
+  const values = [];
+  for (const scope of inputScopes(input)) for (const name of ["sourceEvidence", "source_evidence", "evidence"]) values.push(scope[name]);
+  values.push(env?.TCRN_LIFECYCLE_SOURCE_EVIDENCE, env?.TCRN_DISPATCH_SOURCE_EVIDENCE);
+  const raw = firstDefined(...values);
+  if (!Array.isArray(raw)) return null;
+  const bounded = raw.slice(0, 8).map((entry) => {
+    if (typeof entry === "string") return boundedText(entry, 512);
+    if (!isRecord(entry)) return null;
+    const kind = boundedText(firstDefined(entry.kind, entry.source, entry.type), 128);
+    const locator = boundedText(firstDefined(entry.locator, entry.path, entry.ref), 512);
+    if (kind === null || locator === null || /prompt|self[-_ ]?assert|claim/u.test(`${kind} ${locator}`)) return null;
+    const digest = firstDefined(entry.digest, entry.sha256, entry.sourceDigest);
+    if (digest !== undefined && digest !== null && digest !== "unknown" && (typeof digest !== "string" || !/^[a-f0-9]{64}$/u.test(digest))) return null;
+    return { kind, locator, ...(digest === undefined || digest === null ? {} : { digest }) };
+  }).filter((entry) => entry !== null);
+  return bounded.length === 0 ? null : bounded;
 }
 
 function usageFrom(input, env) {
@@ -121,6 +159,7 @@ function payloadFor(input, env, kind) {
   const observedModel = kind === "subagent-stop"
     ? inputField(input, ["model", "model_name", "modelName", "observed_model", "observedModel"], env, ["TCRN_TELEMETRY_OBSERVED_MODEL", "TCRN_OBSERVED_MODEL"])
     : null;
+  const lifecycleEvidence = sourceEvidence(input, env);
   const configuredHost = boundedText(env?.TCRN_TELEMETRY_HOST ?? env?.TCRN_HOST, 64);
   const host = configuredHost ?? inputField(input, ["host", "host_name", "hostName"], env, [], 64) ?? "unknown-host";
   const event = kind === "subagent-start" ? "SubagentStart" : "SubagentStop";
@@ -135,6 +174,21 @@ function payloadFor(input, env, kind) {
     requestedModel,
     observedModel,
     usage: kind === "subagent-stop" ? usageFrom(input, env) : null,
+    // Lifecycle fields are explicit host facts.  Missing fields remain null;
+    // in particular, an agent/session id is never inferred from a prompt or
+    // from the model name.  The extra fields intentionally make the payload
+    // use the generic bounded telemetry envelope rather than changing the
+    // historical twelve-field record contract.
+    agentId: inputField(input, ["agent_id", "agentId", "child_agent_id", "childAgentId"], env, ["TCRN_AGENT_ID", "TCRN_TELEMETRY_AGENT_ID"]),
+    lifecyclePhase: inputField(input, ["lifecycle_phase", "lifecyclePhase", "phase", "roundType", "round_type"], env, ["TCRN_LIFECYCLE_PHASE", "TCRN_DISPATCH_LIFECYCLE_PHASE"], 128),
+    role: inputField(input, ["role", "role_id", "roleId"], env, ["TCRN_AGENT_ROLE", "TCRN_DISPATCH_ROLE"], 128),
+    pack: inputField(input, ["pack", "pack_id", "packId"], env, ["TCRN_AGENT_PACK", "TCRN_DISPATCH_PACK"], 256),
+    effort: inputField(input, ["effort", "reasoning_effort", "reasoningEffort"], env, ["TCRN_AGENT_EFFORT", "TCRN_DISPATCH_EFFORT"], 128),
+    newInstance: booleanValue(input, env, ["new_instance", "newInstance", "new-instance"], ["TCRN_NEW_AGENT_INSTANCE", "TCRN_DISPATCH_NEW_INSTANCE"]),
+    forkTurns: inputField(input, ["fork_turns", "forkTurns", "fork-turns"], env, ["TCRN_FORK_TURNS", "TCRN_DISPATCH_FORK_TURNS"], 64),
+    sameTaskRunning: booleanValue(input, env, ["same_task_running", "sameTaskRunning", "same-task-running"], ["TCRN_SAME_TASK_RUNNING", "TCRN_DISPATCH_SAME_TASK_RUNNING"]),
+    sourceEvidence: lifecycleEvidence,
+    sourceEvidenceStatus: lifecycleEvidence === null ? "unknown" : "available",
     source: boundedUtf8(`hook:${host}:${event}`, 128),
     availability: "available",
   };

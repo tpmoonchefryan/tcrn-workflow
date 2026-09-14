@@ -139,6 +139,46 @@ test("STORY-393 U6: an explicit Codex hook host is preserved over payload ambigu
   assert.equal(record.payload.source, "hook:codex:SubagentStart");
 });
 
+test("STORY-424: lifecycle facts are bounded and missing facts stay unknown", async (t) => {
+  const root = await scratch("tcrn-telemetry-lifecycle-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const digest = "a".repeat(64);
+  const start = await runTelemetryHook({
+    hook_event_name: "SubagentStart",
+    session_id: "clarification-session",
+    lifecycle: {
+      phase: "clarification",
+      role: "implementation",
+      pack: "EPIC135/STORY-424",
+      effort: "max",
+      agentId: "agent-424",
+      newInstance: false,
+      sameTaskRunning: true,
+      sourceEvidence: [{ kind: "turn_context", locator: "child-rollout#turn_context", digest }],
+    },
+    prompt: "must never be persisted",
+  }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_HOST: "codex", TCRN_TELEMETRY_AT: INSTANT(12) } });
+  assert.equal(start.reasonCode, "TELEMETRY_RECORDED");
+  const stored = (await readTelemetryRecords(root, { limit: 10 })).records[0];
+  assert.equal(stored.payload.lifecyclePhase, "clarification");
+  assert.equal(stored.payload.role, "implementation");
+  assert.equal(stored.payload.pack, "EPIC135/STORY-424");
+  assert.equal(stored.payload.agentId, "agent-424");
+  assert.equal(stored.payload.newInstance, false);
+  assert.equal(stored.payload.sameTaskRunning, true);
+  assert.equal(stored.payload.sourceEvidenceStatus, "available");
+  assert.deepEqual(stored.payload.sourceEvidence, [{ kind: "turn_context", locator: "child-rollout#turn_context", digest }]);
+  assert.doesNotMatch(await readFile(join(root, "telemetry", "2026-09-10.ndjson"), "utf8"), /must never be persisted/u);
+
+  const unknown = await runTelemetryHook({ hook_event_name: "SubagentStop", session_id: "unknown-session" }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_AT: INSTANT(13) } });
+  assert.equal(unknown.reasonCode, "TELEMETRY_RECORDED");
+  const unknownRecord = (await readTelemetryRecords(root, { limit: 10 })).records.find((record) => record.session === "unknown-session");
+  assert.ok(unknownRecord);
+  assert.equal(unknownRecord.payload.newInstance, null);
+  assert.equal(unknownRecord.payload.forkTurns, null);
+  assert.equal(unknownRecord.payload.sourceEvidenceStatus, "unknown");
+});
+
 test("STORY-393: the dispatch hook cannot mint an observation checkpoint from external input", async (t) => {
   const root = await scratch("tcrn-telemetry-checkpoint-hook-");
   t.after(() => rm(root, { recursive: true, force: true }));

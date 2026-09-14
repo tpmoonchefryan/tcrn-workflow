@@ -33,6 +33,364 @@ export const VERIFICATION_PHASES = Object.freeze([
   "merge-sensitive",
 ]);
 
+// TCRN-CROSS-STORY-424: execution evidence is additive to the five dispatch
+// elements above.  A brief remains a transport object, while this small
+// declaration makes the lifetime of the transport's recipient explicit.  It
+// deliberately does not try to authenticate a model or an actor: the
+// collaboration tool input and the host turn context are the evidence sources,
+// and the validator reports when those sources are unavailable instead of
+// treating a prompt claim as identity.
+export const AGENT_LIFECYCLE_SCHEMA_VERSION = "tcrn.agent-lifecycle.v1";
+export const AGENT_LIFECYCLE_PHASES = Object.freeze(["task-pack", "rework", "decision", "acceptance", "clarification"]);
+export const AGENT_LIFECYCLE_FRESH_PHASES = Object.freeze(["task-pack", "rework", "decision", "acceptance"]);
+export const DISPATCH_LIFECYCLE_FIELDS = Object.freeze([
+  "schemaVersion",
+  "phase",
+  "role",
+  "pack",
+  "model",
+  "effort",
+  "agentId",
+  "newInstance",
+  "forkTurns",
+  "sameTaskRunning",
+  "predecessor",
+  "sourceEvidence",
+]);
+export const STRUCTURED_HANDOFF_SCHEMA_VERSION = "tcrn.structured-handoff.v1";
+
+const LIFECYCLE_PHASE_ALIASES = Object.freeze({
+  "epic-pack": "task-pack",
+  "story-pack": "task-pack",
+  "new-pack": "task-pack",
+  "new-task": "task-pack",
+  "new-instance": "task-pack",
+  "rework-round": "rework",
+  "decision-round": "decision",
+  "acceptance-round": "acceptance",
+  clarify: "clarification",
+});
+
+const LIFECYCLE_EVIDENCE_KINDS = Object.freeze([
+  "artifact",
+  "collaboration",
+  "spawn_agent",
+  "send_message",
+  "turn_context",
+  "telemetry",
+  "rollout",
+  "status",
+  "work-show",
+  // Accepted only so a negative fixture can name the tempting false proof;
+  // `validateAgentLifecycleEvidence` never treats it as a fresh-instance fact.
+  "compaction",
+]);
+
+const LIFECYCLE_STATUS_VALUES = Object.freeze(["verified", "unknown"]);
+
+function lifecycleField(value, names) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  for (const name of names) {
+    if (Object.hasOwn(value, name)) return value[name];
+  }
+  return undefined;
+}
+
+function lifecycleText(value, field, maximum = 512) {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > maximum) {
+    return { field, message: `${field} must be non-empty bounded text`, code: "DISPATCH_LIFECYCLE_FIELD_INVALID" };
+  }
+  return null;
+}
+
+function lifecycleBoolean(value, field) {
+  return typeof value === "boolean"
+    ? null
+    : { field, message: `${field} must be an explicit boolean`, code: "DISPATCH_LIFECYCLE_FIELD_INVALID" };
+}
+
+function lifecycleDigest(value, field) {
+  if (value === undefined || value === null || value === "unknown") return null;
+  return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value)
+    ? null
+    : { field, message: `${field} must be a lowercase SHA-256 digest or explicit unknown`, code: "DISPATCH_LIFECYCLE_EVIDENCE_INVALID" };
+}
+
+function lifecycleEvidenceProblems(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return {
+      problems: [{ field: "agentLifecycle.sourceEvidence", message: "sourceEvidence must be a non-empty list", code: "DISPATCH_LIFECYCLE_EVIDENCE_REQUIRED" }],
+      status: "unknown",
+      count: 0,
+    };
+  }
+  const problems = [];
+  let unknown = 0;
+  for (const [index, entry] of entries.entries()) {
+    const field = `agentLifecycle.sourceEvidence[${index}]`;
+    // String locators are retained for compatibility with small handoff notes,
+    // but cannot prove anything by themselves.  They are therefore explicitly
+    // reported as unknown rather than promoted to a green fact.
+    if (typeof entry === "string") {
+      if (entry.trim().length === 0 || entry.length > 1_024) {
+        problems.push({ field, message: "a source-evidence locator must be non-empty bounded text", code: "DISPATCH_LIFECYCLE_EVIDENCE_INVALID" });
+      } else {
+        unknown += 1;
+      }
+      continue;
+    }
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      problems.push({ field, message: "a source-evidence entry must be an object or locator", code: "DISPATCH_LIFECYCLE_EVIDENCE_INVALID" });
+      continue;
+    }
+    const kind = lifecycleField(entry, ["kind", "source", "type"]);
+    const locator = lifecycleField(entry, ["locator", "path", "ref"]);
+    const digest = lifecycleField(entry, ["digest", "sha256", "sourceDigest"]);
+    const status = lifecycleField(entry, ["status", "evidenceStatus"]);
+    const kindProblem = lifecycleText(kind, `${field}.kind`, 128);
+    const locatorProblem = lifecycleText(locator, `${field}.locator`, 1_024);
+    if (kindProblem) problems.push(kindProblem);
+    if (locatorProblem) problems.push(locatorProblem);
+    if (typeof kind === "string" && !LIFECYCLE_EVIDENCE_KINDS.includes(kind) && !/^unknown(?:[-_].*)?$/u.test(kind)) {
+      problems.push({ field: `${field}.kind`, message: `kind must identify a real tool/artifact source (${LIFECYCLE_EVIDENCE_KINDS.join(", ")})`, code: "DISPATCH_LIFECYCLE_EVIDENCE_INVALID" });
+    }
+    if (typeof kind === "string" && /prompt|self[-_ ]?assert|claim/u.test(kind)) {
+      problems.push({ field: `${field}.kind`, message: "prompt self-claims cannot be source evidence", code: "DISPATCH_LIFECYCLE_PROMPT_CLAIM_REJECTED" });
+    }
+    if (typeof locator === "string" && /prompt|self[-_ ]?assert|claim/u.test(locator)) {
+      problems.push({ field: `${field}.locator`, message: "prompt self-claims cannot be source evidence", code: "DISPATCH_LIFECYCLE_PROMPT_CLAIM_REJECTED" });
+    }
+    const digestProblem = lifecycleDigest(digest, `${field}.digest`);
+    if (digestProblem) problems.push(digestProblem);
+    if (status !== undefined && !LIFECYCLE_STATUS_VALUES.includes(status)) {
+      problems.push({ field: `${field}.status`, message: "status must be verified or unknown", code: "DISPATCH_LIFECYCLE_EVIDENCE_INVALID" });
+    }
+    if (!(typeof digest === "string" && /^[a-f0-9]{64}$/u.test(digest) && status !== "unknown")) unknown += 1;
+  }
+  return { problems, status: problems.length > 0 || unknown > 0 ? "unknown" : "verified", count: entries.length };
+}
+
+function lifecyclePhase(value) {
+  const raw = lifecycleField(value, ["phase", "roundType", "lifecyclePhase"]);
+  if (typeof raw !== "string") return raw;
+  return LIFECYCLE_PHASE_ALIASES[raw] ?? raw;
+}
+
+/**
+ * Validate the additive lifecycle declaration carried by a new dispatch
+ * brief.  This is intentionally a shape-and-consistency check, not an
+ * identity service.  `sourceEvidence.status === "unknown"` is a valid,
+ * explicit answer when the host does not expose a digest; callers must not
+ * render that as proof of a fresh instance.
+ */
+export function validateAgentLifecycle(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {
+      ok: false,
+      checked: true,
+      reasonCode: "DISPATCH_LIFECYCLE_REQUIRED",
+      problems: [{ field: "agentLifecycle", message: "agentLifecycle must be an object", code: "DISPATCH_LIFECYCLE_REQUIRED" }],
+      sourceEvidence: { status: "unknown", count: 0 },
+    };
+  }
+  const problems = [];
+  if (value.schemaVersion !== undefined && value.schemaVersion !== AGENT_LIFECYCLE_SCHEMA_VERSION) {
+    problems.push({ field: "agentLifecycle.schemaVersion", message: `schemaVersion must be ${AGENT_LIFECYCLE_SCHEMA_VERSION}`, code: "DISPATCH_LIFECYCLE_SCHEMA_INVALID" });
+  }
+  const phase = lifecyclePhase(value);
+  if (!AGENT_LIFECYCLE_PHASES.includes(phase)) {
+    problems.push({ field: "agentLifecycle.phase", message: `phase must be one of ${AGENT_LIFECYCLE_PHASES.join(", ")}`, code: "DISPATCH_LIFECYCLE_PHASE_INVALID" });
+  }
+  const role = lifecycleField(value, ["role", "roleId"]);
+  const pack = lifecycleField(value, ["pack", "packId"]);
+  const model = lifecycleField(value, ["model", "requestedModel"]);
+  const effort = lifecycleField(value, ["effort", "reasoningEffort"]);
+  for (const [field, candidate] of [["role", role], ["pack", pack], ["model", model], ["effort", effort]]) {
+    const problem = lifecycleText(candidate, `agentLifecycle.${field}`);
+    if (problem) problems.push(problem);
+  }
+  const newInstance = lifecycleField(value, ["newInstance", "new-instance"]);
+  const forkTurns = lifecycleField(value, ["forkTurns", "fork_turns", "fork-turns"]);
+  const sameTaskRunning = lifecycleField(value, ["sameTaskRunning", "same-task-running"]);
+  const newProblem = lifecycleBoolean(newInstance, "agentLifecycle.newInstance");
+  if (newProblem) problems.push(newProblem);
+  const sameProblem = sameTaskRunning === undefined ? null : lifecycleBoolean(sameTaskRunning, "agentLifecycle.sameTaskRunning");
+  if (sameProblem) problems.push(sameProblem);
+  if (forkTurns !== undefined && forkTurns !== "none") {
+    problems.push({ field: "agentLifecycle.forkTurns", message: "forkTurns must be the explicit value none", code: "DISPATCH_LIFECYCLE_FORK_FORBIDDEN" });
+  }
+  if (AGENT_LIFECYCLE_FRESH_PHASES.includes(phase)) {
+    if (newInstance !== true) problems.push({ field: "agentLifecycle.newInstance", message: "fresh task-pack/rework/decision/acceptance rounds require newInstance=true", code: "DISPATCH_LIFECYCLE_NEW_INSTANCE_REQUIRED" });
+    if (forkTurns !== "none") problems.push({ field: "agentLifecycle.forkTurns", message: "fresh rounds require forkTurns=none; inherited history is forbidden", code: "DISPATCH_LIFECYCLE_FORK_NONE_REQUIRED" });
+    if (sameTaskRunning === true) problems.push({ field: "agentLifecycle.sameTaskRunning", message: "a running bounded task may be clarified, but a cross-round dispatch cannot reuse it", code: "DISPATCH_LIFECYCLE_RUNNING_TASK_REQUIRES_CLARIFICATION" });
+  }
+  if (phase === "clarification") {
+    if (sameTaskRunning !== true) problems.push({ field: "agentLifecycle.sameTaskRunning", message: "clarification requires an explicit sameTaskRunning=true", code: "DISPATCH_LIFECYCLE_CLARIFICATION_BINDING_REQUIRED" });
+    if (newInstance !== false) problems.push({ field: "agentLifecycle.newInstance", message: "same-task clarification must keep newInstance=false", code: "DISPATCH_LIFECYCLE_CLARIFICATION_RESTART_REJECTED" });
+  }
+  const agentId = lifecycleField(value, ["agentId", "agent_id", "childAgentId", "child_agent_id"]);
+  if (agentId !== undefined) {
+    const problem = lifecycleText(agentId, "agentLifecycle.agentId", 256);
+    if (problem) problems.push(problem);
+  }
+  const predecessor = lifecycleField(value, ["predecessor", "previousAgent", "previous_agent"]);
+  if (predecessor !== undefined) {
+    if (predecessor === null || typeof predecessor !== "object" || Array.isArray(predecessor)) {
+      problems.push({ field: "agentLifecycle.predecessor", message: "predecessor must be an object when supplied", code: "DISPATCH_LIFECYCLE_PREDECESSOR_INVALID" });
+    } else {
+      const previousId = lifecycleField(predecessor, ["agentId", "agent_id", "id"]);
+      const previousStatus = lifecycleField(predecessor, ["status", "state"]);
+      const idProblem = lifecycleText(previousId, "agentLifecycle.predecessor.agentId", 256);
+      if (idProblem) problems.push(idProblem);
+      const statusProblem = lifecycleText(previousStatus, "agentLifecycle.predecessor.status", 128);
+      if (statusProblem) problems.push(statusProblem);
+      if (typeof agentId === "string" && typeof previousId === "string" && agentId === previousId) {
+        problems.push({ field: "agentLifecycle.agentId", message: "a new round cannot reuse its predecessor agentId", code: "DISPATCH_LIFECYCLE_AGENT_REUSED" });
+      }
+      if (AGENT_LIFECYCLE_FRESH_PHASES.includes(phase) && typeof previousStatus === "string" && ["running", "active", "in-progress"].includes(previousStatus)) {
+        problems.push({ field: "agentLifecycle.predecessor.status", message: "a running predecessor is same-task clarification scope, not a new round", code: "DISPATCH_LIFECYCLE_RUNNING_PREDECESSOR" });
+      }
+    }
+  }
+  const evidence = lifecycleField(value, ["sourceEvidence", "source-evidence", "evidence"]);
+  const sourceEvidence = lifecycleEvidenceProblems(evidence);
+  problems.push(...sourceEvidence.problems);
+  return {
+    ok: problems.length === 0,
+    checked: true,
+    reasonCode: problems.length === 0
+      ? (sourceEvidence.status === "verified" ? "DISPATCH_LIFECYCLE_VALID" : "DISPATCH_LIFECYCLE_VALID_EVIDENCE_UNKNOWN")
+      : "DISPATCH_LIFECYCLE_INVALID",
+    phase,
+    freshRound: AGENT_LIFECYCLE_FRESH_PHASES.includes(phase),
+    role: typeof role === "string" ? role : null,
+    pack: typeof pack === "string" ? pack : null,
+    model: typeof model === "string" ? model : null,
+    effort: typeof effort === "string" ? effort : null,
+    agentId: typeof agentId === "string" ? agentId : null,
+    newInstance: typeof newInstance === "boolean" ? newInstance : null,
+    forkTurns: typeof forkTurns === "string" ? forkTurns : null,
+    sameTaskRunning: typeof sameTaskRunning === "boolean" ? sameTaskRunning : null,
+    sourceEvidence: { status: sourceEvidence.status, count: sourceEvidence.count },
+    problems,
+  };
+}
+
+/**
+ * Validate the structured handoff envelope used by dispatch callers.  It is
+ * optional for historical briefs; when present it binds the lifecycle to one
+ * work id and checks that the duplicated role/Pack labels agree.
+ */
+export function validateStructuredHandoff(value) {
+  if (value === undefined) return { checked: false, ok: true, reasonCode: "DISPATCH_HANDOFF_NOT_DECLARED", problems: [] };
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return { checked: true, ok: false, reasonCode: "DISPATCH_HANDOFF_INVALID", problems: [{ field: "structuredHandoff", message: "structuredHandoff must be an object", code: "DISPATCH_HANDOFF_REQUIRED" }] };
+  }
+  const problems = [];
+  if (value.schemaVersion !== STRUCTURED_HANDOFF_SCHEMA_VERSION) problems.push({ field: "structuredHandoff.schemaVersion", message: `schemaVersion must be ${STRUCTURED_HANDOFF_SCHEMA_VERSION}`, code: "DISPATCH_HANDOFF_SCHEMA_INVALID" });
+  for (const field of ["workId", "role", "pack"]) {
+    const problem = lifecycleText(value[field], `structuredHandoff.${field}`);
+    if (problem) problems.push(problem);
+  }
+  const lifecycle = value.lifecycle ?? value.agentLifecycle;
+  const lifecycleResult = validateAgentLifecycle(lifecycle);
+  if (!lifecycleResult.ok) problems.push(...lifecycleResult.problems.map((problem) => ({ ...problem, field: `structuredHandoff.${problem.field.replace(/^agentLifecycle\.?/u, "lifecycle.")}` })));
+  if (typeof value.role === "string" && typeof lifecycleResult.role === "string" && value.role !== lifecycleResult.role) problems.push({ field: "structuredHandoff.role", message: "handoff role must match agentLifecycle.role", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+  if (typeof value.pack === "string" && typeof lifecycleResult.pack === "string" && value.pack !== lifecycleResult.pack) problems.push({ field: "structuredHandoff.pack", message: "handoff pack must match agentLifecycle.pack", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+  return {
+    checked: true,
+    ok: problems.length === 0,
+    reasonCode: problems.length === 0 ? "DISPATCH_HANDOFF_VALID" : "DISPATCH_HANDOFF_INVALID",
+    workId: typeof value.workId === "string" ? value.workId : null,
+    role: typeof value.role === "string" ? value.role : null,
+    pack: typeof value.pack === "string" ? value.pack : null,
+    lifecycle: lifecycleResult,
+    problems,
+  };
+}
+
+function evidenceEntries(value) {
+  const entries = lifecycleField(value, ["sourceEvidence", "source-evidence", "evidence"]);
+  return Array.isArray(entries) ? entries : [];
+}
+
+function evidenceKind(entry) {
+  if (typeof entry === "string") return entry.toLowerCase().includes("compaction") ? "compaction" : null;
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return null;
+  const kind = lifecycleField(entry, ["kind", "source", "type"]);
+  return typeof kind === "string" ? kind : null;
+}
+
+/**
+ * Compare a declared lifecycle with an observed dispatch envelope.  This is
+ * the narrow bridge from the shape validator to real tool/turn evidence.  It
+ * returns `unknown` when a host did not expose enough facts; it never turns a
+ * task id, compaction marker, or model self-description into a new instance.
+ */
+export function validateAgentLifecycleEvidence(declared, observed) {
+  const declaredResult = validateAgentLifecycle(declared);
+  const problems = [...declaredResult.problems];
+  const unknownReasons = [];
+  if (observed === null || typeof observed !== "object" || Array.isArray(observed)) {
+    return { ok: false, status: "unknown", reasonCode: "DISPATCH_LIFECYCLE_EVIDENCE_MISSING", problems: [{ field: "observedLifecycle", message: "observed tool/turn evidence is unavailable", code: "DISPATCH_LIFECYCLE_EVIDENCE_MISSING" }, ...problems] };
+  }
+  const observedResult = validateAgentLifecycle(observed);
+  // Absence of the evidence list is a not-verifiable observation, not a
+  // proven lifecycle violation.  Other malformed observed fields remain red.
+  problems.push(...observedResult.problems.filter((problem) => problem.code !== "DISPATCH_LIFECYCLE_EVIDENCE_REQUIRED"));
+  const declaredPhase = declaredResult.phase;
+  const observedAgentId = lifecycleField(observed, ["agentId", "agent_id", "childAgentId", "child_agent_id"]);
+  const observedTaskId = lifecycleField(observed, ["taskId", "task_id", "workId", "work_id"]);
+  const observedKinds = new Set(evidenceEntries(observed).map(evidenceKind).filter((value) => value !== null));
+  if (AGENT_LIFECYCLE_FRESH_PHASES.includes(declaredPhase)) {
+    if (typeof observedAgentId !== "string" || observedAgentId.trim().length === 0) {
+      if (typeof observedTaskId === "string") {
+        problems.push({ field: "observedLifecycle.agentId", message: "an old task/work id alone is not a new agent instance", code: "DISPATCH_LIFECYCLE_OLD_TASK_ID_ONLY" });
+      } else {
+        unknownReasons.push({ field: "observedLifecycle.agentId", message: "fresh round did not expose an observed agentId", code: "DISPATCH_LIFECYCLE_AGENT_ID_MISSING" });
+      }
+    }
+    if (observedKinds.has("compaction") && !observedKinds.has("spawn_agent")) {
+      problems.push({ field: "observedLifecycle.sourceEvidence", message: "compaction is not a new agent instance", code: "DISPATCH_LIFECYCLE_COMPACTION_NOT_INSTANCE" });
+    }
+    if (!observedKinds.has("spawn_agent")) {
+      unknownReasons.push({ field: "observedLifecycle.sourceEvidence", message: "fresh round did not expose the real spawn tool input", code: "DISPATCH_LIFECYCLE_SPAWN_EVIDENCE_MISSING" });
+    }
+    if (!observedKinds.has("turn_context")) {
+      unknownReasons.push({ field: "observedLifecycle.sourceEvidence", message: "fresh round did not expose a child turn_context", code: "DISPATCH_LIFECYCLE_TURN_CONTEXT_MISSING" });
+    }
+  }
+  if (declaredPhase === "clarification") {
+    if (observedResult.newInstance !== false || observedResult.sameTaskRunning !== true) {
+      problems.push({ field: "observedLifecycle", message: "clarification must remain same-task and must not restart the instance", code: "DISPATCH_LIFECYCLE_CLARIFICATION_RESTART_REJECTED" });
+    }
+  }
+  for (const field of ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns", "sameTaskRunning"]) {
+    const expected = declaredResult[field];
+    const actual = observedResult[field];
+    if (expected !== null && expected !== undefined && actual !== null && actual !== undefined && expected !== actual) {
+      problems.push({ field: `observedLifecycle.${field}`, message: `observed ${field} does not match the declared handoff`, code: "DISPATCH_LIFECYCLE_BINDING_MISMATCH" });
+    }
+  }
+  if (typeof declaredResult.agentId === "string" && typeof observedAgentId === "string" && declaredResult.agentId !== observedAgentId) {
+    problems.push({ field: "observedLifecycle.agentId", message: "observed agentId does not match the declared fresh instance", code: "DISPATCH_LIFECYCLE_AGENT_ID_MISMATCH" });
+  }
+  const status = problems.length > 0
+    ? "red"
+    : unknownReasons.length > 0 || declaredResult.sourceEvidence.status !== "verified" || observedResult.sourceEvidence.status !== "verified"
+      ? "unknown"
+      : "green";
+  return {
+    ok: status === "green",
+    status,
+    reasonCode: status === "green" ? "DISPATCH_LIFECYCLE_EVIDENCE_GREEN" : status === "red" ? "DISPATCH_LIFECYCLE_EVIDENCE_RED" : "DISPATCH_LIFECYCLE_EVIDENCE_UNKNOWN",
+    declared: declaredResult,
+    observed: observedResult,
+    unknownReasons,
+    problems,
+  };
+}
+
 const VERIFICATION_PLAN_LIST_FIELDS = Object.freeze([
   "localChecks",
   "finalRoots",
@@ -316,6 +674,29 @@ export function validateDispatchBrief(brief) {
   for (const problem of budgets.problems) problems.push(problem);
   const verificationPlan = verificationPlanProblems(brief.verificationPlan);
   problems.push(...verificationPlan.problems);
+  const lifecycleRequired = brief.lifecycleRequired === true || brief.requireFreshInstance === true;
+  const lifecycleCandidate = brief.agentLifecycle !== undefined && brief.agentLifecycle !== null
+    ? brief.agentLifecycle
+    : brief.lifecycle;
+  const declaredLifecycle = lifecycleCandidate === null ? undefined : lifecycleCandidate;
+  if (lifecycleRequired && declaredLifecycle === undefined) {
+    problems.push({ field: "agentLifecycle", message: "new task-pack/rework/decision/acceptance briefs must declare agentLifecycle", code: "DISPATCH_LIFECYCLE_REQUIRED" });
+  }
+  const lifecycle = declaredLifecycle === undefined
+    ? { checked: false, required: lifecycleRequired, reasonCode: lifecycleRequired ? "DISPATCH_LIFECYCLE_REQUIRED" : "DISPATCH_LIFECYCLE_NOT_DECLARED", problems: [] }
+    : { required: lifecycleRequired, ...validateAgentLifecycle(declaredLifecycle) };
+  if (declaredLifecycle !== undefined && brief.agentLifecycle !== undefined && brief.lifecycle !== undefined && brief.agentLifecycle !== brief.lifecycle) {
+    problems.push({ field: "lifecycle", message: "agentLifecycle and lifecycle aliases must not disagree", code: "DISPATCH_LIFECYCLE_DUPLICATE" });
+  }
+  if (declaredLifecycle !== undefined) problems.push(...lifecycle.problems);
+  // Historical briefs use `handoff` as a path pointer.  Only the additive
+  // object-shaped `structuredHandoff` (or an object supplied under the old
+  // alias) is a lifecycle envelope; a path must remain a legacy pointer.
+  const declaredHandoff = brief.structuredHandoff !== undefined
+    ? brief.structuredHandoff
+    : (brief.handoff !== null && typeof brief.handoff === "object" ? brief.handoff : undefined);
+  const structuredHandoff = validateStructuredHandoff(declaredHandoff);
+  if (declaredHandoff !== undefined) problems.push(...structuredHandoff.problems);
   const ready = citations.checked ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_READY_CITATIONS_UNCHECKED";
   return {
     ok: problems.length === 0,
@@ -326,6 +707,8 @@ export function validateDispatchBrief(brief) {
     // called compliant, it is being called unjudged on this axis.
     fieldBudgets: { checked: brief.fieldBudgets !== undefined, declared: budgets.declared },
     verificationPlan: { checked: verificationPlan.checked, ...(brief.verificationPlan === undefined ? {} : { phase: brief.verificationPlan?.phase ?? null }) },
+    lifecycle,
+    structuredHandoff,
   };
 }
 
