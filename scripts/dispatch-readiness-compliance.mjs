@@ -87,6 +87,7 @@ const LIFECYCLE_EVIDENCE_KINDS = Object.freeze([
 ]);
 
 const LIFECYCLE_STATUS_VALUES = Object.freeze(["verified", "unknown"]);
+const TERMINAL_PREDECESSOR_STATUSES = Object.freeze(["done", "completed", "cancelled", "canceled", "blocked", "failed", "terminal", "closed", "succeeded", "success"]);
 
 function lifecycleField(value, names) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -201,6 +202,9 @@ export function validateAgentLifecycle(value) {
   if (!AGENT_LIFECYCLE_PHASES.includes(phase)) {
     problems.push({ field: "agentLifecycle.phase", message: `phase must be one of ${AGENT_LIFECYCLE_PHASES.join(", ")}`, code: "DISPATCH_LIFECYCLE_PHASE_INVALID" });
   }
+  if (AGENT_LIFECYCLE_FRESH_PHASES.includes(phase) && value.schemaVersion !== AGENT_LIFECYCLE_SCHEMA_VERSION) {
+    problems.push({ field: "agentLifecycle.schemaVersion", message: `fresh lifecycle rounds require ${AGENT_LIFECYCLE_SCHEMA_VERSION}`, code: "DISPATCH_LIFECYCLE_SCHEMA_INVALID" });
+  }
   const role = lifecycleField(value, ["role", "roleId"]);
   const pack = lifecycleField(value, ["pack", "packId"]);
   const model = lifecycleField(value, ["model", "requestedModel"]);
@@ -243,6 +247,7 @@ export function validateAgentLifecycle(value) {
     if (problem) problems.push(problem);
   }
   const predecessor = lifecycleField(value, ["predecessor", "previousAgent", "previous_agent"]);
+  let predecessorResult = null;
   if (predecessor !== undefined) {
     if (predecessor === null || typeof predecessor !== "object" || Array.isArray(predecessor)) {
       problems.push({ field: "agentLifecycle.predecessor", message: "predecessor must be an object when supplied", code: "DISPATCH_LIFECYCLE_PREDECESSOR_INVALID" });
@@ -259,6 +264,10 @@ export function validateAgentLifecycle(value) {
       if (AGENT_LIFECYCLE_FRESH_PHASES.includes(phase) && typeof previousStatus === "string" && ["running", "active", "in-progress"].includes(previousStatus)) {
         problems.push({ field: "agentLifecycle.predecessor.status", message: "a running predecessor is same-task clarification scope, not a new round", code: "DISPATCH_LIFECYCLE_RUNNING_PREDECESSOR" });
       }
+      predecessorResult = {
+        agentId: typeof previousId === "string" ? previousId : null,
+        status: typeof previousStatus === "string" ? previousStatus : null,
+      };
     }
   }
   const evidence = lifecycleField(value, ["sourceEvidence", "source-evidence", "evidence"]);
@@ -280,6 +289,7 @@ export function validateAgentLifecycle(value) {
     newInstance: typeof newInstance === "boolean" ? newInstance : null,
     forkTurns: typeof forkTurns === "string" ? forkTurns : null,
     sameTaskRunning: typeof sameTaskRunning === "boolean" ? sameTaskRunning : null,
+    predecessor: predecessorResult,
     sourceEvidence: { status: sourceEvidence.status, count: sourceEvidence.count },
     problems,
   };
@@ -330,6 +340,52 @@ function evidenceKind(entry) {
   return typeof kind === "string" ? kind : null;
 }
 
+function lifecycleBindingProblems(expected, actual, fieldPrefix = "observedLifecycle") {
+  const problems = [];
+  if (!expected || !actual) return problems;
+  for (const field of ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns", "sameTaskRunning"]) {
+    const expectedValue = expected[field];
+    const actualValue = actual[field];
+    if (expectedValue !== null && expectedValue !== undefined && actualValue !== null && actualValue !== undefined && expectedValue !== actualValue) {
+      problems.push({ field: `${fieldPrefix}.${field}`, message: `observed ${field} does not match the authoritative handoff`, code: "DISPATCH_LIFECYCLE_BINDING_MISMATCH" });
+    }
+  }
+  // A required declaration must not be silently omitted from the duplicated
+  // envelope.  Missing host observations are handled by the evidence comparator
+  // as unknown; a handoff envelope is a declaration and must agree in full.
+  const fresh = AGENT_LIFECYCLE_FRESH_PHASES.includes(expected.phase);
+  for (const field of fresh ? ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns"] : ["phase", "role", "pack", "newInstance", "sameTaskRunning"]) {
+    if (expected[field] !== null && expected[field] !== undefined && (actual[field] === null || actual[field] === undefined)) {
+      problems.push({ field: `${fieldPrefix}.${field}`, message: `handoff omitted authoritative ${field}`, code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+    }
+  }
+  if (expected.sourceEvidence.status !== actual.sourceEvidence.status) {
+    problems.push({ field: `${fieldPrefix}.sourceEvidence`, message: "handoff source evidence status must match the authoritative lifecycle", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+  }
+  if (expected.sourceEvidence.count > 0 && actual.sourceEvidence.count === 0) {
+    problems.push({ field: `${fieldPrefix}.sourceEvidence`, message: "handoff omitted authoritative source evidence", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+  }
+  if (expected.predecessor !== null) {
+    if (actual.predecessor === null) {
+      problems.push({ field: `${fieldPrefix}.predecessor`, message: "handoff omitted the authoritative predecessor", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+    } else {
+      for (const field of ["agentId", "status"]) {
+        if (expected.predecessor[field] !== actual.predecessor[field]) {
+          problems.push({ field: `${fieldPrefix}.predecessor.${field}`, message: `handoff predecessor ${field} does not match the authoritative lifecycle`, code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+        }
+      }
+    }
+  }
+  if (expected.agentId !== null && actual.agentId !== null && expected.agentId !== actual.agentId) {
+    problems.push({ field: `${fieldPrefix}.agentId`, message: "handoff agentId does not match the authoritative lifecycle", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+  }
+  return problems;
+}
+
+function terminalStatus(value) {
+  return typeof value === "string" && TERMINAL_PREDECESSOR_STATUSES.includes(value.trim().toLowerCase());
+}
+
 /**
  * Compare a declared lifecycle with an observed dispatch envelope.  This is
  * the narrow bridge from the shape validator to real tool/turn evidence.  It
@@ -359,6 +415,23 @@ export function validateAgentLifecycleEvidence(declared, observed) {
         unknownReasons.push({ field: "observedLifecycle.agentId", message: "fresh round did not expose an observed agentId", code: "DISPATCH_LIFECYCLE_AGENT_ID_MISSING" });
       }
     }
+    if (declaredResult.predecessor?.agentId && observedAgentId === declaredResult.predecessor.agentId) {
+      problems.push({ field: "observedLifecycle.agentId", message: "a terminal predecessor cannot be reused as the fresh agent instance", code: "DISPATCH_LIFECYCLE_TERMINAL_PREDECESSOR_REUSED" });
+    }
+    if (observedResult.predecessor?.agentId === observedAgentId && terminalStatus(observedResult.predecessor.status)) {
+      problems.push({ field: "observedLifecycle.agentId", message: "observed terminal predecessor cannot be treated as the fresh agent instance", code: "DISPATCH_LIFECYCLE_TERMINAL_PREDECESSOR_REUSED" });
+    }
+    if (declaredResult.predecessor !== null) {
+      if (observedResult.predecessor === null) {
+        unknownReasons.push({ field: "observedLifecycle.predecessor", message: "fresh observation did not retain the declared predecessor binding", code: "DISPATCH_LIFECYCLE_PREDECESSOR_MISSING" });
+      } else {
+        for (const field of ["agentId", "status"]) {
+          if (declaredResult.predecessor[field] !== observedResult.predecessor[field]) {
+            problems.push({ field: `observedLifecycle.predecessor.${field}`, message: `observed predecessor ${field} does not match the declaration`, code: "DISPATCH_LIFECYCLE_PREDECESSOR_MISMATCH" });
+          }
+        }
+      }
+    }
     if (observedKinds.has("compaction") && !observedKinds.has("spawn_agent")) {
       problems.push({ field: "observedLifecycle.sourceEvidence", message: "compaction is not a new agent instance", code: "DISPATCH_LIFECYCLE_COMPACTION_NOT_INSTANCE" });
     }
@@ -370,8 +443,17 @@ export function validateAgentLifecycleEvidence(declared, observed) {
     }
   }
   if (declaredPhase === "clarification") {
-    if (observedResult.newInstance !== false || observedResult.sameTaskRunning !== true) {
+    if (observedResult.newInstance !== null && observedResult.newInstance !== false) {
       problems.push({ field: "observedLifecycle", message: "clarification must remain same-task and must not restart the instance", code: "DISPATCH_LIFECYCLE_CLARIFICATION_RESTART_REJECTED" });
+    }
+    if (observedResult.sameTaskRunning !== null && observedResult.sameTaskRunning !== true) {
+      problems.push({ field: "observedLifecycle.sameTaskRunning", message: "clarification must remain bound to a running task", code: "DISPATCH_LIFECYCLE_CLARIFICATION_RESTART_REJECTED" });
+    }
+    if (typeof observedAgentId !== "string" || observedAgentId.trim().length === 0) {
+      unknownReasons.push({ field: "observedLifecycle.agentId", message: "clarification did not expose the running agent id", code: "DISPATCH_LIFECYCLE_AGENT_ID_MISSING" });
+    }
+    if (!observedKinds.has("send_message")) {
+      unknownReasons.push({ field: "observedLifecycle.sourceEvidence", message: "same-task clarification did not expose the real send_message tool input", code: "DISPATCH_LIFECYCLE_SEND_MESSAGE_EVIDENCE_MISSING" });
     }
   }
   for (const field of ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns", "sameTaskRunning"]) {
@@ -379,6 +461,9 @@ export function validateAgentLifecycleEvidence(declared, observed) {
     const actual = observedResult[field];
     if (expected !== null && expected !== undefined && actual !== null && actual !== undefined && expected !== actual) {
       problems.push({ field: `observedLifecycle.${field}`, message: `observed ${field} does not match the declared handoff`, code: "DISPATCH_LIFECYCLE_BINDING_MISMATCH" });
+    }
+    if (expected !== null && expected !== undefined && actual === null && ((AGENT_LIFECYCLE_FRESH_PHASES.includes(declaredPhase) && ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns"].includes(field)) || (declaredPhase === "clarification" && ["phase", "role", "pack", "newInstance", "sameTaskRunning"].includes(field)))) {
+      unknownReasons.push({ field: `observedLifecycle.${field}`, message: `observed lifecycle did not expose ${field}`, code: "DISPATCH_LIFECYCLE_FACT_MISSING" });
     }
   }
   if (typeof declaredResult.agentId === "string" && typeof observedAgentId === "string" && declaredResult.agentId !== observedAgentId) {
@@ -706,6 +791,21 @@ export function validateDispatchBrief(brief) {
     : (brief.handoff !== null && typeof brief.handoff === "object" ? brief.handoff : undefined);
   const structuredHandoff = validateStructuredHandoff(declaredHandoff);
   if (declaredHandoff !== undefined) problems.push(...structuredHandoff.problems);
+  if (declaredHandoff !== undefined && structuredHandoff.ok) {
+    // `storyId`/`workId` is the authoritative work binding when the brief has
+    // one.  A handoff that validates against itself but names another Story is
+    // still a contradictory handoff and must not pass dispatch readiness.
+    const authoritativeWorkId = [brief.storyId, brief.workId, brief.taskId, brief.workID]
+      .find((candidate) => typeof candidate === "string" && candidate.trim().length > 0);
+    if (authoritativeWorkId !== undefined && structuredHandoff.workId !== authoritativeWorkId) {
+      problems.push({ field: "structuredHandoff.workId", message: "handoff workId must match the dispatch brief's authoritative Story/work id", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+    }
+    if (lifecycle.ok && structuredHandoff.lifecycle?.ok) {
+      problems.push(...lifecycleBindingProblems(lifecycle, structuredHandoff.lifecycle, "structuredHandoff.lifecycle"));
+      if (lifecycle.role !== structuredHandoff.role) problems.push({ field: "structuredHandoff.role", message: "handoff role must match the dispatch brief lifecycle", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+      if (lifecycle.pack !== structuredHandoff.pack) problems.push({ field: "structuredHandoff.pack", message: "handoff pack must match the dispatch brief lifecycle", code: "DISPATCH_HANDOFF_BINDING_MISMATCH" });
+    }
+  }
   const ready = citations.checked ? "DISPATCH_BRIEF_READY" : "DISPATCH_BRIEF_READY_CITATIONS_UNCHECKED";
   return {
     ok: problems.length === 0,

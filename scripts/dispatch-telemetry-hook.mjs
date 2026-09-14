@@ -29,9 +29,9 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function boundedText(value, maximum = 256) {
+function boundedText(value, maximum = 256, { preserveUnknown = false } = {}) {
   if (typeof value !== "string" || value.length === 0 || value.length > maximum || value.includes("\u0000") || !value.isWellFormed()) return null;
-  if (UNKNOWN_VALUES.includes(value.trim().toLowerCase())) return null;
+  if (!preserveUnknown && UNKNOWN_VALUES.includes(value.trim().toLowerCase())) return null;
   return value;
 }
 
@@ -60,16 +60,52 @@ function inputScopes(input) {
     input?.payload?.agentLifecycle,
     input?.payload?.structuredHandoff,
     input?.structuredHandoff?.lifecycle,
+    input?.payload?.structuredHandoff?.lifecycle,
   ].filter(isRecord);
 }
 
-function inputField(input, names, env, envName, maximum = 256) {
+// Configuration is allowed to describe the requested lifecycle, but it is not
+// an observation of what a host actually ran.  Keep an explicit observation
+// view for fields such as observedModel so nested structured handoffs cannot
+// accidentally promote their requested model into observed telemetry.
+function observationScopes(input) {
+  return [
+    input,
+    input?.payload,
+    input?.subagent,
+    input?.agent,
+    input?.observation,
+    input?.observed,
+    input?.actual,
+    input?.observationEnvelope,
+    input?.payload?.observation,
+    input?.payload?.observed,
+    input?.payload?.actual,
+    input?.payload?.observationEnvelope,
+  ].filter(isRecord);
+}
+
+function declarationScopes(input) {
+  return [
+    input?.lifecycle,
+    input?.agentLifecycle,
+    input?.structuredHandoff,
+    input?.payload?.lifecycle,
+    input?.payload?.agentLifecycle,
+    input?.payload?.structuredHandoff,
+    input?.structuredHandoff?.lifecycle,
+    input?.payload?.structuredHandoff?.lifecycle,
+  ].filter(isRecord);
+}
+
+function inputField(input, names, env, envName, maximum = 256, { scope = "all", preserveUnknown = false } = {}) {
   const values = [];
-  for (const scope of inputScopes(input)) {
-    for (const name of names) values.push(scope[name]);
+  const scopes = scope === "observation" ? observationScopes(input) : scope === "declaration" ? declarationScopes(input) : inputScopes(input);
+  for (const candidate of scopes) {
+    for (const name of names) values.push(candidate[name]);
   }
   for (const name of Array.isArray(envName) ? envName : [envName]) values.push(env?.[name]);
-  return boundedText(firstDefined(...values), maximum);
+  return boundedText(firstDefined(...values), maximum, { preserveUnknown });
 }
 
 function numeric(value) {
@@ -95,16 +131,28 @@ function sourceEvidence(input, env) {
   const raw = firstDefined(...values);
   if (!Array.isArray(raw)) return null;
   const bounded = raw.slice(0, 8).map((entry) => {
-    if (typeof entry === "string") return boundedText(entry, 512);
+    if (typeof entry === "string") return boundedText(entry, 512, { preserveUnknown: true });
     if (!isRecord(entry)) return null;
-    const kind = boundedText(firstDefined(entry.kind, entry.source, entry.type), 128);
-    const locator = boundedText(firstDefined(entry.locator, entry.path, entry.ref), 512);
+    const kind = boundedText(firstDefined(entry.kind, entry.source, entry.type), 128, { preserveUnknown: true });
+    const locator = boundedText(firstDefined(entry.locator, entry.path, entry.ref), 512, { preserveUnknown: true });
     if (kind === null || locator === null || /prompt|self[-_ ]?assert|claim/u.test(`${kind} ${locator}`)) return null;
     const digest = firstDefined(entry.digest, entry.sha256, entry.sourceDigest);
     if (digest !== undefined && digest !== null && digest !== "unknown" && (typeof digest !== "string" || !/^[a-f0-9]{64}$/u.test(digest))) return null;
-    return { kind, locator, ...(digest === undefined || digest === null ? {} : { digest }) };
+    const status = firstDefined(entry.status, entry.evidenceStatus);
+    if (status !== undefined && status !== "verified" && status !== "unknown") return null;
+    return {
+      kind,
+      locator,
+      ...(digest === undefined || digest === null ? {} : { digest }),
+      ...(status === undefined ? {} : { status }),
+    };
   }).filter((entry) => entry !== null);
   return bounded.length === 0 ? null : bounded;
+}
+
+function sourceEvidenceStatus(evidence) {
+  if (!Array.isArray(evidence) || evidence.length === 0) return "unknown";
+  return evidence.some((entry) => isRecord(entry) && (entry.status === "unknown" || entry.digest === "unknown")) ? "unknown" : "available";
 }
 
 function usageFrom(input, env) {
@@ -161,7 +209,7 @@ async function telemetryRoot(input, env, containerRoot) {
 function payloadFor(input, env, kind) {
   const requestedModel = inputField(input, ["requested_model", "requestedModel", "model_requested"], env, ["TCRN_TELEMETRY_REQUESTED_MODEL", "TCRN_DISPATCH_REQUESTED_MODEL"]);
   const observedModel = kind === "subagent-stop"
-    ? inputField(input, ["model", "model_name", "modelName", "observed_model", "observedModel"], env, ["TCRN_TELEMETRY_OBSERVED_MODEL", "TCRN_OBSERVED_MODEL"])
+    ? inputField(input, ["model", "model_name", "modelName", "observed_model", "observedModel"], env, ["TCRN_TELEMETRY_OBSERVED_MODEL", "TCRN_OBSERVED_MODEL"], 256, { scope: "observation", preserveUnknown: true })
     : null;
   const lifecycleEvidence = sourceEvidence(input, env);
   const configuredHost = boundedText(env?.TCRN_TELEMETRY_HOST ?? env?.TCRN_HOST, 64);
@@ -189,10 +237,10 @@ function payloadFor(input, env, kind) {
     pack: inputField(input, ["pack", "pack_id", "packId"], env, ["TCRN_AGENT_PACK", "TCRN_DISPATCH_PACK"], 256),
     effort: inputField(input, ["effort", "reasoning_effort", "reasoningEffort"], env, ["TCRN_AGENT_EFFORT", "TCRN_DISPATCH_EFFORT"], 128),
     newInstance: booleanValue(input, env, ["new_instance", "newInstance", "new-instance"], ["TCRN_NEW_AGENT_INSTANCE", "TCRN_DISPATCH_NEW_INSTANCE"]),
-    forkTurns: inputField(input, ["fork_turns", "forkTurns", "fork-turns"], env, ["TCRN_FORK_TURNS", "TCRN_DISPATCH_FORK_TURNS"], 64),
+    forkTurns: inputField(input, ["fork_turns", "forkTurns", "fork-turns"], env, ["TCRN_FORK_TURNS", "TCRN_DISPATCH_FORK_TURNS"], 64, { preserveUnknown: true }),
     sameTaskRunning: booleanValue(input, env, ["same_task_running", "sameTaskRunning", "same-task-running"], ["TCRN_SAME_TASK_RUNNING", "TCRN_DISPATCH_SAME_TASK_RUNNING"]),
     sourceEvidence: lifecycleEvidence,
-    sourceEvidenceStatus: lifecycleEvidence === null ? "unknown" : "available",
+    sourceEvidenceStatus: sourceEvidenceStatus(lifecycleEvidence),
     source: boundedUtf8(`hook:${host}:${event}`, 128),
     availability: "available",
   };

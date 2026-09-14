@@ -198,6 +198,59 @@ test("STORY-424: prompt claims cannot stand in for source evidence and handoff b
   assert.ok(handoff.problems.some((problem) => problem.code === "DISPATCH_HANDOFF_BINDING_MISMATCH"));
 });
 
+test("STORY-424 R01: the structured handoff is compared with the brief authority, not just with itself", () => {
+  const declared = { ...freshLifecycle, predecessor: { agentId: "terminal-agent", status: "done" } };
+  const result = validateDispatchBrief({
+    ...brief,
+    storyId: "work:62d23a27246cad5bfc78bc17",
+    lifecycleRequired: true,
+    agentLifecycle: declared,
+    structuredHandoff: {
+      schemaVersion: "tcrn.structured-handoff.v1",
+      workId: "work:unrelated",
+      role: "acceptance",
+      pack: "UNRELATED",
+      lifecycle: { ...declared, role: "acceptance", pack: "UNRELATED", model: "different-model", agentId: "other-agent" },
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.problems.some((problem) => problem.field === "structuredHandoff.workId"));
+  assert.ok(result.problems.some((problem) => problem.code === "DISPATCH_HANDOFF_BINDING_MISMATCH"));
+});
+
+test("STORY-424 R01: a terminal predecessor cannot be reused when declaration omitted its fresh agent id", () => {
+  const declared = { ...freshLifecycle, agentId: undefined, predecessor: { agentId: "terminal-agent", status: "done" } };
+  const observed = {
+    ...freshLifecycle,
+    agentId: "terminal-agent",
+    predecessor: undefined,
+    sourceEvidence: [
+      { kind: "spawn_agent", locator: "fixture-spawn", digest: "c".repeat(64) },
+      { kind: "turn_context", locator: "fixture-turn", digest: "d".repeat(64) },
+    ],
+  };
+  const result = validateAgentLifecycleEvidence(declared, observed);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "red");
+  assert.ok(result.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_TERMINAL_PREDECESSOR_REUSED"));
+});
+
+test("STORY-424 R01: clarification without a real running agent and send_message stays unknown", () => {
+  const clarification = {
+    phase: "clarification",
+    role: "implementation",
+    pack: "EPIC135",
+    newInstance: false,
+    sameTaskRunning: true,
+    sourceEvidence: [{ kind: "artifact", locator: "unrelated-artifact", digest: "a".repeat(64) }],
+  };
+  const result = validateAgentLifecycleEvidence(clarification, clarification);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "unknown");
+  assert.ok(result.unknownReasons.some((problem) => problem.code === "DISPATCH_LIFECYCLE_SEND_MESSAGE_EVIDENCE_MISSING"));
+  assert.ok(result.unknownReasons.some((problem) => problem.code === "DISPATCH_LIFECYCLE_AGENT_ID_MISSING"));
+});
+
 test("STORY-424: real spawn plus child turn context is green, while task-id/compaction-only reuse is red", () => {
   const observed = {
     ...freshLifecycle,
