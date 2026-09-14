@@ -173,6 +173,10 @@ export function buildNativeSpawnInput(prepared, lifecycle) {
   if (!isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "lifecycle binding is required before spawn");
   const value = prepared.resolution.value;
   const declared = { ...lifecycle };
+  const lifecycleWorkId = invocationValue(declared, ["workId", "work_id", "taskId", "task_id"]);
+  if (typeof lifecycleWorkId !== "string" || lifecycleWorkId.trim().length === 0) {
+    return failure("DISPATCH_WORK_BINDING_REQUIRED", "lifecycle workId is required before spawn");
+  }
   const lifecycleClass = invocationValue(declared, ["taskClass", "dispatchClass", "class"]);
   if (lifecycleClass !== undefined && lifecycleClass !== prepared.resolution.taskClass) {
     return failure("DISPATCH_CLASS_MISMATCH", "lifecycle class does not match the engine resolution", { expected: prepared.resolution.taskClass, actual: lifecycleClass });
@@ -270,6 +274,14 @@ export async function validateDispatchInvocation({ prepared, invocation, lifecyc
     }
   }
   if (!isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "lifecycle binding is required for native dispatch");
+  const lifecycleWorkId = invocationValue(lifecycle, ["workId", "work_id", "taskId", "task_id"]);
+  if (typeof lifecycleWorkId !== "string" || lifecycleWorkId.trim().length === 0) {
+    return failure("DISPATCH_WORK_BINDING_REQUIRED", "lifecycle workId is required for native dispatch");
+  }
+  const invocationWorkId = invocationValue(invocation, ["workId", "work_id", "taskId", "task_id"]);
+  if (invocationWorkId !== undefined && invocationWorkId !== lifecycleWorkId) {
+    return failure("DISPATCH_WORK_BINDING_MISMATCH", "native invocation workId does not match the lifecycle binding", { expected: lifecycleWorkId, actual: invocationWorkId });
+  }
   const lifecycleClass = invocationValue(lifecycle, ["taskClass", "dispatchClass", "class"]);
   if (lifecycleClass !== undefined && lifecycleClass !== request.taskClass) {
     return failure("DISPATCH_CLASS_MISMATCH", "lifecycle class does not match the engine resolution", { expected: request.taskClass, actual: lifecycleClass });
