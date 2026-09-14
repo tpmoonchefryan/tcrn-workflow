@@ -235,6 +235,15 @@ test("STORY-424 R01: a terminal predecessor cannot be reused when declaration om
   assert.ok(result.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_TERMINAL_PREDECESSOR_REUSED"));
 });
 
+test("STORY-424 R01: observed work binding cannot drift while the role and Pack remain equal", () => {
+  const declared = { ...freshLifecycle, workId: "work:424" };
+  const observed = { ...freshLifecycle, workId: "work:other", sourceEvidence: [{ kind: "spawn_agent", locator: "fixture-spawn", digest: "c".repeat(64) }, { kind: "turn_context", locator: "fixture-turn", digest: "d".repeat(64) }] };
+  const result = validateAgentLifecycleEvidence(declared, observed);
+  assert.equal(result.ok, false);
+  assert.equal(result.status, "red");
+  assert.ok(result.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_WORK_BINDING_MISMATCH"));
+});
+
 test("STORY-424 R01: clarification without a real running agent and send_message stays unknown", () => {
   const clarification = {
     phase: "clarification",

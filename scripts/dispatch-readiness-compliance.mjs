@@ -405,8 +405,15 @@ export function validateAgentLifecycleEvidence(declared, observed) {
   problems.push(...observedResult.problems.filter((problem) => problem.code !== "DISPATCH_LIFECYCLE_EVIDENCE_REQUIRED"));
   const declaredPhase = declaredResult.phase;
   const observedAgentId = lifecycleField(observed, ["agentId", "agent_id", "childAgentId", "child_agent_id"]);
+  const declaredWorkId = lifecycleField(declared, ["workId", "work_id", "taskId", "task_id"]);
+  const observedWorkId = lifecycleField(observed, ["workId", "work_id", "taskId", "task_id"]);
   const observedTaskId = lifecycleField(observed, ["taskId", "task_id", "workId", "work_id"]);
   const observedKinds = new Set(evidenceEntries(observed).map(evidenceKind).filter((value) => value !== null));
+  if (typeof declaredWorkId === "string" && typeof observedWorkId === "string" && declaredWorkId !== observedWorkId) {
+    problems.push({ field: "observedLifecycle.workId", message: "observed work/task id does not match the declared handoff", code: "DISPATCH_LIFECYCLE_WORK_BINDING_MISMATCH" });
+  } else if (typeof declaredWorkId === "string" && (observedWorkId === undefined || observedWorkId === null)) {
+    unknownReasons.push({ field: "observedLifecycle.workId", message: "observed lifecycle did not expose the declared work/task id", code: "DISPATCH_LIFECYCLE_WORK_ID_MISSING" });
+  }
   if (AGENT_LIFECYCLE_FRESH_PHASES.includes(declaredPhase)) {
     if (typeof observedAgentId !== "string" || observedAgentId.trim().length === 0) {
       if (typeof observedTaskId === "string") {
