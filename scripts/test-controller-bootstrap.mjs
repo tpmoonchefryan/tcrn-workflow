@@ -10,17 +10,8 @@ import { lstat, mkdtemp, open, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
-import { stopCoverage } from "node:v8";
 
 import { appendProgressIfConfigured, delay } from "./lib/incremental-output.mjs";
-
-// The bootstrap is a supervisor, not a covered test worker. When a caller
-// supplies NODE_V8_COVERAGE for the worker, Node enables coverage before this
-// module starts. Stop that supervisor-only collector immediately so its exit
-// cannot write a late document into the worker's directory. The worker receives
-// the same variable explicitly at spawn time below; no process-wide environment
-// variable is unset or weakened.
-stopCoverage();
 
 const lockPath = process.env.TCRN_TEST_CONTROLLER_LOCK_PATH;
 const outerPid = Number(process.env.TCRN_TEST_CONTROLLER_OUTER_PID);
