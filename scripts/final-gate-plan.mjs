@@ -225,6 +225,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
     exitCode,
     phase: document.phase,
     reasonCode,
+    ...(governanceNotices.length === 0 ? {} : { governanceNotices }),
     inputs: document.inputs,
     terminalEvidence: {
       id: `${RECEIPT_RUNNER_VERSION}:${entry.id}`,

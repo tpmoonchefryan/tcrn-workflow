@@ -411,12 +411,14 @@ async function executeDynamicRoots(qualification) {
   }, { getInputs: async () => codeOwnedImpact(baselineCommit === undefined ? {} : { baselineCommit }).inputs });
   const budgetBlocked = execution.executed?.some((row) => row.reasonCode === "PROOF_BUDGET_EXCEEDED" || row.failureReasonCode === "PROOF_BUDGET_EXCEEDED" || row.terminalEvidence?.reasonCode === "PROOF_BUDGET_EXCEEDED") === true;
   const completed = execution.executable === true && execution.blocked?.length === 0;
+  const governanceNotices = execution.executed?.flatMap((row) => row.governanceNotices ?? row.terminalEvidence?.governanceNotices ?? []) ?? [];
   return {
     ok: completed,
     status: completed ? "completed" : budgetBlocked ? "not-verifiable" : "failed",
     reasonCode: completed ? "BATCH_DYNAMIC_GATE_COMPLETED" : budgetBlocked ? "BATCH_ROOT_BUDGET_NOT_VERIFIABLE" : execution.reasonCode ?? "BATCH_DYNAMIC_GATE_FAILED",
     plan,
     execution,
+    governanceNotices,
     storeRoot: receiptAuthority?.storeRoot ?? null,
     executed: execution.executed ?? [],
   };
