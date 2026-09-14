@@ -211,7 +211,7 @@ function sourceEvidenceSummary(evidence) {
     const locator = firstDefined(entry.locator, entry.path, entry.ref);
     const digest = firstDefined(entry.digest, entry.sha256, entry.sourceDigest);
     const status = firstDefined(entry.status, entry.evidenceStatus);
-    if (typeof locator !== "string" || locator.length === 0 || unknownText(locator)) locatorAvailable = false;
+    if (typeof locator !== "string" || locator.length === 0 || unknownText(locator) || unknownText(digest) || status === "unknown") locatorAvailable = false;
     if (unknownText(digest) || typeof digest !== "string" || !/^[a-f0-9]{64}$/u.test(digest) || status === "unknown") verified = false;
   }
   const availability = locatorAvailable ? "available" : "unknown";
