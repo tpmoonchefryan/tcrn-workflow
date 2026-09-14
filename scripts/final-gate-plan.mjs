@@ -4,10 +4,11 @@
 // This module plans work; it never turns a missing or failed result into a cache hit.
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { buildContainedExecutionPlan } from "./lib/push-gate-children.mjs";
@@ -25,6 +26,15 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultRosterPath = resolve(repositoryRoot, "../../platform-docs/acceptance-gate-groups.json");
 const containmentPath = resolve(repositoryRoot, "scripts/policy/gate-containment.json");
 
+export const GATE_RECEIPT_AUTHORITY_VERSION = "tcrn.gate-receipt-authority.v1";
+export const GATE_RECEIPT_DOCUMENT_VERSION = "tcrn.gate-runner-receipt.v1";
+export const STAGE_COMPLETION_AUTHORITY_VERSION = "tcrn.stage-completion-authority.v1";
+export const STAGE_COMPLETION_RECEIPT_VERSION = "tcrn.stage-completion-receipt.v1";
+const RECEIPT_RUNNER_VERSION = "tcrn-code-owned-runner.v1";
+const RECEIPT_AUTHORITIES = new WeakMap();
+const STAGE_COMPLETION_AUTHORITIES = new WeakMap();
+const DYNAMIC_PLAN_CONTEXTS = new WeakMap();
+
 function planError(reasonCode, detail) {
   const error = new Error(detail);
   error.reasonCode = reasonCode;
@@ -41,9 +51,238 @@ function digestValue(value) {
   return createHash("sha256").update(JSON.stringify(canonicalValue(value)), "utf8").digest("hex");
 }
 
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function deepFreeze(value) {
+  if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
 function normalizeCommand(value) {
   return typeof value === "string" ? value.trim().replace(/\s+/gu, " ") : "";
 }
+
+function normalizeInvocation(value, fallback = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const executable = typeof (value.executable ?? value.command) === "string"
+    ? String(value.executable ?? value.command).trim()
+    : null;
+  const argvValue = value.argv ?? value.args;
+  const argv = Array.isArray(argvValue) && argvValue.every((argument) => typeof argument === "string")
+    ? argvValue.map((argument) => argument)
+    : null;
+  const cwd = typeof value.cwd === "string" && value.cwd.trim().length > 0 ? resolve(value.cwd) : null;
+  const command = normalizeCommand(value.command ?? fallback.command);
+  if (executable === null || argv === null || cwd === null || command.length === 0) return null;
+  return { executable, argv, cwd, command };
+}
+
+function invocationKey(value) {
+  const normalized = normalizeInvocation(value);
+  return normalized === null ? null : JSON.stringify(normalized);
+}
+
+function codeOwnedInvocationForGate(entry) {
+  const id = entry?.id;
+  if (id === "engine-release") return { executable: "node", argv: ["scripts/push-gate.mjs"], cwd: repositoryRoot, command: "node scripts/push-gate.mjs" };
+  if (id === "platform-layout") return { executable: "node", argv: ["scripts/platform-doctor.mjs", "--platform-root", resolve(repositoryRoot, "../..")], cwd: repositoryRoot, command: "node scripts/platform-doctor.mjs --platform-root <container>" };
+  if (id === "product-gates") return { executable: "pnpm", argv: ["verify"], cwd: resolve(repositoryRoot, "../../TCRN Platform/TCRN-Design-System"), command: "pnpm verify" };
+  return null;
+}
+
+function receiptAuthorityState(authority) {
+  return RECEIPT_AUTHORITIES.get(authority) ?? null;
+}
+
+function bindReceiptAuthority(authority, requiredGateIds) {
+  const state = receiptAuthorityState(authority);
+  if (state === null || !Array.isArray(requiredGateIds)) return;
+  const ids = [...new Set(requiredGateIds.filter((id) => typeof id === "string"))];
+  if (state.requiredGateIds === null) state.requiredGateIds = ids;
+}
+
+function stageCompletionAuthorityState(authority) {
+  return STAGE_COMPLETION_AUTHORITIES.get(authority) ?? null;
+}
+
+/**
+ * Make an opaque, process-local issuer/query context for gate receipts.  The
+ * filesystem location is intentionally generated here; a caller may inspect a
+ * returned descriptor, but cannot make an arbitrary store or marker become an
+ * issuer record.
+ */
+export function createGateReceiptAuthority() {
+  const storeRoot = mkdtempSync(join(tmpdir(), "tcrn-code-owned-gates-"));
+  const authority = Object.freeze({ schemaVersion: GATE_RECEIPT_AUTHORITY_VERSION, storeRoot });
+  RECEIPT_AUTHORITIES.set(authority, { storeRoot, records: new Map(), requiredGateIds: null });
+  return authority;
+}
+
+export function receiptAuthoritySnapshot(authority) {
+  const state = receiptAuthorityState(authority);
+  return state === null ? null : { storeRoot: state.storeRoot, requiredGateIds: state.requiredGateIds === null ? null : [...state.requiredGateIds], receiptCount: state.records.size };
+}
+
+function receiptDescriptorMatches(candidate, registered) {
+  if (!candidate || typeof candidate !== "object" || !registered) return false;
+  const fields = ["id", "gateId", "path", "sha256", "bytes", "source", "storeRoot", "status", "ok", "exitCode", "phase"];
+  if (fields.some((field) => candidate[field] !== registered[field])) return false;
+  return invocationKey(candidate.invocation) === invocationKey(registered.invocation);
+}
+
+function canonicalInvocation(value, fallback) {
+  const normalized = normalizeInvocation(value, fallback);
+  if (normalized === null) throw planError("GATE_RECEIPT_INVOCATION_INVALID", "executable, argv, cwd, and command are required");
+  return normalized;
+}
+
+/** Issue and register one receipt from the code-owned runner. */
+export function issueGateReceipt(authority, { entry, result, inputs, invocation } = {}) {
+  const state = receiptAuthorityState(authority);
+  if (state === null) throw planError("GATE_RECEIPT_AUTHORITY_REQUIRED", "a code-owned receipt authority is required");
+  if (!entry || typeof entry.id !== "string" || entry.id.trim().length === 0) throw planError("GATE_RECEIPT_ENTRY_INVALID", "gate entry id");
+  if (state.requiredGateIds !== null && !state.requiredGateIds.includes(entry.id)) throw planError("GATE_RECEIPT_GATE_NOT_REQUIRED", "receipt gate is outside the original required gate set");
+  if (!result || typeof result !== "object") throw planError("GATE_RECEIPT_RESULT_INVALID", "runner result");
+  if (!hasCompleteInputKey(inputs)) throw planError("GATE_RECEIPT_INPUTS_INVALID", "all four gate input digests are required");
+  const boundInvocation = deepFreeze(canonicalInvocation(invocation ?? entry.invocation, { command: entry.command }));
+  if (normalizeCommand(boundInvocation.command) !== normalizeCommand(entry.command)) throw planError("GATE_RECEIPT_COMMAND_MISMATCH", "runner invocation must use the roster command");
+  const officialInvocation = codeOwnedInvocationForGate(entry);
+  if (officialInvocation !== null && invocationKey(boundInvocation) !== invocationKey(officialInvocation)) throw planError("GATE_RECEIPT_INVOCATION_MISMATCH", "runner invocation is not the code-owned relative command for this gate");
+  const phase = entry.phase ?? "candidate-final";
+  const exitCode = Number.isSafeInteger(result.exitCode) ? result.exitCode : Number.isSafeInteger(result.status) ? result.status : null;
+  const status = result.ok === true && exitCode === 0 ? "completed" : "failed";
+  const reasonCode = result.reasonCode ?? (/PROOF_BUDGET_EXCEEDED/u.test(`${result.stdout ?? ""}\n${result.stderr ?? ""}`) ? "PROOF_BUDGET_EXCEEDED" : null);
+  const document = {
+    schemaVersion: GATE_RECEIPT_DOCUMENT_VERSION,
+    runnerVersion: RECEIPT_RUNNER_VERSION,
+    gateId: entry.id,
+    phase,
+    command: boundInvocation.command,
+    executable: boundInvocation.executable,
+    argv: boundInvocation.argv,
+    cwd: boundInvocation.cwd,
+    invocation: boundInvocation,
+    status,
+    ok: result.ok === true,
+    exitCode,
+    signal: result.signal ?? null,
+    inputs: normalizedDigestInput(inputs),
+    stdoutSha256: sha256(String(result.stdout ?? "")),
+    stderrSha256: sha256(String(result.stderr ?? "")),
+  };
+  const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`, "utf8");
+  const path = resolve(state.storeRoot, `${entry.id}-${state.records.size + 1}.json`);
+  writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
+  const descriptor = deepFreeze({
+    id: entry.id,
+    gateId: entry.id,
+    command: boundInvocation.command,
+    invocation: boundInvocation,
+    status,
+    ok: document.ok,
+    exitCode,
+    phase: document.phase,
+    reasonCode,
+    inputs: document.inputs,
+    terminalEvidence: {
+      id: `${RECEIPT_RUNNER_VERSION}:${entry.id}`,
+      gateId: entry.id,
+      path,
+      sha256: sha256(bytes),
+      bytes: bytes.length,
+      source: "tcrn-code-owned-runner",
+      storeRoot: state.storeRoot,
+      status,
+      ok: document.ok,
+      exitCode,
+      phase: document.phase,
+      reasonCode,
+      invocation: boundInvocation,
+    },
+  });
+  state.records.set(path, { descriptor: descriptor.terminalEvidence, evidence: descriptor });
+  return descriptor;
+}
+
+export function gateReceiptEvidence(authority) {
+  const state = receiptAuthorityState(authority);
+  if (state === null) return [];
+  return [...state.records.values()].map(({ evidence }) => evidence);
+}
+
+export const createReceiptAuthority = createGateReceiptAuthority;
+export const issueRunnerReceipt = issueGateReceipt;
+
+export function queryGateReceipt(authority, candidate, { expectedInputs = null, gateId = null, expectedCommand = null, expectedInvocation = null, expectedPhase = null } = {}) {
+  return trustedArtifactIdentity(candidate, { expectedInputs, gateId, expectedCommand, expectedInvocation, expectedPhase, authority });
+}
+
+/** Make an opaque issuer/query context for implementation-unit completion receipts. */
+export function createStageCompletionAuthority() {
+  const authority = Object.freeze({ schemaVersion: STAGE_COMPLETION_AUTHORITY_VERSION });
+  STAGE_COMPLETION_AUTHORITIES.set(authority, { records: new Map() });
+  return authority;
+}
+
+export const createImplementationUnitAuthority = createStageCompletionAuthority;
+
+function candidateIdentity(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const id = batchString(value.id ?? value.commit ?? value.commitId ?? value.ref);
+  const digest = batchString(value.digest ?? value.treeDigest ?? value.commitDigest ?? value.sha256 ?? value.hash);
+  return id !== null && digest !== null ? { id, digest } : null;
+}
+
+/** Issue one source/queue-bound implementation-unit completion receipt. */
+export function issueStageCompletionReceipt(authority, input = {}) {
+  const state = stageCompletionAuthorityState(authority);
+  if (state === null) throw planError("STAGE_COMPLETION_AUTHORITY_REQUIRED", "a code-owned stage-completion authority is required");
+  const workId = batchString(input.workId ?? input.id);
+  const series = batchString(input.series);
+  const pack = batchString(input.pack);
+  const stage = batchString(input.stage ?? input.phase);
+  const agent = batchString(input.agent ?? input.agentId ?? input.actor);
+  const queueDigest = batchString(input.queueDigest ?? input.queue);
+  const scopeDigest = batchString(input.scopeDigest);
+  const candidate = candidateIdentity(input.candidate);
+  if (workId === null || series === null || pack === null || stage === null || agent === null || queueDigest === null || scopeDigest === null || candidate === null) throw planError("STAGE_COMPLETION_RECEIPT_INVALID", "work, revision/scope, Pack, candidate, agent, and queue are required");
+  if (!Number.isSafeInteger(input.revision) || input.revision < 1 || input.status !== undefined && input.status !== "completed") throw planError("STAGE_COMPLETION_RECEIPT_INVALID", "completed implementation receipt fields");
+  const receipt = {
+    schemaVersion: STAGE_COMPLETION_RECEIPT_VERSION,
+    status: "completed",
+    workId,
+    revision: input.revision,
+    scopeDigest,
+    series,
+    pack,
+    stage,
+    candidate,
+    agent,
+    queueDigest,
+    issuedBy: "code-owned-stage-completion-authority",
+  };
+  const receiptDigest = sha256(Buffer.from(JSON.stringify(canonicalValue(receipt)), "utf8"));
+  const result = deepFreeze({ ...receipt, receiptDigest });
+  state.records.set(receiptDigest, result);
+  return result;
+}
+
+export const issueImplementationUnitCompletionReceipt = issueStageCompletionReceipt;
+
+export function queryStageCompletionReceipt(authority, candidate) {
+  const state = stageCompletionAuthorityState(authority);
+  if (state === null || !candidate || typeof candidate !== "object") return null;
+  const digest = batchString(candidate.receiptDigest);
+  if (digest === null) return null;
+  const registered = state.records.get(digest);
+  if (registered === undefined || JSON.stringify(canonicalValue(candidate)) !== JSON.stringify(canonicalValue(registered))) return null;
+  return registered;
+}
+
+export const verifyStageCompletionReceipt = queryStageCompletionReceipt;
 
 function validateRoster(roster, containment) {
   if (!roster || !Array.isArray(roster.groups)) throw planError("GATE_PLAN_ROSTER_INVALID", "acceptance roster groups");
@@ -335,7 +574,7 @@ function defaultGateForEntry(entry) {
     return null;
   }
   if (entry.category === "dependency") return "engine-release";
-  const knownEnginePath = path.startsWith("packages/") || path.startsWith("scripts/") || path.startsWith("tests/") || path.startsWith("tools/") || path.startsWith("portal/") || path.startsWith("docs/") || path.startsWith(".github/") || ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "package.json", "pnpm-lock.yaml", "tsconfig.json"].includes(path);
+  const knownEnginePath = path.startsWith("packages/") || path.startsWith("scripts/") || path.startsWith("tests/") || path.startsWith("tools/") || path.startsWith("portal/") || path.startsWith("docs/") || path.startsWith(".github/") || path.startsWith("fixtures/") || path === "verification-map.yaml" || ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "package.json", "pnpm-lock.yaml", "tsconfig.json"].includes(path);
   return knownEnginePath ? "engine-release" : null;
 }
 
@@ -469,7 +708,7 @@ function evidenceValue(evidence, key) {
   return evidence?.[key] ?? evidence?.result?.[key];
 }
 
-function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = null, expectedCommand = null } = {}) {
+function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = null, expectedCommand = null, expectedInvocation = null, expectedPhase = null, authority = null } = {}) {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
   const artifactPath = batchString(candidate.path ?? candidate.file ?? candidate.storePath ?? candidate.artifactPath);
   const digest = batchString(candidate.sha256 ?? candidate.digest ?? candidate.hash);
@@ -478,12 +717,15 @@ function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = nu
   const source = batchString(candidate.source ?? candidate.runner);
   const storeRoot = batchString(candidate.storeRoot ?? candidate.evidenceStore ?? candidate.store);
   // A digest over a caller-written JSON document proves only that the bytes
-  // stayed the same.  Operational reuse additionally requires the marker and
-  // store emitted by the code-owned runner; otherwise any self-written file is
-  // an unsigned success claim.
+  // stayed the same.  Operational reuse additionally requires a registration
+  // in the opaque code-owned issuer context; marker strings and store paths
+  // are not provenance.
   if (source !== "tcrn-code-owned-runner" || storeRoot === null || artifactPath === null || digest === null || id === null || !status || !/^[a-f0-9]{64}$/u.test(digest)) return null;
   let absolute;
   try { absolute = resolve(artifactPath); } catch { return null; }
+  const state = receiptAuthorityState(authority);
+  const registered = state?.records.get(absolute);
+  if (registered === undefined || !receiptDescriptorMatches(candidate, registered.descriptor)) return null;
   try {
     if (!statSync(absolute).isFile()) return null;
     const root = resolve(storeRoot);
@@ -500,7 +742,9 @@ function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = nu
     const documentCommand = batchString(document.command);
     if (documentGate === null || gateId !== null && documentGate !== gateId || documentCommand === null) return null;
     if (expectedCommand !== null && normalizeCommand(documentCommand) !== normalizeCommand(expectedCommand)) return null;
-    if (gateId === "engine-release" && !/(?:^|\/)scripts\/push-gate\.mjs(?:\s|$)/u.test(documentCommand)) return null;
+    if (expectedPhase !== null && document.phase !== expectedPhase) return null;
+    if (invocationKey(document.invocation ?? document) !== invocationKey(registered.descriptor.invocation)) return null;
+    if (expectedInvocation !== null && invocationKey(document.invocation ?? document) !== invocationKey(expectedInvocation)) return null;
     const documentInputs = normalizedDigestInput(document.inputs ?? document.inputDigests);
     if (!hasCompleteInputKey(documentInputs)) return null;
     if (expectedInputs !== null && JSON.stringify(completeInputKey(documentInputs)) !== JSON.stringify(completeInputKey(expectedInputs))) return null;
@@ -513,18 +757,20 @@ function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = nu
       inputs: documentInputs,
       command: documentCommand,
       gateId: documentGate,
+      phase: document.phase,
+      invocation: normalizeInvocation(document.invocation ?? document),
     };
   } catch {
     return null;
   }
 }
 
-function terminalEvidenceIdentity(evidence, { requireTrusted = false, expectedCommand = null } = {}) {
+function terminalEvidenceIdentity(evidence, { requireTrusted = false, expectedCommand = null, expectedInvocation = null, expectedPhase = null, authority = null } = {}) {
   const candidates = [evidence?.terminalEvidence, evidence?.runnerEvidence, evidence?.receipt, evidence?.artifact, evidence?.result?.terminalEvidence, evidence?.result?.receipt];
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
     if (requireTrusted) {
-      const trusted = trustedArtifactIdentity(candidate, { expectedInputs: normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs), gateId: evidenceGateId(evidence), expectedCommand });
+      const trusted = trustedArtifactIdentity(candidate, { expectedInputs: normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs), gateId: evidenceGateId(evidence), expectedCommand, expectedInvocation, expectedPhase, authority });
       if (trusted !== null) return trusted;
       continue;
     }
@@ -558,14 +804,14 @@ function evidenceForGate(previousEvidence, gateId, gateCount) {
     const id = evidenceGateId(evidence);
     return id === gateId || (Array.isArray(evidence.gateIds) && evidence.gateIds.length === 1 && evidence.gateIds[0] === gateId);
   });
-  if (exact.length > 0) return exact[0];
+  if (exact.length > 0) return exact.at(-1);
   // A single unlabelled result can be used only for a single-root plan. It is not
   // safe to apply one command's result to several proof obligations.
   const unlabeled = rows.filter((evidence) => evidenceGateId(evidence) === null);
   return gateCount === 1 && unlabeled.length === 1 ? unlabeled[0] : null;
 }
 
-export function assessDynamicEvidenceReuse({ evidence, inputs, phase, gateId, requireTrustedEvidence = false } = {}) {
+export function assessDynamicEvidenceReuse({ evidence, inputs, phase, gateId, requireTrustedEvidence = false, receiptAuthority = null, authority = null, invocation = null } = {}) {
   const expected = normalizedDigestInput(inputs);
   const actual = normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs);
   const reasons = [];
@@ -575,7 +821,7 @@ export function assessDynamicEvidenceReuse({ evidence, inputs, phase, gateId, re
   if (changedInputs.length > 0) reasons.push(`input digest changed: ${changedInputs.join(", ")}`);
   if (evidenceValue(evidence, "ok") !== true) reasons.push("previous result was not successful");
   if (!TERMINAL_EVIDENCE_STATES.has(evidenceValue(evidence, "status")) && evidenceValue(evidence, "terminal") !== true) reasons.push("evidence is not terminal");
-  const terminalEvidence = terminalEvidenceIdentity(evidence, { requireTrusted: requireTrustedEvidence, expectedCommand: evidenceValue(evidence, "command") ?? null });
+  const terminalEvidence = terminalEvidenceIdentity(evidence, { requireTrusted: requireTrustedEvidence, expectedCommand: evidenceValue(evidence, "command") ?? null, expectedInvocation: invocation, expectedPhase: phase ?? null, authority: receiptAuthority ?? authority });
   if (terminalEvidence === null) reasons.push(requireTrustedEvidence ? "immutable trusted terminal artifact is missing, unreadable, or digest-mismatched" : "trusted terminal runner evidence is missing");
   // `phase` is retained on the plan for audit and selection, but reuse is bound
   // only to the four measured input digests plus successful terminal state.
@@ -634,12 +880,13 @@ function buildDynamicObligations(options, gateRows, containment) {
  * executable top-level roots only; every contained child is represented once in
  * `coveredBy` and is never launched independently.
  */
-export function buildDynamicGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, gateInputs, inputsByGate, previousEvidence = [], readiness = {}, blockedDependencies = readiness.blockedDependencies ?? [], executionPermission = readiness.executionPermission ?? readiness.formalGateAllowed, candidateReady = readiness.ready ?? readiness.eligible ?? readiness.candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations, operational = false, requireInputObserver = false, requireCompleteImpact = false } = {}) {
+export function buildDynamicGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, gateInputs, inputsByGate, previousEvidence = [], receiptAuthority = null, gateInvocations = {}, readiness = {}, blockedDependencies = readiness.blockedDependencies ?? [], executionPermission = readiness.executionPermission ?? readiness.formalGateAllowed, candidateReady = readiness.ready ?? readiness.eligible ?? readiness.candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations, operational = false, requireInputObserver = false, requireCompleteImpact = false } = {}) {
   if (!FINAL_GATE_PHASES.includes(phase)) throw planError("GATE_PLAN_PHASE_INVALID", phase);
   const { contained, rosterGroups } = validateRoster(roster, containment);
+  bindReceiptAuthority(receiptAuthority, contained.selected.map(({ id }) => id));
   const dynamic = dynamicImpact({ changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings }, contained);
   const phaseAwareImpact = normalizePhaseAwareImpact({ changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings });
-  const roots = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
+  const roots = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, invocation: normalizeInvocation(gateInvocations?.[entry.id], { command: rosterGroups.get(entry.id).command }), phase }));
   const rootIds = new Set(roots.map(({ id }) => id));
   const gateEvidenceCount = rootIds.size;
   const rows = [];
@@ -663,7 +910,7 @@ export function buildDynamicGatePlan({ roster, containment, phase = "candidate-f
   for (const root of roots) {
     const expectedInputs = gateInputsFor({ inputs, gateInputs, inputsByGate }, root.id);
     const evidence = evidenceForGate(previousEvidence, root.id, gateEvidenceCount);
-    const reuse = evidence === null ? null : assessDynamicEvidenceReuse({ evidence, inputs: expectedInputs, phase, gateId: root.id, requireTrustedEvidence: operational });
+    const reuse = evidence === null ? null : assessDynamicEvidenceReuse({ evidence, inputs: expectedInputs, phase, gateId: root.id, requireTrustedEvidence: operational, receiptAuthority, invocation: root.invocation });
     if (effective && reuse !== null && !reuse.reusable && hasGateSpecificInputs({ inputs, gateInputs, inputsByGate }, root.id) && inputDifference(expectedInputs, evidenceValue(evidence, "inputs")).length > 0) impactedRoots.add(root.id);
     let disposition;
     let reason;
@@ -738,26 +985,32 @@ export function buildDynamicGatePlan({ roster, containment, phase = "candidate-f
   const uniqueBlocked = blocked.filter((entry, index, all) => all.findIndex((candidate) => candidate.id === entry.id && candidate.reason === entry.reason) === index);
   const executable = uniqueBlocked.length === 0 && executionPermission === true && (candidateReady === true || !effective);
   const mappedObligationIds = new Set(obligationResult.obligations.flatMap((obligation) => obligation.gateIds));
-  const commandBindings = Object.fromEntries(rows.map((row) => [row.id, { id: row.id, rootId: row.rootId, command: normalizeCommand(row.command), phase: row.phase }]));
+  const commandBindings = Object.fromEntries(rows.map((row) => [row.id, { id: row.id, rootId: row.rootId, command: normalizeCommand(row.command), invocation: row.invocation, phase: row.phase }]));
   const integrity = {
     schemaVersion: GATE_PLAN_INTEGRITY_VERSION,
     containmentDigest: digestValue(contained.all.map(({ id, rootId, path, command }) => ({ id, rootId, path, command: normalizeCommand(command) }))),
     commandBindings,
-    requiredSelected: selected.map(({ id, rootId, command }) => ({ id, rootId, command: normalizeCommand(command) })),
+    requiredSelected: selected.map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation })),
     coveredChildren: coveredBy.map(({ id, rootId, coveredBy: parent }) => ({ id, rootId, coveredBy: parent })),
     requireInputObserver: operational || requireInputObserver,
   };
+  integrity.requiredRoots = roots.map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation }));
+  integrity.requiredSelectionDigest = digestValue({
+    roots: integrity.requiredRoots,
+    gates: rows.map(({ id, rootId, disposition, command, invocation, inputs: gateInputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs: gateInputs })),
+    selected: integrity.requiredSelected,
+  });
   integrity.planDigest = digestValue({
     phase,
     inputs,
-    selected: selected.map(({ id, rootId, command, inputs: gateInputs }) => ({ id, rootId, command: normalizeCommand(command), inputs: gateInputs })),
-    gates: rows.map(({ id, rootId, disposition, command, inputs: gateInputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), inputs: gateInputs })),
+    selected: selected.map(({ id, rootId, command, invocation, inputs: gateInputs }) => ({ id, rootId, command: normalizeCommand(command), invocation, inputs: gateInputs })),
+    gates: rows.map(({ id, rootId, disposition, command, invocation, inputs: gateInputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs: gateInputs })),
     coveredBy,
     obligations: obligationResult.obligations,
     executionOrder: selected.map(({ id }) => id),
     containmentDigest: integrity.containmentDigest,
   });
-  return {
+  const plan = {
     schemaVersion: FINAL_GATE_PLAN_VERSION,
     plannerVersion: DYNAMIC_GATE_PLAN_VERSION,
     phase,
@@ -802,6 +1055,14 @@ export function buildDynamicGatePlan({ roster, containment, phase = "candidate-f
     integrity,
     rule: "apply the same impact and evidence predicate at candidate-final, publication, and merge-sensitive; execute only selected top-level roots",
   };
+  DYNAMIC_PLAN_CONTEXTS.set(plan, {
+    authority: receiptAuthority,
+    roots: structuredClone(integrity.requiredRoots),
+    selected: structuredClone(integrity.requiredSelected),
+    gates: structuredClone(rows.map(({ id, rootId, disposition, command, invocation, inputs: gateInputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs: gateInputs }))),
+    selectionDigest: integrity.requiredSelectionDigest,
+  });
+  return plan;
 }
 
 const BATCH_FORMAL_TRIGGERS = new Set(["formal-batch-gate", "formal-gate"]);
@@ -949,6 +1210,36 @@ function normalizedBatchTask(value, index) {
   };
 }
 
+function taskIsComplete(task) {
+  return BATCH_COMPLETE_STATES.has(String(task?.status ?? "").toLowerCase()) || task?.implementationComplete === true;
+}
+
+function stageCompletionRows(input) {
+  const value = input.stageCompletionReceipts ?? input.implementationReceipts ?? input.implementationUnitReceipts ?? input.implementationUnitCompletionReceipts ?? input.completionReceipts ?? input.completionReceipt;
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return Object.values(value);
+  return value === undefined || value === null ? [] : [value];
+}
+
+function implementationCompletionForTask(task, input, queueDigest) {
+  const rows = [...stageCompletionRows(input), ...(task.raw?.completionReceipt === undefined ? [] : [task.raw.completionReceipt])];
+  const provided = rows.some((row) => row && typeof row === "object" && (row.workId ?? row.id) === task.id);
+  if (!provided) return { complete: false, provided: false, receipt: null, reason: "implementation completion receipt is missing" };
+  const authority = input.stageCompletionAuthority ?? input.implementationUnitAuthority ?? input.completionAuthority ?? input.receiptAuthority;
+  const receipt = rows.map((row) => queryStageCompletionReceipt(authority, row)).find((row) => row?.workId === task.id) ?? null;
+  if (receipt === null) return { complete: false, provided: true, receipt: null, reason: "implementation completion receipt is absent, forged, or unreadable" };
+  const binding = batchBinding(input.expectedBinding ?? input.binding ?? input);
+  const stage = batchString(input.stage ?? input.phase) ?? binding.stage;
+  const problems = [];
+  if (receipt.series !== binding.series || receipt.pack !== binding.pack || receipt.stage !== stage) problems.push("series, Pack, or stage drifted");
+  if (receipt.revision !== task.revision || receipt.scopeDigest !== task.scopeDigest) problems.push("work revision or scope drifted");
+  if (queueDigest !== null && receipt.queueDigest !== queueDigest) problems.push("queue digest drifted");
+  if (receipt.agent === null || receipt.agent.length === 0) problems.push("real agent identity is missing");
+  return problems.length === 0
+    ? { complete: true, provided: true, receipt, reason: "code-owned implementation completion receipt matches work, revision, scope, Pack, stage, agent, and queue" }
+    : { complete: false, provided: true, receipt, reason: problems.join("; ") };
+}
+
 function batchCandidate(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { stable: false, id: null, digest: null, revision: null };
   const digest = batchString(value.digest ?? value.sourceDigest ?? value.treeDigest ?? value.commitDigest ?? value.sha256 ?? value.hash);
@@ -1048,6 +1339,7 @@ export function normalizeBatchRuntimeObserver(input = {}, { requireCandidate = f
       writes,
       dependencies,
       candidate,
+      scopeObservations: source.scopeObservations ?? source.scope ?? null,
       observedAt: batchString(source.observedAt ?? source.at) ?? null,
       source: batchString(source.source ?? source.observer) ?? null,
     },
@@ -1334,6 +1626,10 @@ export function qualifyBatch(input = {}) {
   if (source.securityVeto === true || source.permissionDenied === true || source.security?.veto === true || source.permission?.denied === true) {
     return { ...base, status: "rejected", reasonCode: "BATCH_SECURITY_VETO", reasons: ["permission or security refusal is immediate and cannot be bypassed by a batch key"] };
   }
+  const knownRedReasons = batchArray(source.knownReds ?? source.knownRedReasons ?? source.reds).map((reason) => typeof reason === "string" ? reason : reason && typeof reason === "object" ? reason.reasonCode ?? reason.reason ?? reason.id : null).filter((reason) => typeof reason === "string" && reason.trim().length > 0);
+  if (source.knownRed === true || knownRedReasons.length > 0) {
+    return { ...base, status: "not-verifiable", reasonCode: "BATCH_KNOWN_RED", reasons: knownRedReasons.length > 0 ? knownRedReasons : ["a known red result must be repaired before formal evaluation"] };
+  }
   if (!bindingComplete(expectedBinding) || !bindingComplete(actualBinding)) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BINDING_NOT_VERIFIABLE", reasons: ["series, Pack, and stage are required from the bound batch"] };
   const bindingMismatch = ["series", "pack", "stage"].filter((key) => expectedBinding[key] !== actualBinding[key]);
   if (bindingMismatch.length > 0) return { ...base, status: "rejected", reasonCode: "BATCH_BINDING_MISMATCH", reasons: bindingMismatch.map((key) => `${key} binding changed`) };
@@ -1393,7 +1689,24 @@ export function qualifyBatch(input = {}) {
   // An empty caller-shaped array is not an observed queue.  Keep a very narrow
   // compatibility allowance for the historical unit fixture; production callers
   // use acquireOperationalBatchInput and must provide all observer parts.
-  const tasks = taskSource.map(normalizedBatchTask);
+  const tasks = taskSource.map(normalizedBatchTask).map((task) => {
+    if (task.postAction || BATCH_COMPLETE_STATES.has(task.status.toLowerCase())) return { ...task, implementationComplete: false, completionReceipt: null, completionReason: "native terminal status" };
+    const completion = implementationCompletionForTask(task, source, actualQueueDigest);
+    return { ...task, implementationComplete: completion.complete, completionReceipt: completion.receipt, completionReason: completion.reason, completionReceiptProvided: completion.provided };
+  });
+  const invalidCompletion = tasks.filter((task) => task.completionReceiptProvided === true && task.implementationComplete !== true);
+  if (invalidCompletion.length > 0) {
+    return {
+      ...base,
+      status: "not-verifiable",
+      reasonCode: "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE",
+      tasks,
+      postActions: tasks.filter((task) => task.postAction || batchPostAction(task.raw)),
+      remainingPrerequisites: invalidCompletion.map((task) => task.id),
+      observation: observerResult,
+      reasons: invalidCompletion.map((task) => `${task.id}: ${task.completionReason}`),
+    };
+  }
   const activeTasks = tasks.filter((task) => !task.postAction);
   const postActions = tasks.filter((task) => task.postAction || batchPostAction(task.raw));
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
@@ -1405,7 +1718,7 @@ export function qualifyBatch(input = {}) {
       const target = taskMap.get(dependency);
       if (!target) missingDependencies.push(`${task.id}->${dependency}`);
       else if (!target.postAction && target.realBlocked) blockedDependencies.push(`${task.id}->${dependency}`);
-      else if (!target.postAction && !BATCH_COMPLETE_STATES.has(target.status.toLowerCase())) unfinishedDependencies.push(`${task.id}->${dependency}`);
+      else if (!target.postAction && !taskIsComplete(target)) unfinishedDependencies.push(`${task.id}->${dependency}`);
     }
   }
   if (missingDependencies.length > 0 || blockedDependencies.length > 0) {
@@ -1416,14 +1729,14 @@ export function qualifyBatch(input = {}) {
   }
   if (expectedQueueDigest === null || actualQueueDigest === null) return { ...base, status: "not-verifiable", reasonCode: "BATCH_QUEUE_DIGEST_NOT_VERIFIABLE", tasks, postActions, queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the current task queue has no stable comparison digest"] };
   if (actualQueueDigest !== expectedQueueDigest) return { ...base, status: "rejected", reasonCode: "BATCH_QUEUE_STALE", tasks, postActions, queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the task queue changed while qualification was being evaluated"] };
-  const remainingTasks = activeTasks.filter((task) => !BATCH_COMPLETE_STATES.has(task.status.toLowerCase()) && !task.realBlocked);
+  const remainingTasks = activeTasks.filter((task) => !taskIsComplete(task) && !task.realBlocked);
   const executableWork = remainingTasks.filter((task) => task.executable || task.running || BATCH_EXECUTABLE_STATES.has(task.status.toLowerCase()) || task.status.toLowerCase() === "unknown");
   const runningAgentSource = strictObservation || hasObserver ? observerArray(observerResult.observer, "agents") : source.runningAgents ?? source.runningSubagents ?? source.inFlightAgents ?? source.activeSubagents ?? source.subagents ?? source.state?.runningAgents;
-  const runningAgents = batchArray(runningAgentSource).filter(observedProcessActive);
+  const runningAgents = batchArray(runningAgentSource).filter((row) => row?.role === "unknown-live-process" ? false : observedProcessActive(row));
   const writes = batchArray(strictObservation || hasObserver ? observerArray(observerResult.observer, "writes") : source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions).filter(observedProcessActive);
   const writeStatus = String(strictObservation || hasObserver ? "" : source.writeStatus ?? source.writeState ?? source.transactionStatus ?? "").toLowerCase();
   const runningWrites = strictObservation || hasObserver ? writes.length > 0 : source.writeInProgress === true || source.writing === true || BATCH_RUNNING_STATES.has(writeStatus) || writes.length > 0;
-  const remainingPrerequisites = activeTasks.filter((task) => !BATCH_COMPLETE_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
+  const remainingPrerequisites = activeTasks.filter((task) => !taskIsComplete(task) && !task.realBlocked).map((task) => task.id);
   const blockedWithoutEvidence = activeTasks.filter((task) => BATCH_BLOCKED_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
   if (blockedWithoutEvidence.length > 0) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BLOCKED_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: blockedWithoutEvidence, reasons: [`blocked task lacks a real reason/evidence: ${blockedWithoutEvidence.join(", ")}`] };
   if (remainingTasks.length > 0 || runningAgents.length > 0 || runningWrites) {
@@ -1438,6 +1751,10 @@ export function qualifyBatch(input = {}) {
   if (!candidate.stable) return { ...base, status: "not-verifiable", reasonCode: "BATCH_CANDIDATE_NOT_STABLE", tasks, postActions, remainingPrerequisites, candidate, reasons: ["a stable candidate identity and digest are required"] };
   const observedCandidateDigest = observerResult.observer?.candidate?.digest;
   if (observedCandidateDigest !== null && observedCandidateDigest !== undefined && candidate.digest !== observedCandidateDigest) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: ["the candidate digest differs from the runtime observer snapshot"] };
+  const completionDrift = tasks.filter((task) => task.implementationComplete === true && (
+    task.completionReceipt?.candidate?.digest !== candidate.digest || task.completionReceipt?.candidate?.id !== candidate.id
+  ));
+  if (completionDrift.length > 0) return { ...base, status: "rejected", reasonCode: "BATCH_IMPLEMENTATION_RECEIPT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: completionDrift.map((task) => `${task.id}: implementation receipt candidate differs from the observed candidate`) };
   const idempotencyKey = batchIdempotencyKey(actualBinding, candidate, actualQueueDigest);
   const running = batchRunningRun(source, idempotencyKey);
   if (running !== null) return { ...base, status: "rejected", reasonCode: "BATCH_ALREADY_RUNNING", tasks, postActions, candidate, idempotencyKey, queueDigest: actualQueueDigest, priorRun: running, reasons: ["the same stable batch is already in flight"] };
@@ -1458,6 +1775,8 @@ export function qualifyBatch(input = {}) {
     candidate,
     idempotencyKey,
     queueDigest: actualQueueDigest,
+    stageCompletionAuthority: source.stageCompletionAuthority ?? source.implementationUnitAuthority ?? source.completionAuthority ?? source.receiptAuthority ?? null,
+    stageCompletionReceipts: stageCompletionRows(source),
     remainingPrerequisites,
     observation: observerResult.ok ? observerResult : legacyFixtureObservation ? { schemaVersion: BATCH_OBSERVER_VERSION, status: "legacy-fixture", missing: ["queue", "agents", "writes"] } : observerResult,
     reasons: BATCH_FORMAL_TRIGGERS.has(base.trigger) ? ["all current-stage prerequisites are complete or real-blocked and the candidate is stable"] : ["hooks perform notification/qualification only; the sole formal trigger is required"],
@@ -1478,6 +1797,8 @@ function qualificationRequest(input) {
     currentBinding: actual,
     tasks: qualification.tasks,
     candidate: qualification.candidate,
+    stageCompletionAuthority: qualification.stageCompletionAuthority ?? input.stageCompletionAuthority,
+    stageCompletionReceipts: qualification.stageCompletionReceipts ?? input.stageCompletionReceipts,
     runtimeObserver: qualification.observation?.observer ?? qualification.observation ?? input.runtimeObserver,
     requireRuntimeObservation: true,
     queueDigest: qualification.queueDigest,
@@ -1704,16 +2025,16 @@ export function buildDevelopmentPlan({ changedFiles, previousEvidence = [], inpu
   };
 }
 
-export function buildFinalGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, gateInputs, inputsByGate, previousEvidence = [], readiness = {}, blockedDependencies = readiness.blockedDependencies ?? [], executionPermission = readiness.executionPermission ?? readiness.formalGateAllowed, candidateReady = readiness.ready ?? readiness.eligible ?? readiness.candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations, operational = false, requireInputObserver = false, requireCompleteImpact = false } = {}) {
+export function buildFinalGatePlan({ roster, containment, phase = "candidate-final", inputs = {}, gateInputs, inputsByGate, previousEvidence = [], receiptAuthority = null, gateInvocations = {}, readiness = {}, blockedDependencies = readiness.blockedDependencies ?? [], executionPermission = readiness.executionPermission ?? readiness.formalGateAllowed, candidateReady = readiness.ready ?? readiness.eligible ?? readiness.candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations, operational = false, requireInputObserver = false, requireCompleteImpact = false } = {}) {
   const dynamicRequested = operational || requireInputObserver || changedFiles !== undefined || diff !== undefined || actualDiff !== undefined || changes !== undefined || impact !== undefined || dependencies !== undefined || dependencyFiles !== undefined || dependencyGraph !== undefined || configuration !== undefined || configurationFiles !== undefined || configFiles !== undefined || generated !== undefined || generatedFiles !== undefined || environment !== undefined || environmentChanges !== undefined || crossRepoChanges !== undefined || crossRepositoryChanges !== undefined || repositories !== undefined || affectedGateIds !== undefined || affectedGates !== undefined || effectiveChanges !== undefined || hasEffectiveChanges !== undefined || gateMappings !== undefined || proofObligations !== undefined || obligations !== undefined || gateInputs !== undefined || inputsByGate !== undefined;
   if (dynamicRequested) {
-    return buildDynamicGatePlan({ roster, containment, phase, inputs, gateInputs, inputsByGate, previousEvidence, readiness, blockedDependencies, executionPermission, candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations, operational, requireInputObserver, requireCompleteImpact });
+    return buildDynamicGatePlan({ roster, containment, phase, inputs, gateInputs, inputsByGate, previousEvidence, receiptAuthority, gateInvocations, readiness, blockedDependencies, executionPermission, candidateReady, changedFiles, diff, actualDiff, changes, impact, dependencies, dependencyFiles, dependencyGraph, configuration, configurationFiles, configFiles, generated, generatedFiles, environment, environmentChanges, crossRepoChanges, crossRepositoryChanges, repositories, affectedGateIds, affectedGates, effectiveChanges, hasEffectiveChanges, gateMappings, proofObligations, obligations, operational, requireInputObserver, requireCompleteImpact });
   }
   // The old fixed-root default is retained only for the pre-R2 unit fixture
   // envelope. A production call without an impact observation is dynamic and
   // conservative rather than an implicit successful full-roster run.
   const legacyFixture = Array.isArray(previousEvidence) && previousEvidence.length > 0 && previousEvidence.every((entry) => /^evidence-\d+(?:-\d+)*$/u.test(String(entry?.id ?? "")));
-  if (!legacyFixture) return buildDynamicGatePlan({ roster, containment, phase, inputs, previousEvidence, readiness, blockedDependencies, executionPermission, candidateReady, effectiveChanges: false, operational, requireInputObserver, requireCompleteImpact });
+  if (!legacyFixture) return buildDynamicGatePlan({ roster, containment, phase, inputs, previousEvidence, receiptAuthority, gateInvocations, readiness, blockedDependencies, executionPermission, candidateReady, effectiveChanges: false, operational, requireInputObserver, requireCompleteImpact });
   if (!FINAL_GATE_PHASES.includes(phase)) throw planError("GATE_PLAN_PHASE_INVALID", phase);
   const { contained, rosterGroups } = validateRoster(roster, containment);
   const selected = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
@@ -1750,9 +2071,18 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   };
 }
 
-export function recordExecution(plan, results) {
+export function recordExecution(plan, results, { blocked: blockedOverride } = {}) {
   if (plan?.executable !== true) throw planError("GATE_PLAN_NOT_EXECUTABLE", "plan has blocked prerequisites");
   if (plan?.dynamic === true && (!plan.integrity || plan.integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION)) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "dynamic plans require an integrity envelope");
+  const context = plan?.dynamic === true ? DYNAMIC_PLAN_CONTEXTS.get(plan) : null;
+  if (plan?.dynamic === true && context === undefined) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "code-owned planning context is missing");
+  if (context !== null && context !== undefined) {
+    const selected = (plan.selected ?? []).map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation }));
+    const gates = (plan.gates ?? []).map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs }));
+    if (JSON.stringify(selected) !== JSON.stringify(context.selected) || JSON.stringify(gates) !== JSON.stringify(context.gates) || plan.integrity.requiredSelectionDigest !== context.selectionDigest) {
+      throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "required root selection or gate bindings changed after planning");
+    }
+  }
   const rows = Array.isArray(results) ? results : [];
   const selectedIds = new Set((plan?.selected ?? []).map((entry) => entry.id));
   const executedIds = rows.map((entry) => entry?.id).filter(Boolean);
@@ -1761,18 +2091,30 @@ export function recordExecution(plan, results) {
   const missing = [...selectedIds].filter((id) => !executedIds.includes(id));
   if (duplicate || unselected.length > 0 || missing.length > 0) throw planError("GATE_PLAN_EXECUTION_MISMATCH", JSON.stringify({ duplicate, unselected, missing }));
   if (plan?.integrity?.requireInputObserver === true) {
-    const invalid = rows.flatMap((row) => measuredResultProblems(row, row?.plannedInputs ?? row?.inputs ?? plan.inputs, { requireTrusted: true, expectedCommand: plan.selected?.find((entry) => entry.id === row?.id)?.command ?? null, expectedGateId: row?.id ?? null }));
+    const invalid = rows.flatMap((row) => measuredResultProblems(row, row?.plannedInputs ?? row?.inputs ?? plan.inputs, { requireTrusted: true, expectedCommand: plan.selected?.find((entry) => entry.id === row?.id)?.command ?? null, expectedInvocation: plan.selected?.find((entry) => entry.id === row?.id)?.invocation ?? null, expectedGateId: row?.id ?? null, authority: context?.authority ?? null }));
     if (invalid.length > 0) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", invalid.join("; "));
   }
   if (plan?.dynamic === true && rows.some((row) => /^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? "")))) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", "fixture root result cannot satisfy a production gate");
   const failed = rows.some((entry) => entry?.ok !== true);
-  return { ...plan, executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })), executable: failed ? false : plan.executable, executionPermission: failed ? "denied" : plan.executionPermission };
+  const next = { ...plan, ...(blockedOverride === undefined ? {} : { blocked: blockedOverride }), executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })), executable: failed ? false : plan.executable, executionPermission: failed ? "denied" : plan.executionPermission };
+  if (context !== null && context !== undefined) DYNAMIC_PLAN_CONTEXTS.set(next, context);
+  return next;
 }
 
 function executionPlanProblems(plan) {
   const problems = [];
   const integrity = plan?.integrity;
   if (!integrity || integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION) return ["execution integrity envelope is missing"];
+  const context = plan?.dynamic === true ? DYNAMIC_PLAN_CONTEXTS.get(plan) : null;
+  if (plan?.dynamic === true && context === undefined) problems.push("code-owned planning context is missing");
+  if (context !== null && context !== undefined) {
+    const selectedContext = (plan.selected ?? []).map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation }));
+    const gatesContext = (plan.gates ?? []).map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs }));
+    if (JSON.stringify(selectedContext) !== JSON.stringify(context.selected)) problems.push("required selected roots changed after planning");
+    if (JSON.stringify(gatesContext) !== JSON.stringify(context.gates)) problems.push("required gate dispositions changed after planning");
+    if (integrity.requiredSelectionDigest !== context.selectionDigest) problems.push("required selection authority changed after planning");
+    if (JSON.stringify(integrity.requiredRoots ?? []) !== JSON.stringify(context.roots)) problems.push("required root set changed after planning");
+  }
   // The integrity envelope is evidence, not authority.  Re-derive the root
   // command bindings from the checked-in roster and containment declaration so
   // a caller cannot edit selected/gates/bindings together and then reseal the
@@ -1799,8 +2141,8 @@ function executionPlanProblems(plan) {
   const computedPlanDigest = digestValue({
     phase: plan.phase,
     inputs: plan.inputs,
-    selected: (plan.selected ?? []).map(({ id, rootId, command, inputs }) => ({ id, rootId, command: normalizeCommand(command), inputs })),
-    gates: (plan.gates ?? []).map(({ id, rootId, disposition, command, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), inputs })),
+    selected: (plan.selected ?? []).map(({ id, rootId, command, invocation, inputs }) => ({ id, rootId, command: normalizeCommand(command), invocation, inputs })),
+    gates: (plan.gates ?? []).map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs })),
     coveredBy: plan.coveredBy ?? [],
     obligations: plan.obligations ?? [],
     executionOrder: plan.executionOrder ?? [],
@@ -1809,11 +2151,11 @@ function executionPlanProblems(plan) {
   if (typeof integrity.planDigest !== "string" || integrity.planDigest !== computedPlanDigest) problems.push("plan integrity digest changed after planning");
   const selected = Array.isArray(plan.selected) ? plan.selected : [];
   const expected = Array.isArray(integrity.requiredSelected) ? integrity.requiredSelected : [];
-  if (JSON.stringify(selected.map(({ id, rootId, command }) => ({ id, rootId, command: normalizeCommand(command) }))) !== JSON.stringify(expected)) problems.push("selected roots changed after planning");
+  if (JSON.stringify(selected.map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation }))) !== JSON.stringify(expected)) problems.push("selected roots changed after planning");
   const expectedByGate = integrity.commandBindings ?? {};
   for (const entry of selected) {
     const binding = expectedByGate[entry.id];
-    if (!binding || binding.rootId !== entry.rootId || normalizeCommand(binding.command) !== normalizeCommand(entry.command) || binding.phase !== entry.phase) problems.push(`command binding changed for ${entry.id}`);
+    if (!binding || binding.rootId !== entry.rootId || normalizeCommand(binding.command) !== normalizeCommand(entry.command) || invocationKey(binding.invocation) !== invocationKey(entry.invocation) || binding.phase !== entry.phase) problems.push(`command binding changed for ${entry.id}`);
   }
   const runIds = (plan.gates ?? []).filter((entry) => entry.disposition === "run").map(({ id }) => id);
   if (JSON.stringify(runIds) !== JSON.stringify(selected.map(({ id }) => id))) problems.push("selected roots do not cover every run disposition");
@@ -1824,11 +2166,11 @@ function executionPlanProblems(plan) {
   return problems;
 }
 
-function measuredResultProblems(row, expectedInputs, { requireTrusted = false, expectedCommand = null, expectedGateId = null } = {}) {
+function measuredResultProblems(row, expectedInputs, { requireTrusted = false, expectedCommand = null, expectedInvocation = null, expectedGateId = null, authority = null } = {}) {
   const problems = [];
   const rowInputs = row?.inputs ?? row?.inputDigests;
   if (!hasCompleteInputKey(rowInputs) || JSON.stringify(completeInputKey(rowInputs)) !== JSON.stringify(completeInputKey(expectedInputs))) problems.push("runner did not return the planned four input digests");
-  if (terminalEvidenceIdentity(row, { requireTrusted, expectedCommand }) === null) problems.push(requireTrusted ? "runner did not return a readable immutable terminal artifact" : "runner did not return trusted terminal evidence");
+  if (terminalEvidenceIdentity(row, { requireTrusted, expectedCommand, expectedInvocation, authority }) === null) problems.push(requireTrusted ? "runner did not return a readable immutable terminal artifact" : "runner did not return trusted terminal evidence");
   if (!TERMINAL_EVIDENCE_STATES.has(row?.status) && row?.terminal !== true) problems.push("runner result is not terminal");
   if (expectedGateId !== null && row?.gateId !== expectedGateId) problems.push("runner result is bound to the wrong gate");
   if (requireTrusted && row?.exitCode !== 0) problems.push("runner result did not report exitCode 0");
@@ -1843,6 +2185,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
   }
   if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
   if (plan?.executable !== true || (plan?.blocked ?? []).length > 0) return { ...plan, executed: [] };
+  const planContext = plan?.dynamic === true ? DYNAMIC_PLAN_CONTEXTS.get(plan) : null;
   const integrityProblems = plan?.dynamic === true || plan?.integrity ? executionPlanProblems(plan) : [];
   if (integrityProblems.length > 0) {
     return {
@@ -1920,7 +2263,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
       blocked.push({ id: entry.id, reason: "gate inputs changed while the root was running" });
     }
     if (plan?.integrity?.requireInputObserver === true) {
-      const measuredProblems = measuredResultProblems(row, expectedInputs, { requireTrusted: true, expectedCommand: entry.command, expectedGateId: entry.id });
+      const measuredProblems = measuredResultProblems(row, expectedInputs, { requireTrusted: true, expectedCommand: entry.command, expectedInvocation: entry.invocation ?? null, expectedGateId: entry.id, authority: planContext?.authority ?? null });
       if (measuredProblems.length > 0) {
         row.ok = false;
         row.reasonCode = "GATE_PLAN_TERMINAL_EVIDENCE_INVALID";
@@ -1938,7 +2281,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
     rows.push(row);
     if (drifted) return { ...plan, executed: rows, blocked, invalidated: [...(plan.invalidated ?? []), { id: entry.id, evidenceId: entry.evidenceId ?? null, reasons: ["gate inputs changed while the root was running"] }], executable: false, executionPermission: "denied" };
   }
-  const recorded = recordExecution({ ...plan, blocked }, rows);
+  const recorded = recordExecution(plan, rows, { blocked });
   return {
     ...recorded,
     executable: blocked.length === 0,

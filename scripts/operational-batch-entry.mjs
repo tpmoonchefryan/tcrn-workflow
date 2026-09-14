@@ -6,15 +6,17 @@
 // by the planner API, and executes only its selected top-level roots serially.
 
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildContainedExecutionPlan } from "./lib/push-gate-children.mjs";
 import {
   buildDynamicGatePlan,
+  createGateReceiptAuthority,
+  gateReceiptEvidence,
+  issueGateReceipt,
   executeOperationalBatch,
   executeSelectedRoots,
   readNativeBatchState,
@@ -30,6 +32,8 @@ const rosterPath = resolve(platformRoot, "platform-docs/acceptance-gate-groups.j
 const containmentPath = resolve(repositoryRoot, "scripts/policy/gate-containment.json");
 const sourceArchivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
 const node = process.execPath;
+export const PACK_SOURCE_BASELINE_COMMIT = "06b9f0a20467d9cbd5203d519eb8d4a563e5f126";
+const productionReceiptAuthority = createGateReceiptAuthority();
 
 const text = (value) => typeof value === "string" ? value : "";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -62,13 +66,26 @@ function gitOutput(args) {
   return result.ok ? result.stdout : "";
 }
 
-function changedSourceFiles() {
-  const tracked = gitOutput(["diff", "--name-only", "-z", "HEAD"]);
-  const untracked = gitOutput(["ls-files", "--others", "--exclude-standard", "-z"]);
-  return [...new Set(`${tracked}${untracked}`.split("\0").map((path) => path.trim()).filter(Boolean))].sort();
+function resolvedCommit(value) {
+  const commit = gitOutput(["rev-parse", value]).trim();
+  return /^[0-9a-f]{40}$/u.test(commit) ? commit : null;
 }
 
-function currentSourceDigest(files) {
+function sourceDeltaFiles(baselineCommit = PACK_SOURCE_BASELINE_COMMIT) {
+  const baseline = resolvedCommit(baselineCommit);
+  const head = resolvedCommit("HEAD");
+  if (baseline === null || head === null) return { baseline, head, files: [], verifiable: false };
+  const committed = gitOutput(["diff", "--name-only", "-z", `${baseline}..${head}`]);
+  const tracked = gitOutput(["diff", "--name-only", "-z", "HEAD"]);
+  const untracked = gitOutput(["ls-files", "--others", "--exclude-standard", "-z"]);
+  return { baseline, head, files: [...new Set(`${committed}${tracked}${untracked}`.split("\0").map((path) => path.trim()).filter(Boolean))].sort(), verifiable: true };
+}
+
+function changedSourceFiles(options = {}) {
+  return sourceDeltaFiles(options.baselineCommit ?? PACK_SOURCE_BASELINE_COMMIT).files;
+}
+
+function currentSourceDigest(files, { baselineCommit = PACK_SOURCE_BASELINE_COMMIT, baseline = null, head = null } = {}) {
   const rows = files.map((path) => {
     try {
       const bytes = readFileSync(resolve(repositoryRoot, path));
@@ -77,44 +94,73 @@ function currentSourceDigest(files) {
       return { path, bytes: null, sha256: null };
     }
   });
-  return { digest: digestValue(rows), files: rows };
+  const currentHead = head ?? resolvedCommit("HEAD");
+  const currentTree = gitOutput(["rev-parse", "HEAD^{tree}"]).trim();
+  const basis = {
+    schemaVersion: "tcrn.source-delta.v1",
+    baselineCommit: baseline ?? resolvedCommit(baselineCommit),
+    headCommit: currentHead,
+    headTree: /^[0-9a-f]{40}$/u.test(currentTree) ? currentTree : null,
+    files: rows,
+  };
+  return { digest: digestValue(basis), files: rows, baselineCommit: basis.baselineCommit, headCommit: basis.headCommit, headTree: basis.headTree, deltaMeasured: true };
 }
 
-function classifyProcess(row, { selfPid = process.pid } = {}) {
+const GOVERNED_WRITE_COMMAND = /(?:tcrn-workflow\.mjs|tcrn-workflow\/scripts\/[^\s]+\.mjs).*\b(?:artifact-put|conference-(?:append-position|cancel|close|open)|dispatch-(?:classes-set|mode-set|tiers-set)|gate-(?:create|delete|transition)|knowledge-(?:article-create|article-refresh|batch|bodies-migrate|capture|checkpoint|create|init|promote|rebase|recover|retire|reverify)|lease-(?:break|recovery-break)|machine-settings-(?:remove|set)|migration-execute|project-(?:create|delete|update)|recover|retire-sweep|settings-(?:remove|set)|snapshot-replay-rebuild|template-admit|work-(?:annotate|batch|create|delete|transition))\b/iu;
+const RELATIVE_REPOSITORY_COMMAND = /(?:^|\s)(?:node|pnpm)(?:\s+[^\s]+)*\s+(?:scripts\/|tools\/|packages\/|tests\/)/u;
+
+function classifyProcess(row, { selfPid = process.pid, selfPgid = null } = {}) {
   const command = text(row.command);
   const state = text(row.state).trim();
-  const isOwn = row.pid === selfPid;
-  const formalEntryWrapper = /operational-batch-entry\.mjs/u.test(command);
-  const inRepository = command.includes(repositoryRoot) || command.includes("TCRN-CROSS-STORY-") || command.includes("EPIC135");
+  const isOwn = row.pid === selfPid || selfPgid !== null && row.pgid === selfPgid;
+  const formalEntryWrapper = /(?:^|\s)(?:node\s+)?[^\s]*operational-batch-entry\.mjs(?:\s|$)/u.test(command);
+  const absoluteRepository = command.includes(repositoryRoot) || text(row.cwd).startsWith(repositoryRoot);
+  const taskBound = command.includes("TCRN-CROSS-STORY-") || command.includes("EPIC135");
+  const relativeRepository = RELATIVE_REPOSITORY_COMMAND.test(command);
+  const inRepository = absoluteRepository || taskBound;
   const appService = /(?:Codex \((?:Service|Renderer)\)|Claude Helper|static-serve|portal\/portal\.mjs|\/Applications\/(?:ChatGPT|Claude)\.app|codex app-server)/iu.test(command);
   const taskRole = /(?:\b(?:luna|astra|sonnet|sol|rework|acceptance|review|implement)\b|TCRN-CROSS-STORY-4(?:1[5-9]|2[0-2]))/iu.test(command);
+  const likelyGovernedWrite = GOVERNED_WRITE_COMMAND.test(command) || relativeRepository && /\b(?:put|set|create|delete|transition|recover|capture|promote|retire|migrate|annotate|batch)\b/iu.test(command);
   let scope = "unknown";
   let active = true;
   let role = "unknown";
-  if (isOwn || formalEntryWrapper) {
+  let scopeBasis = "unresolved";
+  if (isOwn) {
     scope = "orchestration";
     role = "formal-entry";
     active = false;
+    scopeBasis = "code-owned-entry";
+  } else if (formalEntryWrapper) {
+    scope = "orchestration";
+    role = "formal-entry";
+    scopeBasis = "code-owned-entry";
   } else if (appService) {
     scope = "unrelated";
     role = "host-service";
     active = false;
+    scopeBasis = "host-service";
   } else if (taskRole && inRepository) {
     scope = /(?:review|acceptance|astra)/iu.test(command) ? "review" : "implementation";
     role = scope;
+    scopeBasis = absoluteRepository ? "absolute-repository" : "task-bound";
   } else if (inRepository) {
     scope = "orchestration";
     role = "orchestration";
+    scopeBasis = absoluteRepository ? "absolute-repository" : "task-bound";
   } else if (/^(?:R|S|S\+|Ss)$/u.test(state)) {
-    // A process row with a live macOS state but no reliable scope is not idle.
+    // A live relative repository command is an unknown scoped observation, not
+    // an empty list; an unrelated live system process is retained separately so
+    // it does not block a batch merely because its cwd is unavailable.
     scope = "unknown";
-    role = "unknown-live-process";
+    role = relativeRepository || likelyGovernedWrite ? "unknown-repository-process" : "unknown-live-process";
+    scopeBasis = relativeRepository ? "relative-command-without-cwd" : "live-process-without-scope";
   } else {
     scope = "unrelated";
     role = "host-service";
     active = false;
+    scopeBasis = "non-live-system-process";
   }
-  return { ...row, scope, role, active, inRepository, stateKnown: /^(?:R|S|S\+|Ss)$/u.test(state) };
+  return { ...row, scope, role, active, inRepository, likelyGovernedWrite, scopeBasis, stateKnown: /^(?:R|S|S\+|Ss)$/u.test(state) };
 }
 
 function processSnapshot() {
@@ -124,17 +170,19 @@ function processSnapshot() {
     const match = line.match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/u);
     return match === null ? null : { pid: Number(match[1]), ppid: Number(match[2]), pgid: Number(match[3]), state: match[4], command: match[5] };
   }).filter(Boolean);
-  const classified = rows.map((row) => classifyProcess(row));
+  const selfPgid = rows.find((row) => row.pid === process.pid)?.pgid ?? null;
+  const classified = rows.map((row) => classifyProcess(row, { selfPid: process.pid, selfPgid }));
   const agentRows = classified.filter((row) => row.pid !== process.pid && row.scope !== "unrelated" && row.scope !== "unknown");
-  const governedWrite = /(?:tcrn-workflow\.mjs|tcrn-workflow\/scripts\/[^\s]+\.mjs).*\b(?:artifact-put|conference-(?:append-position|cancel|close|open)|dispatch-(?:classes-set|mode-set|tiers-set)|gate-(?:create|delete|transition)|knowledge-(?:article-create|article-refresh|batch|bodies-migrate|capture|checkpoint|create|init|promote|rebase|recover|retire|reverify)|lease-(?:break|recovery-break)|machine-settings-(?:remove|set)|migration-execute|project-(?:create|delete|update)|recover|retire-sweep|settings-(?:remove|set)|snapshot-replay-rebuild|template-admit|work-(?:annotate|batch|create|delete|transition))\b/iu;
-  const writeRows = classified.filter((row) => governedWrite.test(row.command));
+  const unknownRows = classified.filter((row) => row.scope === "unknown");
+  const writeRows = classified.filter((row) => row.scope !== "unrelated" && (GOVERNED_WRITE_COMMAND.test(row.command) || row.likelyGovernedWrite === true));
   const unrelated = classified.filter((row) => row.scope === "unrelated");
   return {
     ok: true,
     observedAt: new Date().toISOString(),
     source: "code-owned-ps-host-snapshot",
-    agents: { observed: true, digest: digestValue(agentRows), records: agentRows, unrelatedCount: unrelated.length },
-    writes: { observed: true, digest: digestValue(writeRows), records: writeRows },
+    agents: { observed: true, digest: digestValue(agentRows), records: agentRows, unknown: unknownRows, unrelatedCount: unrelated.length },
+    writes: { observed: true, digest: digestValue(writeRows), records: writeRows, unknown: writeRows.filter((row) => row.scope === "unknown") },
+    scopeObservations: { inScope: agentRows, outOfScope: unrelated, unknown: unknownRows },
     processCount: rows.length,
     unrelatedCount: unrelated.length,
   };
@@ -183,14 +231,16 @@ async function observeHostRuntime({ nativeState } = {}) {
     dependencies: { observed: true, digest: dependencies.digest ?? digestValue(dependencies.records), records: dependencies.records },
     agents: snapshot.agents,
     writes: snapshot.writes,
+    scopeObservations: snapshot.scopeObservations,
     candidate: { observed: candidate.observed, stable: candidate.stable, digest: candidate.digest, id: candidate.id, records: [], source: candidate.source, statusClean: candidate.statusClean, head: candidate.head, tree: candidate.tree, reasonCode: candidate.reasonCode },
     candidateObservation: candidate,
   };
 }
 
-function codeOwnedImpact() {
-  const changedFiles = changedSourceFiles();
-  const source = currentSourceDigest(changedFiles);
+function codeOwnedImpact({ baselineCommit = PACK_SOURCE_BASELINE_COMMIT } = {}) {
+  const sourceDelta = sourceDeltaFiles(baselineCommit);
+  const changedFiles = sourceDelta.files;
+  const source = currentSourceDigest(changedFiles, { baselineCommit, baseline: sourceDelta.baseline, head: sourceDelta.head });
   const dependencies = changedFiles.filter((path) => /^(?:package\.json|pnpm-lock\.yaml|packages\/[^/]+\/package\.json|packages\/[^/]+\/src\/)/u.test(path)).map((path) => ({ path, repository: "TCRN Platform/tcrn-workflow" }));
   const configuration = changedFiles.filter((path) => /(?:scripts\/policy\/|\.claude\/|\.codex\/|settings|config)/iu.test(path)).map((path) => ({ path, repository: "TCRN Platform/tcrn-workflow" }));
   const generated = changedFiles.filter((path) => /^(?:dist\/|generated\/)/u.test(path)).map((path) => ({ path, repository: "TCRN Platform/tcrn-workflow" }));
@@ -200,6 +250,7 @@ function codeOwnedImpact() {
   const environment = [
     { name: "node-runtime", value: nodeVersion, known: nodeVersion === "v24.16.0", gateIds: ["engine-release"] },
     { name: "pnpm-runtime", value: pnpmVersion, known: pnpmVersion === "11.3.0", gateIds: ["engine-release"] },
+    { name: "source-baseline", value: sourceDelta.baseline ?? baselineCommit, known: sourceDelta.verifiable, gateIds: ["engine-release"] },
   ];
   const crossRepoChanges = [];
   let baselineBytes = Buffer.alloc(0);
@@ -212,8 +263,9 @@ function codeOwnedImpact() {
   } catch {
     baselineBytes = Buffer.from("baseline-unreadable", "utf8");
   }
-  const commandBytes = Buffer.from(stableJson({ rosterPath, containmentPath, node, pnpmVersion, phase: "candidate-final" }), "utf8");
+  const commandBytes = Buffer.from(stableJson({ rosterPath, containmentPath, node, pnpmVersion, phase: "candidate-final", baselineCommit: source.baselineCommit, sourceBaseline: PACK_SOURCE_BASELINE_COMMIT }), "utf8");
   return {
+    schemaVersion: "tcrn.operational-impact.v2",
     changedFiles,
     dependencies,
     configuration,
@@ -227,6 +279,14 @@ function codeOwnedImpact() {
       commandDigest: sha256(commandBytes),
       baselineDigest: sha256(baselineBytes),
     },
+    sourceBaseline: {
+      requested: baselineCommit,
+      resolved: source.baselineCommit,
+      head: source.headCommit,
+      tree: source.headTree,
+      verifiable: sourceDelta.verifiable,
+      deltaFiles: changedFiles,
+    },
     source,
   };
 }
@@ -238,60 +298,36 @@ function loadGateDeclarations() {
   return { roster, containment, contained };
 }
 
-function rootInvocation(id) {
-  if (id === "engine-release") return { executable: node, args: [resolve(repositoryRoot, "scripts/push-gate.mjs")], cwd: repositoryRoot };
-  if (id === "platform-layout") return { executable: node, args: [resolve(repositoryRoot, "scripts/platform-doctor.mjs"), "--platform-root", platformRoot], cwd: repositoryRoot };
-  if (id === "product-gates") return { executable: "pnpm", args: ["verify"], cwd: resolve(platformRoot, "TCRN Platform/TCRN-Design-System") };
+function rootInvocation(id, command) {
+  if (id === "engine-release") return { executable: "node", argv: ["scripts/push-gate.mjs"], cwd: repositoryRoot, command: command ?? "node scripts/push-gate.mjs" };
+  if (id === "platform-layout") return { executable: "node", argv: ["scripts/platform-doctor.mjs", "--platform-root", platformRoot], cwd: repositoryRoot, command: command ?? "node scripts/platform-doctor.mjs --platform-root <container>" };
+  if (id === "product-gates") return { executable: "pnpm", argv: ["verify"], cwd: resolve(platformRoot, "TCRN Platform/TCRN-Design-System"), command: command ?? "pnpm verify" };
   return null;
 }
 
-function writeRunnerReceipt(storeRoot, entry, result, inputs) {
-  const status = result.ok ? "completed" : "failed";
-  const document = {
-    schemaVersion: "tcrn.gate-runner-receipt.v1",
-    runnerVersion: CODE_OWNED_RUNNER_VERSION,
-    gateId: entry.id,
-    command: entry.command,
-    status,
-    ok: result.ok,
-    exitCode: result.status,
-    signal: result.signal,
-    inputs,
-    stdoutSha256: sha256(result.stdout),
-    stderrSha256: sha256(result.stderr),
-  };
-  const path = resolve(storeRoot, `${entry.id}.json`);
-  const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`, "utf8");
-  writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
-  return {
-    id: entry.id,
-    gateId: entry.id,
-    command: entry.command,
-    status,
-    ok: result.ok,
-    exitCode: result.status,
-    signal: result.signal,
-    inputs,
-    terminalEvidence: {
-      id: `${CODE_OWNED_RUNNER_VERSION}:${entry.id}`,
-      path,
-      sha256: sha256(bytes),
-      bytes: bytes.length,
-      source: "tcrn-code-owned-runner",
-      storeRoot,
-    },
-  };
+function writeRunnerReceipt(authority, entry, result, inputs, invocation) {
+  return issueGateReceipt(authority, { entry, result, inputs, invocation });
 }
 
 async function executeDynamicRoots(qualification) {
-  const { roster, containment } = loadGateDeclarations();
-  const impact = codeOwnedImpact();
+  const { roster, containment, contained } = loadGateDeclarations();
+  const baselineCommit = typeof PACK_SOURCE_BASELINE_COMMIT === "undefined" ? undefined : PACK_SOURCE_BASELINE_COMMIT;
+  const impact = codeOwnedImpact(baselineCommit === undefined ? {} : { baselineCommit });
+  const receiptAuthority = typeof productionReceiptAuthority === "undefined" ? null : productionReceiptAuthority;
+  const priorEvidence = receiptAuthority === null || typeof gateReceiptEvidence === "undefined" ? [] : gateReceiptEvidence(receiptAuthority);
   const phase = ["candidate-final", "publication", "merge-sensitive"].includes(qualification.stage) ? qualification.stage : "candidate-final";
+  const gateInvocations = Object.fromEntries((contained?.selected ?? []).map(({ id }) => {
+    const command = roster?.groups?.find((group) => group.id === id)?.command;
+    return [id, rootInvocation(id, command)];
+  }).filter(([, invocation]) => invocation !== null));
   const plan = buildDynamicGatePlan({
     roster,
     containment,
     phase,
     inputs: impact.inputs,
+    previousEvidence: priorEvidence,
+    receiptAuthority,
+    gateInvocations,
     changedFiles: impact.changedFiles,
     dependencies: impact.dependencies,
     configuration: impact.configuration,
@@ -305,20 +341,21 @@ async function executeDynamicRoots(qualification) {
     requireCompleteImpact: true,
   });
   if (plan.executable !== true || plan.blocked?.length > 0) return { ok: false, status: "not-verifiable", reasonCode: "BATCH_DYNAMIC_PLAN_NOT_EXECUTABLE", plan, executed: [] };
-  const storeRoot = mkdtempSync(resolve(tmpdir(), "tcrn-code-owned-gates-"));
   const execution = await executeSelectedRoots(plan, async (entry) => {
-    const invocation = rootInvocation(entry.id);
+    const invocation = entry.invocation ?? rootInvocation(entry.id, entry.command);
     if (invocation === null || entry.rootId !== entry.id) return { id: entry.id, status: "failed", ok: false, exitCode: null, reasonCode: "BATCH_ROOT_NOT_REGISTERED" };
-    const result = run(invocation.executable, invocation.args, { cwd: invocation.cwd, timeout: 30 * 60_000, maxBuffer: 64 * 1024 * 1024 });
-    return writeRunnerReceipt(storeRoot, entry, result, impact.inputs);
-  }, { getInputs: async () => impact.inputs });
+    const result = run(invocation.executable, invocation.argv ?? invocation.args, { cwd: invocation.cwd, timeout: 30 * 60_000, maxBuffer: 64 * 1024 * 1024 });
+    return writeRunnerReceipt(receiptAuthority, entry, result, entry.inputs ?? impact.inputs, invocation);
+  }, { getInputs: async () => codeOwnedImpact(baselineCommit === undefined ? {} : { baselineCommit }).inputs });
+  const budgetBlocked = execution.executed?.some((row) => row.reasonCode === "PROOF_BUDGET_EXCEEDED" || row.failureReasonCode === "PROOF_BUDGET_EXCEEDED" || row.terminalEvidence?.reasonCode === "PROOF_BUDGET_EXCEEDED") === true;
+  const completed = execution.executable === true && execution.blocked?.length === 0;
   return {
-    ok: execution.executable === true && execution.blocked?.length === 0,
-    status: execution.executable === true && execution.blocked?.length === 0 ? "completed" : "failed",
-    reasonCode: execution.executable === true && execution.blocked?.length === 0 ? "BATCH_DYNAMIC_GATE_COMPLETED" : execution.reasonCode ?? "BATCH_DYNAMIC_GATE_FAILED",
+    ok: completed,
+    status: completed ? "completed" : budgetBlocked ? "not-verifiable" : "failed",
+    reasonCode: completed ? "BATCH_DYNAMIC_GATE_COMPLETED" : budgetBlocked ? "BATCH_ROOT_BUDGET_NOT_VERIFIABLE" : execution.reasonCode ?? "BATCH_DYNAMIC_GATE_FAILED",
     plan,
     execution,
-    storeRoot,
+    storeRoot: receiptAuthority?.storeRoot ?? null,
     executed: execution.executed ?? [],
   };
 }
@@ -339,6 +376,8 @@ export async function executeProductionBatch(request = {}) {
     expectedBinding: boundRequest.expectedBinding,
     currentBinding: boundRequest.currentBinding,
     previousRuns: boundRequest.previousRuns,
+    stageCompletionAuthority: boundRequest.stageCompletionAuthority,
+    stageCompletionReceipts: boundRequest.stageCompletionReceipts,
     securityVeto: boundRequest.securityVeto,
     permissionDenied: boundRequest.permissionDenied,
   };
@@ -349,7 +388,7 @@ function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
 }
 
-export { processSnapshot, observeHostRuntime, codeOwnedImpact };
+export { classifyProcess, processSnapshot, observeHostRuntime, codeOwnedImpact, rootInvocation, writeRunnerReceipt };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await executeProductionBatch(readStdin());

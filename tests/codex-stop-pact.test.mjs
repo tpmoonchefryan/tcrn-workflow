@@ -22,6 +22,11 @@ import {
   buildPact,
   writePact,
 } from "../tools/stop-pact/pact.mjs";
+import {
+  createStageCompletionAuthority,
+  issueStageCompletionReceipt,
+  qualifyBatch as qualifyStageBatch,
+} from "../scripts/final-gate-plan.mjs";
 
 const NOW = "2026-08-07T12:00:00.000Z";
 
@@ -295,4 +300,48 @@ test("STORY-421: batch qualification uses real work state, keeps hooks light, an
   const concurrent = qualifyBatch({ ...stable, trigger: "formal-batch-gate", previousRuns: [{ idempotencyKey: "EPIC135|HC2|candidate-final|tree-421|queue-421", status: "running" }] });
   assert.equal(concurrent.reasonCode, "BATCH_ALREADY_RUNNING");
   assert.equal(concurrent.formalGateAllowed, false);
+});
+
+test("EPIC135 closeout: active Stories need code-owned implementation completion receipts", () => {
+  const binding = { series: "EPIC135", pack: "HC1-HC3-final-machine-closeout", stage: "candidate-final" };
+  const candidate = { id: "candidate-final", digest: "tree-final" };
+  const queueDigest = "queue-final";
+  const tasks = [
+    { id: "work:418", status: "active", revision: 3, scopeDigest: "scope-418", dependencies: [] },
+    { id: "work:420", status: "active", revision: 3, scopeDigest: "scope-420", dependencies: ["work:418"] },
+  ];
+  const authority = createStageCompletionAuthority();
+  const receipts = tasks.map((task) => issueStageCompletionReceipt(authority, {
+    ...binding,
+    workId: task.id,
+    revision: task.revision,
+    scopeDigest: task.scopeDigest,
+    candidate,
+    queueDigest,
+    agent: "agent:luna",
+  }));
+  const runtimeObserver = {
+    observedAt: NOW,
+    source: "test-code-owned-observer",
+    queue: { observed: true, digest: queueDigest, records: tasks },
+    dependencies: { observed: true, digest: "dependency-final", records: tasks.map(({ id, dependencies }) => ({ id, dependencies })) },
+    agents: { observed: true, digest: "agents-final", records: [] },
+    writes: { observed: true, digest: "writes-final", records: [] },
+    candidate: { observed: true, stable: true, id: candidate.id, digest: candidate.digest, records: [] },
+  };
+  const input = { ...binding, expectedBinding: binding, currentBinding: binding, trigger: "formal-batch-gate", tasks, candidate, queueDigest, currentQueueDigest: queueDigest, runtimeObserver, observationFresh: true, operational: true, requireRuntimeObservation: true, stageCompletionAuthority: authority, stageCompletionReceipts: receipts };
+  const eligible = qualifyStageBatch(input);
+  assert.equal(eligible.status, "eligible");
+  assert.equal(eligible.eligible, true);
+  assert.deepEqual(eligible.remainingPrerequisites, []);
+  assert.ok(eligible.tasks.every(({ implementationComplete }) => implementationComplete === true));
+
+  const withoutReceipts = qualifyStageBatch({ ...input, stageCompletionReceipts: [] });
+  assert.equal(withoutReceipts.eligible, false);
+  assert.equal(withoutReceipts.reasonCode, "BATCH_WORK_REMAINING");
+  const forged = structuredClone(receipts[0]);
+  forged.agent = "agent:caller";
+  const forgedResult = qualifyStageBatch({ ...input, stageCompletionReceipts: [forged, receipts[1]] });
+  assert.equal(forgedResult.eligible, false);
+  assert.equal(forgedResult.reasonCode, "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE");
 });

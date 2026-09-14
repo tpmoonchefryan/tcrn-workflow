@@ -14,7 +14,8 @@ import {
   diffEvidence,
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
-import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, createGateReceiptAuthority, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, issueGateReceipt, queryGateReceipt, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { classifyProcess } from "../scripts/operational-batch-entry.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 
 const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
@@ -274,6 +275,51 @@ test("STORY-420: dynamic impact selects affected roots, reuses only bound termin
     const phasePlan = buildDynamicGatePlan({ ...options, phase, changedFiles: ["scripts/final-gate-plan.mjs"] });
     assert.deepEqual(phasePlan.selected.map(({ id }) => id), ["engine-release"]);
   }
+});
+
+test("EPIC135 closeout: only an issued receipt with the exact invocation can be reused", async () => {
+  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
+  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const entry = roster.groups.find(({ id }) => id === "engine-release");
+  const repositoryRoot = resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow");
+  const inputs = { sourceDigest: "source-closeout", environmentDigest: "environment-closeout", commandDigest: "command-closeout", baselineDigest: "baseline-closeout" };
+  const invocation = { executable: "node", argv: ["scripts/push-gate.mjs"], cwd: repositoryRoot, command: entry.command };
+  const authority = createGateReceiptAuthority();
+  const receipt = issueGateReceipt(authority, { entry, invocation, inputs, result: { ok: true, status: 0, signal: null, stdout: "", stderr: "" } });
+  assert.equal(queryGateReceipt(authority, receipt.terminalEvidence, { gateId: entry.id, expectedInputs: inputs, expectedCommand: entry.command, expectedInvocation: invocation }).gateId, entry.id);
+  assert.equal(assessDynamicEvidenceReuse({ evidence: receipt, inputs, gateId: entry.id, phase: "candidate-final", requireTrustedEvidence: true, receiptAuthority: authority, invocation }).reusable, true);
+
+  const forged = structuredClone(receipt);
+  forged.terminalEvidence = { ...forged.terminalEvidence, source: "tcrn-code-owned-runner", storeRoot: authority.storeRoot };
+  assert.equal(assessDynamicEvidenceReuse({ evidence: forged, inputs, gateId: entry.id, phase: "candidate-final", requireTrustedEvidence: true, receiptAuthority: createGateReceiptAuthority(), invocation }).reusable, false);
+  const failedAuthority = createGateReceiptAuthority();
+  const failed = issueGateReceipt(failedAuthority, { entry, invocation, inputs, result: { ok: false, status: 1, signal: null, stdout: "", stderr: "failed" } });
+  assert.equal(assessDynamicEvidenceReuse({ evidence: failed, inputs, gateId: entry.id, phase: "candidate-final", requireTrustedEvidence: true, receiptAuthority: failedAuthority, invocation }).reusable, false);
+
+  const plan = buildDynamicGatePlan({ roster, containment, inputs, changedFiles: ["scripts/final-gate-plan.mjs"], dependencies: [], configuration: [], generated: [], environment: [], crossRepoChanges: [], candidateReady: true, executionPermission: true, operational: true, requireCompleteImpact: true, gateInvocations: { [entry.id]: invocation }, receiptAuthority: authority });
+  const resealed = structuredClone(plan);
+  resealed.selected = [];
+  resealed.coveredBy = [];
+  resealed.executionOrder = [];
+  resealed.gates = resealed.gates.map((gate) => gate.disposition === "run" ? { ...gate, disposition: "not-applicable", status: "not-applicable" } : gate);
+  resealed.integrity.requiredSelected = [];
+  resealed.integrity.coveredChildren = [];
+  let calls = 0;
+  const refused = await executeSelectedRoots(resealed, async () => { calls += 1; return { ok: true }; }, { getInputs: async () => inputs });
+  assert.equal(calls, 0);
+  assert.equal(refused.executable, false);
+  assert.equal(refused.reasonCode, "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
+});
+
+test("EPIC135 closeout: runtime scope keeps unknown writes visible without blocking on unknown system processes", () => {
+  const relativeWrite = classifyProcess({ pid: 101, state: "S", command: "node scripts/tcrn-workflow.mjs work-create --workspace /tmp/workspace" }, { selfPid: 1 });
+  assert.equal(relativeWrite.scope, "unknown");
+  assert.equal(relativeWrite.likelyGovernedWrite, true);
+  assert.equal(relativeWrite.scopeBasis, "relative-command-without-cwd");
+  const systemProcess = classifyProcess({ pid: 102, state: "S", command: "/usr/libexec/system-service --wait" }, { selfPid: 1 });
+  assert.equal(systemProcess.scope, "unknown");
+  assert.equal(systemProcess.role, "unknown-live-process");
+  assert.equal(systemProcess.likelyGovernedWrite, false);
 });
 
 test("STORY-414: progress waits report cursor deltas, unchanged polls, and terminal failures without false success", async (t) => {
