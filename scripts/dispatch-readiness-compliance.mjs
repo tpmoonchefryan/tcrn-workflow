@@ -648,7 +648,7 @@ export function validateAgentLifecycleEvidence(declared, observed) {
     if (expected !== null && expected !== undefined && actual !== null && actual !== undefined && expected !== actual) {
       problems.push({ field: `observedLifecycle.${field}`, message: `observed ${field} does not match the declared handoff`, code: "DISPATCH_LIFECYCLE_BINDING_MISMATCH" });
     }
-    if (expected !== null && expected !== undefined && actual === null && ((AGENT_LIFECYCLE_FRESH_PHASES.includes(declaredPhase) && ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns"].includes(field)) || (declaredPhase === "clarification" && ["phase", "role", "pack", "newInstance", "sameTaskRunning"].includes(field)))) {
+    if (expected !== null && expected !== undefined && actual === null && ((AGENT_LIFECYCLE_FRESH_PHASES.includes(declaredPhase) && ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns"].includes(field)) || (declaredPhase === "clarification" && ["phase", "role", "pack", "model", "effort", "newInstance", "forkTurns", "sameTaskRunning"].includes(field)))) {
       unknownReasons.push({ field: `observedLifecycle.${field}`, message: `observed lifecycle did not expose ${field}`, code: "DISPATCH_LIFECYCLE_FACT_MISSING" });
     }
   }
