@@ -239,9 +239,9 @@ function loadGateDeclarations() {
 }
 
 function rootInvocation(id) {
-  if (id === "engine-release") return { executable: node, args: [resolve(repositoryRoot, "scripts/push-gate.mjs")] };
-  if (id === "platform-layout") return { executable: node, args: [resolve(repositoryRoot, "scripts/platform-doctor.mjs"), "--platform-root", platformRoot] };
-  if (id === "product-gates") return { executable: "pnpm", args: ["verify"] };
+  if (id === "engine-release") return { executable: node, args: [resolve(repositoryRoot, "scripts/push-gate.mjs")], cwd: repositoryRoot };
+  if (id === "platform-layout") return { executable: node, args: [resolve(repositoryRoot, "scripts/platform-doctor.mjs"), "--platform-root", platformRoot], cwd: repositoryRoot };
+  if (id === "product-gates") return { executable: "pnpm", args: ["verify"], cwd: resolve(platformRoot, "TCRN Platform/TCRN-Design-System") };
   return null;
 }
 
@@ -309,7 +309,7 @@ async function executeDynamicRoots(qualification) {
   const execution = await executeSelectedRoots(plan, async (entry) => {
     const invocation = rootInvocation(entry.id);
     if (invocation === null || entry.rootId !== entry.id) return { id: entry.id, status: "failed", ok: false, exitCode: null, reasonCode: "BATCH_ROOT_NOT_REGISTERED" };
-    const result = run(invocation.executable, invocation.args, { cwd: repositoryRoot, timeout: 30 * 60_000, maxBuffer: 64 * 1024 * 1024 });
+    const result = run(invocation.executable, invocation.args, { cwd: invocation.cwd, timeout: 30 * 60_000, maxBuffer: 64 * 1024 * 1024 });
     return writeRunnerReceipt(storeRoot, entry, result, impact.inputs);
   }, { getInputs: async () => impact.inputs });
   return {
