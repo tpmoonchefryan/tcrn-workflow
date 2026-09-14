@@ -188,8 +188,15 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
       if (remaining <= 0) {
         terminateTestControllerGroup(child.pid);
         await resultOutcome;
-        await waitForProcessGroupExit(child.pid);
-        fail("TEST_CONTROLLER_TIMEOUT", `controller exceeded ${timeoutMs}ms`);
+        let groupJoinError = null;
+        try { await waitForProcessGroupExit(child.pid); }
+        catch (error) { groupJoinError = {reasonCode: error.reasonCode ?? "TEST_CONTROLLER_GROUP_JOIN_FAILED", message: error.message}; }
+        fail("TEST_CONTROLLER_TIMEOUT", JSON.stringify({
+          primaryError: "controller timeout",
+          cleanupErrors: groupJoinError === null ? [] : [groupJoinError],
+          processGroup: child.pid,
+          coverageDirectory,
+        }));
       }
       const waitController = new AbortController();
       const wait = waitForProgress(progressPath, {
@@ -243,8 +250,15 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
         if (exitOutcome.kind === "timeout") {
           terminateTestControllerGroup(child.pid);
           await resultOutcome;
-          await waitForProcessGroupExit(child.pid);
-          fail("TEST_CONTROLLER_TIMEOUT", `controller did not close after ${outcome.value.status}`);
+          let groupJoinError = null;
+          try { await waitForProcessGroupExit(child.pid); }
+          catch (error) { groupJoinError = {reasonCode: error.reasonCode ?? "TEST_CONTROLLER_GROUP_JOIN_FAILED", message: error.message}; }
+          fail("TEST_CONTROLLER_TIMEOUT", JSON.stringify({
+            primaryError: "controller did not close after " + outcome.value.status,
+            cleanupErrors: groupJoinError === null ? [] : [groupJoinError],
+            processGroup: child.pid,
+            coverageDirectory,
+          }));
         }
         if (exitOutcome.kind === "error") throw exitOutcome.error;
         completed = exitOutcome.value;
