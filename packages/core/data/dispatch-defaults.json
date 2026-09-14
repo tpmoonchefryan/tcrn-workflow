@@ -5,8 +5,16 @@
     "economy"
   ],
   "classes": {
+    "acceptance": {
+      "dispatch": true,
+      "verify": true
+    },
     "plan": {
       "dispatch": false,
+      "verify": false
+    },
+    "decision": {
+      "dispatch": true,
       "verify": false
     },
     "dispatch-review": {
@@ -40,9 +48,11 @@
   },
   "modes": {
     "frontier": {
+      "acceptance": "main",
+      "decision": "flagship",
       "plan": "flagship",
       "dispatch-review": "main",
-      "implement": "main",
+      "implement": "economy",
       "research": "economy",
       "docs": "economy",
       "chain-ops": "economy",
@@ -50,6 +60,8 @@
       "retrieval-gate": "economy"
     },
     "eco": {
+      "acceptance": "economy",
+      "decision": "economy",
       "plan": "main",
       "dispatch-review": "main",
       "implement": "economy",

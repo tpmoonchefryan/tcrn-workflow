@@ -56,7 +56,7 @@ test("S369: dispatch settings are cataloged, sorted, and vocabulary-linked", asy
     assert.equal(entry.defaultValue.length > 0, true);
   }
   const classes = await invoke(["dispatch-classes-list", "--workspace", workspace]);
-  assert.deepEqual(Object.keys(classes.classes).sort(), ["chain-ops", "dispatch-review", "docs", "implement", "knowledge-expand", "plan", "research", "retrieval-gate"]);
+  assert.deepEqual(Object.keys(classes.classes).sort(), ["acceptance", "chain-ops", "decision", "dispatch-review", "docs", "implement", "knowledge-expand", "plan", "research", "retrieval-gate"]);
   assert.ok(Object.values(classes.classes).every((value) => typeof value.dispatch === "boolean" && typeof value.verify === "boolean"));
   const modes = await invoke(["dispatch-mode-list", "--workspace", workspace]);
   assert.deepEqual(Object.keys(modes.modes).sort(), ["eco", "frontier"]);

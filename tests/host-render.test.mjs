@@ -63,12 +63,12 @@ test("STORY-371: Claude rendering preserves user fields, writes tier fields, and
   await writeFile(join(root, ".claude", "agents", "implement.md"), `---${newline}description: user-owned${newline}model: old-model${newline}effort: old-effort${newline}---${newline}User body stays here.${newline}`);
   const first = renderHostPlan({ host: "claude-code", mode: "frontier", settings: settings("claude-code"), root, repoRoot, existing: new Map() });
   const plan = renderHostPlan({ host: "claude-code", mode: "frontier", settings: settings("claude-code"), root, repoRoot, existing: await existingFor(first, root) });
-  assert.equal(plan.resolutions.implement.model, "claude-code-main");
-  assert.equal(plan.resolutions.implement.effort, "high");
+  assert.equal(plan.resolutions.implement.model, "claude-code-economy");
+  assert.equal(plan.resolutions.implement.effort, "low");
   assert.ok(plan.drift.length > 0);
   const receipt = await applyHostRender(plan, { backupDir: join(root, "backups") });
   assert.equal(receipt.reasonCode, "HOST_RENDER_COMMITTED");
-  assert.equal(receipt.files.length, 10);
+  assert.equal(receipt.files.length, 12);
   const renderedSettings = JSON.parse(await readFile(join(root, ".claude", "settings.json"), "utf8"));
   assert.equal(renderedSettings.model, "claude-code-flagship");
   assert.equal(renderedSettings.env.USER_SETTING, "yes");
@@ -78,14 +78,14 @@ test("STORY-371: Claude rendering preserves user fields, writes tier fields, and
   assert.equal(renderedSettings.hooks.Stop.length, 3);
   const agent = await readFile(join(root, ".claude", "agents", "implement.md"), "utf8");
   assert.match(agent, /description: user-owned/u);
-  assert.match(agent, /model: claude-code-main/u);
-  assert.match(agent, /effort: high/u);
+  assert.match(agent, /model: claude-code-economy/u);
+  assert.match(agent, /effort: low/u);
   assert.match(agent, /User body stays here\./u);
   const green = await inspectHostRenderDrift({ host: "claude-code", settings: settings("claude-code"), root, repoRoot });
   assert.equal(green.ok, true);
   assert.equal(green.drift.length, 0);
 
-  await writeFile(join(root, ".claude", "agents", "implement.md"), agent.replace("model: claude-code-main", "model: forged-model"));
+  await writeFile(join(root, ".claude", "agents", "implement.md"), agent.replace("model: claude-code-economy", "model: forged-model"));
   const red = await inspectHostRenderDrift({ host: "claude-code", settings: settings("claude-code"), root, repoRoot });
   assert.equal(red.ok, false);
   assert.ok(red.drift.some((entry) => entry.path.endsWith("implement.md")));

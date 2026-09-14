@@ -19,6 +19,7 @@
     "build": "node scripts/task.mjs build",
     "clean": "node scripts/task.mjs clean",
     "dispatch:validate": "node scripts/dispatch-readiness-compliance.mjs",
+    "dispatch:resolve": "node scripts/dispatch-adapter.mjs",
     "format": "node scripts/task.mjs format-write",
     "format:check": "node scripts/task.mjs format-check",
     "generate:proof-artifacts": "node scripts/generate-proof-artifacts.mjs",

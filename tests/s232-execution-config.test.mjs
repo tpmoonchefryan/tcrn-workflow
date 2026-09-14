@@ -91,11 +91,11 @@ test("S369: two host tier tables stay isolated while a mode switch changes resol
   await json(write("dispatch-mode-set", workspace, await version(), 3, ["--name", "custom", "--mapping", JSON.stringify({ implement: "economy" })]));
 
   const frontier = await json(["dispatch-mode-list", "--workspace", workspace, "--host", "claude-code", "--class", "implement"]);
-  assert.equal(frontier.resolution.value.model, "claude-main");
+  assert.equal(frontier.resolution.value.model, "claude-eco");
   assert.equal(frontier.resolution.dispatch, true);
   assert.equal(frontier.resolution.verify, true);
   const codexRead = await json(["dispatch-mode-list", "--workspace", workspace, "--host", "codex", "--class", "implement"]);
-  assert.equal(codexRead.resolution.value.model, "codex-main", "frontier reads the selected host's main row");
+  assert.equal(codexRead.resolution.value.model, "codex-eco", "frontier implement resolution uses the economy row");
 
   const switched = await json(write("settings-set", workspace, await version(), 4, ["--key", "execution.dispatchMode", "--value", "custom"]));
   assert.equal(switched.version, 4);

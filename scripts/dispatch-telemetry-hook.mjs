@@ -240,6 +240,29 @@ function usageFrom(input, env) {
   return Object.values(result).some((value) => value !== null) ? result : null;
 }
 
+// A dispatch adapter may attach the engine's resolution to the host hook
+// envelope. These are bounded provenance facts, not a model identity claim:
+// observedModel remains sourced only from the stop observation path above.
+function dispatchResolutionFacts(input, env) {
+  const scopes = observationScopes(input);
+  const resolution = firstDefined(
+    ...scopes.flatMap((scope) => [scope.dispatchResolution, scope.dispatch_resolution, scope.resolution]),
+    env?.TCRN_DISPATCH_RESOLUTION,
+  );
+  const sources = [resolution, resolution?.source, resolution?.resolution, resolution?.currentSource, ...scopes];
+  const value = (names) => firstDefined(...sources.flatMap((scope) => names.map((name) => scope?.[name])));
+  const version = numeric(value(["configVersion", "configurationVersion", "dispatchConfigVersion", "version"]));
+  const configDigest = boundedText(value(["configDigest", "configurationDigest", "dispatchConfigDigest"]), 64, { preserveUnknown: true });
+  const resolutionStatus = boundedText(value(["status", "resolutionStatus"]), 64, { preserveUnknown: true });
+  const source = boundedText(value(["sourceKind", "resolutionSource", "kind"]), 128, { preserveUnknown: true });
+  return {
+    configVersion: version,
+    configDigest,
+    resolutionStatus,
+    resolutionSource: source,
+  };
+}
+
 function hostArgument(argv = process.argv.slice(2)) {
   const index = argv.findIndex((value) => value === "--host");
   if (index < 0) return null;
@@ -279,6 +302,7 @@ function payloadFor(input, env, kind) {
   const configuredHost = boundedText(env?.TCRN_TELEMETRY_HOST ?? env?.TCRN_HOST, 64);
   const host = configuredHost ?? inputField(input, ["host", "host_name", "hostName"], env, [], 64) ?? "unknown-host";
   const event = kind === "subagent-start" ? "SubagentStart" : "SubagentStop";
+  const resolutionFacts = dispatchResolutionFacts(input, env);
   return {
     dispatchId: inputField(input, ["dispatch_id", "dispatchId"], env, ["TCRN_DISPATCH_ID", "TCRN_TELEMETRY_DISPATCH_ID"]),
     parentSession: inputField(input, ["parent_session", "parentSession", "parent_session_id", "parentSessionId", "parent"], env, ["TCRN_TELEMETRY_PARENT_SESSION", "TCRN_PARENT_SESSION"]),
@@ -287,6 +311,10 @@ function payloadFor(input, env, kind) {
     mode: inputField(input, ["dispatch_mode", "dispatchMode", "mode", "execution_mode", "executionMode"], env, ["TCRN_TELEMETRY_MODE", "TCRN_DISPATCH_MODE"], 128),
     requestedTier: inputField(input, ["requested_tier", "requestedTier", "tier"], env, ["TCRN_TELEMETRY_REQUESTED_TIER", "TCRN_DISPATCH_REQUESTED_TIER"], 128),
     resolvedTier: inputField(input, ["resolved_tier", "resolvedTier", "actual_tier", "actualTier"], env, ["TCRN_TELEMETRY_RESOLVED_TIER", "TCRN_DISPATCH_RESOLVED_TIER"], 128),
+    configVersion: resolutionFacts.configVersion,
+    configDigest: resolutionFacts.configDigest,
+    resolutionStatus: resolutionFacts.resolutionStatus,
+    resolutionSource: resolutionFacts.resolutionSource,
     requestedModel,
     observedModel,
     observedModelStatus: modelObservation.status,

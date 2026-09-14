@@ -306,6 +306,7 @@
     "scripts/coverage-conservation.mjs",
     "scripts/cross-repo-privacy.mjs",
     "scripts/dependency-materialization.mjs",
+    "scripts/dispatch-adapter.mjs",
     "scripts/dispatch-readiness-compliance.mjs",
     "scripts/dispatch-telemetry-hook.mjs",
     "scripts/ds-component-css-proof.mjs",
