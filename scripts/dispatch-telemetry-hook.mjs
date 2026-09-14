@@ -56,6 +56,10 @@ function inputScopes(input) {
     input?.lifecycle,
     input?.agentLifecycle,
     input?.structuredHandoff,
+    input?.payload?.lifecycle,
+    input?.payload?.agentLifecycle,
+    input?.payload?.structuredHandoff,
+    input?.structuredHandoff?.lifecycle,
   ].filter(isRecord);
 }
 
