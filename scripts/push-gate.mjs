@@ -398,9 +398,10 @@ process.stdout.write = (chunk, ...arguments_) => {
   stdoutObserved += typeof chunk === "string" ? chunk : Buffer.from(chunk).toString(encoding);
   return originalStdoutWrite(chunk, ...arguments_);
 };
+const noticeFields = governanceNotices.length === 0 ? {} : { governanceNotices };
 const output = failures.length > 0
-  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures, governanceNotices }, null, 2)
-  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION, governanceNotices });
+  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures, ...noticeFields }, null, 2)
+  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION, ...noticeFields });
 process.stdout.write(`${output}\n`);
 await writeTimingEvidence(failures.length === 0, stdoutObserved.replace(/\n$/u, ""));
 if (failures.length > 0) {
