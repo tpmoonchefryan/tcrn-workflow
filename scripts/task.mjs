@@ -266,7 +266,7 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
       }
     }
     await waitForProcessGroupExit(child.pid);
-    const progress = { ...summarizeProgress(events), cursor, ...counters };
+    const progress = { ...summarizeProgress(events), cursor, ...counters, lastProgress: events.at(-1) ?? null };
     if (completed.code === 0 && progress.status !== "completed") {
       fail("TEST_CONTROLLER_PROGRESS_MISSING", JSON.stringify(progress));
     }
