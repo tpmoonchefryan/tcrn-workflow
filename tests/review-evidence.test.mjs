@@ -311,6 +311,38 @@ test("EPIC135 closeout: only an issued receipt with the exact invocation can be 
   assert.equal(refused.reasonCode, "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
 });
 
+test("EPIC135 R1: private plan registration rejects public discriminator and reseal downgrades before any runner call", async () => {
+  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
+  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const inputs = { sourceDigest: "source-r1", environmentDigest: "environment-r1", commandDigest: "command-r1", baselineDigest: "baseline-r1" };
+  const options = { roster, containment, phase: "candidate-final", inputs, changedFiles: ["scripts/final-gate-plan.mjs"], dependencies: [], configuration: [], generated: [], environment: [], crossRepoChanges: [], candidateReady: true, executionPermission: true };
+  const assertRefused = async (plan) => {
+    let calls = 0;
+    const result = await executeSelectedRoots(plan, async () => { calls += 1; return { ok: true }; }, { getInputs: async () => inputs });
+    assert.equal(calls, 0);
+    assert.equal(result.reasonCode, "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
+    assert.equal(result.executable, false);
+  };
+  const downgraded = buildDynamicGatePlan(options);
+  downgraded.dynamic = false;
+  delete downgraded.integrity;
+  await assertRefused(downgraded);
+
+  const commandChanged = buildDynamicGatePlan(options);
+  commandChanged.selected[0].command = "node unregistered-command.mjs";
+  await assertRefused(commandChanged);
+
+  const resealed = structuredClone(buildDynamicGatePlan(options));
+  resealed.selected = [];
+  resealed.executionOrder = [];
+  resealed.gates = resealed.gates.map((gate) => ({ ...gate, disposition: "not-applicable", status: "not-applicable" }));
+  resealed.integrity.requiredSelected = [];
+  resealed.integrity.requiredSelectionDigest = "0".repeat(64);
+  let directCalls = 0;
+  assert.throws(() => recordExecution(resealed, []), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
+  assert.equal(directCalls, 0);
+});
+
 test("EPIC135 closeout: runtime scope keeps unknown writes visible without blocking on unknown system processes", () => {
   const relativeWrite = classifyProcess({ pid: 101, state: "S", command: "node scripts/tcrn-workflow.mjs work-create --workspace /tmp/workspace" }, { selfPid: 1 });
   assert.equal(relativeWrite.scope, "unknown");

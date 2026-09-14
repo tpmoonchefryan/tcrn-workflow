@@ -6,7 +6,7 @@
 // by the planner API, and executes only its selected top-level roots serially.
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,11 +19,13 @@ import {
   issueGateReceipt,
   executeOperationalBatch,
   executeSelectedRoots,
+  loadStageCompletionSource,
   readNativeBatchState,
 } from "./final-gate-plan.mjs";
 
 export const OPERATIONAL_BATCH_ENTRY_VERSION = "tcrn.operational-batch-entry.v2";
 export const CODE_OWNED_RUNNER_VERSION = "tcrn-code-owned-runner.v1";
+export const OPERATOR_STAGE_BRIDGE_VERSION = "tcrn.operator-stage-bridge.v1";
 const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const platformRoot = resolve(repositoryRoot, "../..");
 const chainContainer = [".tcrn", "workspace"].join("-");
@@ -33,7 +35,12 @@ const containmentPath = resolve(repositoryRoot, "scripts/policy/gate-containment
 const sourceArchivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
 const node = process.execPath;
 export const PACK_SOURCE_BASELINE_COMMIT = "06b9f0a20467d9cbd5203d519eb8d4a563e5f126";
-const productionReceiptAuthority = createGateReceiptAuthority();
+let productionReceiptAuthority = null;
+
+function getProductionReceiptAuthority() {
+  if (productionReceiptAuthority === null) productionReceiptAuthority = createGateReceiptAuthority();
+  return productionReceiptAuthority;
+}
 
 const text = (value) => typeof value === "string" ? value : "";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -42,6 +49,43 @@ const stableJson = (value) => JSON.stringify(value, (_key, child) => {
   return Object.fromEntries(Object.keys(child).sort().map((key) => [key, child[key]]));
 });
 const digestValue = (value) => sha256(stableJson(value));
+const candidateIdentityCache = new Map();
+
+function archiveSourceIdentity(archivePath, tree) {
+  const archiveBytes = readFileSync(archivePath);
+  const archiveDigest = sha256(archiveBytes);
+  const cacheKey = `${tree}:${archiveDigest}`;
+  const cached = candidateIdentityCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const listing = spawnSync("tar", ["-tf", archivePath], { cwd: repositoryRoot, encoding: "utf8", timeout: 30_000, maxBuffer: 4 * 1024 * 1024, shell: false });
+  if (listing.error || listing.status !== 0) {
+    const result = { archiveDigest, matches: false, archiveEntries: [], mismatches: [{ path: null, reason: "archive listing failed" }] };
+    candidateIdentityCache.set(cacheKey, result);
+    return result;
+  }
+  const archiveEntries = [...new Set(String(listing.stdout ?? "").split(/\r?\n/u).map((entry) => entry.trim().replace(/^\.\//u, "")).filter(Boolean))].sort();
+  const trackedOutput = gitOutput(["ls-tree", "-r", "--name-only", "-z", "HEAD"]);
+  const trackedEntries = [...new Set(trackedOutput.split("\0").map((entry) => entry.trim()).filter(Boolean))].sort();
+  const mismatches = [];
+  if (trackedEntries.length !== archiveEntries.length || trackedEntries.some((entry, index) => entry !== archiveEntries[index])) {
+    const archiveSet = new Set(archiveEntries);
+    const trackedSet = new Set(trackedEntries);
+    for (const path of trackedEntries.filter((entry) => !archiveSet.has(entry))) mismatches.push({ path, reason: "source file is absent from archive" });
+    for (const path of archiveEntries.filter((entry) => !trackedSet.has(entry))) mismatches.push({ path, reason: "archive contains a file absent from source tree" });
+  }
+  for (const path of trackedEntries) {
+    if (mismatches.some((entry) => entry.path === path)) continue;
+    let current;
+    try { current = readFileSync(resolve(repositoryRoot, path)); } catch { mismatches.push({ path, reason: "source file is unreadable" }); continue; }
+    const extracted = spawnSync("tar", ["-xOf", archivePath, path], { cwd: repositoryRoot, encoding: null, timeout: 30_000, maxBuffer: Math.max(4 * 1024 * 1024, current.length + 1024), shell: false });
+    if (extracted.error || extracted.status !== 0 || !Buffer.isBuffer(extracted.stdout) || !extracted.stdout.equals(current)) {
+      mismatches.push({ path, reason: extracted.error || extracted.status !== 0 ? "archive member is unreadable" : "archive member bytes differ" });
+    }
+  }
+  const result = { archiveDigest, matches: mismatches.length === 0, archiveEntries, mismatches };
+  candidateIdentityCache.set(cacheKey, result);
+  return result;
+}
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -188,25 +232,31 @@ function processSnapshot() {
   };
 }
 
-function candidateSnapshot() {
+function candidateSnapshot({ archivePath = sourceArchivePath } = {}) {
   try {
-    const archive = readFileSync(sourceArchivePath);
     const head = gitOutput(["rev-parse", "HEAD"]).trim();
     const tree = gitOutput(["rev-parse", "HEAD^{tree}"]).trim();
     const status = gitOutput(["status", "--porcelain=v1", "--untracked-files=all"]);
-    const stable = status.trim() === "" && /^[0-9a-f]{40}$/u.test(head) && /^[0-9a-f]{40}$/u.test(tree);
+    if (typeof archivePath !== "string" || !archivePath.startsWith("/") || !existsSync(archivePath) || !lstatSync(archivePath).isFile() || lstatSync(archivePath).isSymbolicLink()) return { observed: false, stable: false, id: tree || head || null, digest: null, records: [], reasonCode: "BATCH_CANDIDATE_ARCHIVE_NOT_VERIFIABLE" };
+    const archiveIdentity = archiveSourceIdentity(archivePath, tree);
+    const cleanSource = status.trim() === "" && /^[0-9a-f]{40}$/u.test(head) && /^[0-9a-f]{40}$/u.test(tree);
+    const stable = cleanSource && archiveIdentity.matches;
     return {
       observed: true,
       stable,
       id: tree || head || "engine-source-candidate",
-      digest: sha256(archive),
-      bytes: archive.length,
+      digest: archiveIdentity.archiveDigest,
+      bytes: readFileSync(archivePath).length,
       source: "code-owned-candidate-observer",
       statusDigest: sha256(status),
       statusClean: status.trim() === "",
       head,
       tree,
-      reasonCode: stable ? "BATCH_CANDIDATE_STABLE" : "BATCH_CANDIDATE_TREE_DIRTY",
+      archivePath,
+      archiveEntries: archiveIdentity.archiveEntries.length,
+      archiveSourceMatches: archiveIdentity.matches,
+      archiveMismatches: archiveIdentity.mismatches,
+      reasonCode: stable ? "BATCH_CANDIDATE_STABLE" : cleanSource ? "BATCH_CANDIDATE_SOURCE_ARCHIVE_STALE" : "BATCH_CANDIDATE_TREE_DIRTY",
       records: [],
     };
   } catch (error) {
@@ -232,7 +282,7 @@ async function observeHostRuntime({ nativeState } = {}) {
     agents: snapshot.agents,
     writes: snapshot.writes,
     scopeObservations: snapshot.scopeObservations,
-    candidate: { observed: candidate.observed, stable: candidate.stable, digest: candidate.digest, id: candidate.id, records: [], source: candidate.source, statusClean: candidate.statusClean, head: candidate.head, tree: candidate.tree, reasonCode: candidate.reasonCode },
+    candidate: { observed: candidate.observed, stable: candidate.stable, digest: candidate.digest, id: candidate.id, records: [], source: candidate.source, statusClean: candidate.statusClean, head: candidate.head, tree: candidate.tree, archivePath: candidate.archivePath, archiveEntries: candidate.archiveEntries, archiveSourceMatches: candidate.archiveSourceMatches, archiveMismatches: candidate.archiveMismatches, reasonCode: candidate.reasonCode },
     candidateObservation: candidate,
   };
 }
@@ -313,7 +363,7 @@ async function executeDynamicRoots(qualification) {
   const { roster, containment, contained } = loadGateDeclarations();
   const baselineCommit = typeof PACK_SOURCE_BASELINE_COMMIT === "undefined" ? undefined : PACK_SOURCE_BASELINE_COMMIT;
   const impact = codeOwnedImpact(baselineCommit === undefined ? {} : { baselineCommit });
-  const receiptAuthority = typeof productionReceiptAuthority === "undefined" ? null : productionReceiptAuthority;
+  const receiptAuthority = getProductionReceiptAuthority();
   const priorEvidence = receiptAuthority === null || typeof gateReceiptEvidence === "undefined" ? [] : gateReceiptEvidence(receiptAuthority);
   const phase = ["candidate-final", "publication", "merge-sensitive"].includes(qualification.stage) ? qualification.stage : "candidate-final";
   const gateInvocations = Object.fromEntries((contained?.selected ?? []).map(({ id }) => {
@@ -362,7 +412,30 @@ async function executeDynamicRoots(qualification) {
 
 /** Execute the production entry; all caller observations are discarded. */
 export async function executeProductionBatch(request = {}) {
-  const { nativeState: _native, runtimeObserver: _runtime, observer: _observer, ...boundRequest } = request && typeof request === "object" ? request : {};
+  const { nativeState: _native, runtimeObserver: _runtime, observer: _observer, stageCompletionAuthority: _callerAuthority, stageCompletionReceipts: _callerReceipts, ...boundRequest } = request && typeof request === "object" ? request : {};
+  const completionSource = boundRequest.stageCompletionSource ?? boundRequest.implementationCompletionSource ?? boundRequest.completionSource;
+  let stageBridge;
+  try {
+    stageBridge = loadStageCompletionSource(completionSource);
+  } catch (error) {
+    return {
+      schemaVersion: OPERATIONAL_BATCH_ENTRY_VERSION,
+      status: "not-verifiable",
+      reasonCode: error?.reasonCode ?? "BATCH_IMPLEMENTATION_SOURCE_NOT_VERIFIABLE",
+      eligible: false,
+      formalGateAllowed: false,
+      formalGateExecutions: 0,
+      executed: [],
+      operatorBridge: {
+        schemaVersion: OPERATOR_STAGE_BRIDGE_VERSION,
+        status: "not-verifiable",
+        source: typeof completionSource === "string" ? completionSource : null,
+        lifecycle: "source-required; no caller JSON authority or receipt array is accepted",
+        reason: String(error?.message ?? error),
+      },
+      reasons: ["a sealed code-owned implementation completion source is required; caller-supplied WeakMap-shaped authority/receipts are ignored"],
+    };
+  }
   const input = {
     workspace: boundRequest.workspace ?? workspaceDefault,
     engineCli: boundRequest.engineCli ?? resolve(repositoryRoot, "scripts/tcrn-workflow.mjs"),
@@ -376,22 +449,33 @@ export async function executeProductionBatch(request = {}) {
     expectedBinding: boundRequest.expectedBinding,
     currentBinding: boundRequest.currentBinding,
     previousRuns: boundRequest.previousRuns,
-    stageCompletionAuthority: boundRequest.stageCompletionAuthority,
-    stageCompletionReceipts: boundRequest.stageCompletionReceipts,
+    stageCompletionAuthority: stageBridge.authority,
+    stageCompletionReceipts: stageBridge.receipts,
     securityVeto: boundRequest.securityVeto,
     permissionDenied: boundRequest.permissionDenied,
   };
-  return executeOperationalBatch(input, executeDynamicRoots, { readNative: readNativeBatchState, observeRuntime: observeHostRuntime });
+  const result = await executeOperationalBatch(input, executeDynamicRoots, { readNative: readNativeBatchState, observeRuntime: observeHostRuntime });
+  return {
+    ...result,
+    operatorBridge: {
+      schemaVersion: OPERATOR_STAGE_BRIDGE_VERSION,
+      status: "loaded",
+      manifestPath: stageBridge.source.manifestPath,
+      manifestDigest: stageBridge.source.manifestDigest,
+      receiptCount: stageBridge.source.receiptCount,
+      lifecycle: stageBridge.source.lifecycle,
+    },
+  };
 }
 
 function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
 }
 
-export { classifyProcess, processSnapshot, observeHostRuntime, codeOwnedImpact, rootInvocation, writeRunnerReceipt };
+export { classifyProcess, processSnapshot, observeHostRuntime, candidateSnapshot, archiveSourceIdentity, codeOwnedImpact, rootInvocation, writeRunnerReceipt };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await executeProductionBatch(readStdin());
-  process.stdout.write(`${JSON.stringify({ schemaVersion: OPERATIONAL_BATCH_ENTRY_VERSION, ...result })}\n`);
+  process.stdout.write(`${JSON.stringify({ ...result, schemaVersion: OPERATIONAL_BATCH_ENTRY_VERSION })}\n`);
   if (result.status !== "completed" && result.status !== "idempotent") process.exitCode = 1;
 }

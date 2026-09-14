@@ -4,7 +4,7 @@
 // This module plans work; it never turns a missing or failed result into a cache hit.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
@@ -30,15 +30,35 @@ export const GATE_RECEIPT_AUTHORITY_VERSION = "tcrn.gate-receipt-authority.v1";
 export const GATE_RECEIPT_DOCUMENT_VERSION = "tcrn.gate-runner-receipt.v1";
 export const STAGE_COMPLETION_AUTHORITY_VERSION = "tcrn.stage-completion-authority.v1";
 export const STAGE_COMPLETION_RECEIPT_VERSION = "tcrn.stage-completion-receipt.v1";
+export const STAGE_COMPLETION_STORE_VERSION = "tcrn.stage-completion-store.v1";
 const RECEIPT_RUNNER_VERSION = "tcrn-code-owned-runner.v1";
 const RECEIPT_AUTHORITIES = new WeakMap();
 const STAGE_COMPLETION_AUTHORITIES = new WeakMap();
+const STAGE_COMPLETION_STORES = new WeakMap();
+// A plan is executable only while this process still owns the opaque context
+// that created it.  The public JSON shape is an audit projection, not an
+// authority: in particular, `dynamic`, `integrity`, and `executable` may never
+// be used to downgrade a plan after the fact.
 const DYNAMIC_PLAN_CONTEXTS = new WeakMap();
 
 function planError(reasonCode, detail) {
   const error = new Error(detail);
   error.reasonCode = reasonCode;
   return error;
+}
+
+function planMode(plan) {
+  return plan?.dynamic === true ? "dynamic" : "legacy";
+}
+
+function registerPlanContext(plan, context) {
+  if (!plan || typeof plan !== "object" || !context || typeof context !== "object") return;
+  DYNAMIC_PLAN_CONTEXTS.set(plan, Object.freeze({
+    ...context,
+    mode: context.mode ?? planMode(plan),
+    publicDynamic: plan.dynamic === true,
+    integrityDigest: context.integrityDigest ?? (plan.integrity ? digestValue(plan.integrity) : null),
+  }));
 }
 
 function canonicalValue(value) {
@@ -283,6 +303,167 @@ export function queryStageCompletionReceipt(authority, candidate) {
 }
 
 export const verifyStageCompletionReceipt = queryStageCompletionReceipt;
+
+const STAGE_COMPLETION_STORE_SOURCE = "code-owned-stage-completion-store";
+
+function regularOwnedFile(path, { writable = false } = {}) {
+  try {
+    const info = lstatSync(path);
+    if (!info.isFile() || info.isSymbolicLink()) return false;
+    if (typeof process.getuid === "function" && info.uid !== process.getuid()) return false;
+    if (writable && (info.mode & 0o077) !== 0) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function safeRelativeStorePath(value) {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const normalized = value.trim().replaceAll("\\", "/");
+  if (normalized.startsWith("/") || normalized.split("/").some((part) => part === ".." || part.length === 0)) return null;
+  return normalized;
+}
+
+function stageCompletionReceiptDigest(receipt) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
+  const { receiptDigest: _receiptDigest, ...body } = receipt;
+  return sha256(Buffer.from(JSON.stringify(canonicalValue(body)), "utf8"));
+}
+
+function validateStageCompletionReceiptDocument(receipt) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return "receipt is not an object";
+  if (receipt.schemaVersion !== STAGE_COMPLETION_RECEIPT_VERSION || receipt.status !== "completed" || receipt.issuedBy !== "code-owned-stage-completion-authority") return "receipt schema or issuer is invalid";
+  if (typeof receipt.receiptDigest !== "string" || !/^[a-f0-9]{64}$/u.test(receipt.receiptDigest) || stageCompletionReceiptDigest(receipt) !== receipt.receiptDigest) return "receipt digest is invalid";
+  if (typeof receipt.workId !== "string" || receipt.workId.trim().length === 0 || !Number.isSafeInteger(receipt.revision) || receipt.revision < 1) return "receipt work binding is invalid";
+  if ([receipt.scopeDigest, receipt.series, receipt.pack, receipt.stage, receipt.agent, receipt.queueDigest].some((value) => typeof value !== "string" || value.trim().length === 0)) return "receipt scope or lifecycle binding is invalid";
+  if (!receipt.candidate || typeof receipt.candidate !== "object" || Array.isArray(receipt.candidate) || typeof receipt.candidate.id !== "string" || receipt.candidate.id.trim().length === 0 || typeof receipt.candidate.digest !== "string" || receipt.candidate.digest.trim().length === 0) return "receipt candidate identity is invalid";
+  return null;
+}
+
+/**
+ * Create a code-owned durable completion source for an operator session.
+ *
+ * The returned token is intentionally opaque and only the code that created
+ * it may append receipts.  The sealed manifest is the cross-process handoff;
+ * a later CLI process validates its bytes before registering a fresh in-memory
+ * authority, so JSON cannot manufacture a WeakMap capability.
+ */
+export function createStageCompletionStore({ root = null } = {}) {
+  const storeRoot = root === null ? mkdtempSync(join(tmpdir(), "tcrn-stage-completion-")) : resolve(root);
+  if (root !== null) {
+    if (!storeRoot.startsWith("/") || existsSync(storeRoot) && !lstatSync(storeRoot).isDirectory()) throw planError("STAGE_COMPLETION_STORE_INVALID", "an absolute directory is required");
+    if (!existsSync(storeRoot)) mkdirSync(storeRoot, { recursive: true, mode: 0o700 });
+    if ((lstatSync(storeRoot).mode & 0o077) !== 0) throw planError("STAGE_COMPLETION_STORE_INVALID", "store directory must not be group or world accessible");
+  }
+  const receiptsRoot = join(storeRoot, "receipts");
+  if (!existsSync(receiptsRoot)) mkdirSync(receiptsRoot, { recursive: true, mode: 0o700 });
+  const authority = createStageCompletionAuthority();
+  const token = Object.freeze({ schemaVersion: STAGE_COMPLETION_STORE_VERSION, storeRoot });
+  STAGE_COMPLETION_STORES.set(token, { storeRoot, receiptsRoot, authority, receipts: [], sealed: false });
+  return Object.freeze({ token, storeRoot, receiptsRoot, manifestPath: join(storeRoot, "manifest.json"), lifecycle: "open" });
+}
+
+function stageCompletionStoreState(store) {
+  return STAGE_COMPLETION_STORES.get(store?.token ?? store) ?? null;
+}
+
+/** Append one receipt through the code-owned issuer and durable store. */
+export function writeStageCompletionStoreReceipt(store, input = {}) {
+  const state = stageCompletionStoreState(store);
+  if (state === null) throw planError("STAGE_COMPLETION_STORE_REQUIRED", "a code-owned stage completion store is required");
+  if (state.sealed) throw planError("STAGE_COMPLETION_STORE_SEALED", "stage completion store is already sealed");
+  const receipt = issueStageCompletionReceipt(state.authority, input);
+  const path = join(state.receiptsRoot, `${receipt.receiptDigest}.json`);
+  const bytes = Buffer.from(`${JSON.stringify(canonicalValue(receipt), null, 2)}\n`, "utf8");
+  writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
+  const entry = { path: `receipts/${receipt.receiptDigest}.json`, bytes: bytes.length, sha256: sha256(bytes), receiptDigest: receipt.receiptDigest };
+  state.receipts.push(entry);
+  return Object.freeze({ receipt, entry, storeRoot: state.storeRoot, lifecycle: "open" });
+}
+
+/** Seal the source so a separate operator/CLI process can load it exactly once per invocation. */
+export function sealStageCompletionStore(store) {
+  const state = stageCompletionStoreState(store);
+  if (state === null) throw planError("STAGE_COMPLETION_STORE_REQUIRED", "a code-owned stage completion store is required");
+  if (state.sealed) throw planError("STAGE_COMPLETION_STORE_SEALED", "stage completion store is already sealed");
+  const base = {
+    schemaVersion: STAGE_COMPLETION_STORE_VERSION,
+    status: "sealed",
+    source: STAGE_COMPLETION_STORE_SOURCE,
+    receipts: [...state.receipts].sort((one, two) => one.path.localeCompare(two.path)),
+    receiptCount: state.receipts.length,
+    lifecycle: "sealed-source-loaded-per-operator-invocation",
+  };
+  const manifestDigest = sha256(Buffer.from(JSON.stringify(canonicalValue(base)), "utf8"));
+  const manifest = { ...base, manifestDigest };
+  const bytes = Buffer.from(`${JSON.stringify(canonicalValue(manifest), null, 2)}\n`, "utf8");
+  writeFileSync(join(state.storeRoot, "manifest.json"), bytes, { flag: "wx", mode: 0o600 });
+  state.sealed = true;
+  return Object.freeze({ ...manifest, manifestPath: join(state.storeRoot, "manifest.json"), storeRoot: state.storeRoot });
+}
+
+/**
+ * Load and validate a sealed completion source at a process boundary.  The
+ * loader registers only bytes produced by the code-owned store format; raw
+ * receipt arrays and structured-cloned authorities are deliberately ignored by
+ * the production operator entry.
+ */
+export function loadStageCompletionSource(source) {
+  const manifestPath = typeof source === "string" ? source : source && typeof source === "object" ? source.manifestPath ?? source.path : null;
+  if (typeof manifestPath !== "string" || !manifestPath.startsWith("/") || manifestPath.includes("\u0000")) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "an absolute manifest path is required");
+  const absoluteManifest = resolve(manifestPath);
+  if (!regularOwnedFile(absoluteManifest, { writable: true })) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest must be an owner-only regular file");
+  let manifest;
+  try { manifest = JSON.parse(readFileSync(absoluteManifest, "utf8")); } catch (error) { throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion manifest is unreadable: ${String(error?.message ?? error)}`); }
+  if (!manifest || manifest.schemaVersion !== STAGE_COMPLETION_STORE_VERSION || manifest.status !== "sealed" || manifest.source !== STAGE_COMPLETION_STORE_SOURCE || !Array.isArray(manifest.receipts) || !Number.isSafeInteger(manifest.receiptCount) || manifest.receiptCount !== manifest.receipts.length) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest is not a sealed code-owned source");
+  const { manifestDigest, ...base } = manifest;
+  if (typeof manifestDigest !== "string" || manifestDigest !== sha256(Buffer.from(JSON.stringify(canonicalValue(base)), "utf8"))) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest digest is invalid");
+  const manifestRoot = resolve(absoluteManifest, "..");
+  try {
+    const rootInfo = lstatSync(manifestRoot);
+    if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink() || typeof process.getuid === "function" && rootInfo.uid !== process.getuid() || (rootInfo.mode & 0o077) !== 0) throw new Error("completion source directory is not owner-only");
+  } catch (error) {
+    throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", String(error?.message ?? error));
+  }
+  const seenPaths = new Set();
+  const authority = createStageCompletionAuthority();
+  const state = stageCompletionAuthorityState(authority);
+  const receipts = [];
+  for (const entry of manifest.receipts) {
+    const relative = safeRelativeStorePath(entry?.path);
+    if (relative === null || seenPaths.has(relative) || typeof entry?.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(entry.sha256) || !Number.isSafeInteger(entry?.bytes)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest entry is invalid");
+    seenPaths.add(relative);
+    const path = resolve(manifestRoot, relative);
+    if (!(path === manifestRoot || path.startsWith(`${manifestRoot}/`)) || !regularOwnedFile(path, { writable: true })) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion receipt path is outside the sealed source");
+    const bytes = readFileSync(path);
+    if (bytes.length !== entry.bytes || sha256(bytes) !== entry.sha256) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion receipt bytes drifted for ${relative}`);
+    let receipt;
+    try { receipt = JSON.parse(bytes.toString("utf8")); } catch { throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion receipt is not JSON for ${relative}`); }
+    const problem = validateStageCompletionReceiptDocument(receipt);
+    if (problem !== null || receipt.receiptDigest !== entry.receiptDigest || state.records.has(receipt.receiptDigest)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", problem ?? `duplicate completion receipt ${relative}`);
+    const frozen = deepFreeze(receipt);
+    state.records.set(receipt.receiptDigest, frozen);
+    receipts.push(frozen);
+  }
+  return Object.freeze({
+    schemaVersion: STAGE_COMPLETION_STORE_VERSION,
+    status: "loaded",
+    authority,
+    receipts,
+    source: {
+      manifestPath: absoluteManifest,
+      manifestDigest,
+      receiptCount: receipts.length,
+      lifecycle: "sealed-source-loaded-per-operator-invocation; authority-query-valid-for-process-lifetime",
+    },
+  });
+}
+
+export const createImplementationCompletionStore = createStageCompletionStore;
+export const writeImplementationCompletionReceipt = writeStageCompletionStoreReceipt;
+export const sealImplementationCompletionStore = sealStageCompletionStore;
+export const loadImplementationCompletionSource = loadStageCompletionSource;
 
 function validateRoster(roster, containment) {
   if (!roster || !Array.isArray(roster.groups)) throw planError("GATE_PLAN_ROSTER_INVALID", "acceptance roster groups");
@@ -1055,11 +1236,13 @@ export function buildDynamicGatePlan({ roster, containment, phase = "candidate-f
     integrity,
     rule: "apply the same impact and evidence predicate at candidate-final, publication, and merge-sensitive; execute only selected top-level roots",
   };
-  DYNAMIC_PLAN_CONTEXTS.set(plan, {
+  registerPlanContext(plan, {
     authority: receiptAuthority,
+    mode: "dynamic",
     roots: structuredClone(integrity.requiredRoots),
     selected: structuredClone(integrity.requiredSelected),
     gates: structuredClone(rows.map(({ id, rootId, disposition, command, invocation, inputs: gateInputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs: gateInputs }))),
+    coveredChildren: structuredClone(integrity.coveredChildren),
     selectionDigest: integrity.requiredSelectionDigest,
   });
   return plan;
@@ -1291,6 +1474,8 @@ function observedPart(value, name) {
     observed,
     digest,
     records: Array.isArray(records) ? records : null,
+    unknown: Array.isArray(source?.unknown) ? source.unknown : [],
+    unrelated: Array.isArray(source?.unrelated) ? source.unrelated : [],
     // Keep the raw snapshot available to the qualification boundary.  The raw
     // value is never treated as a caller assertion; it is useful only for
     // checking that the code-owned adapter supplied the complete shape.
@@ -1356,6 +1541,36 @@ function observerTasks(source, observer) {
 function observerArray(observer, name) {
   const part = observer?.[name];
   return part?.records === null ? [] : part?.records;
+}
+
+const RELATIVE_REPOSITORY_PROCESS = /(?:^|\s)(?:node|pnpm)(?:\s+[^\s]+)*\s+(?:scripts\/|tools\/|packages\/|tests\/)/u;
+
+function potentialRepositoryProcess(row) {
+  if (!row || typeof row !== "object" || Array.isArray(row)) return false;
+  if (row.scope === "unrelated" || row.active === false || row.role === "unknown-live-process" && row.likelyGovernedWrite !== true) return false;
+  if (row.role === "unknown-repository-process" || row.likelyGovernedWrite === true) return true;
+  return row.scope === "unknown" && RELATIVE_REPOSITORY_PROCESS.test(String(row.command ?? ""));
+}
+
+function observerUnknownRepositoryProcesses(observer, name) {
+  const unknown = observer?.[name]?.unknown;
+  return (Array.isArray(unknown) ? unknown : []).filter((row) => potentialRepositoryProcess(row) && observedProcessActive(row));
+}
+
+function observerUnknownScopeProcesses(observer) {
+  const unknown = observer?.scopeObservations?.unknown;
+  return (Array.isArray(unknown) ? unknown : []).filter((row) => potentialRepositoryProcess(row) && observedProcessActive(row));
+}
+
+function mergeObservedRows(...groups) {
+  const seen = new Set();
+  return groups.flat().filter((row) => {
+    if (!row || typeof row !== "object") return false;
+    const key = row.pid !== undefined ? `pid:${row.pid}` : row.id !== undefined ? `id:${row.id}` : JSON.stringify(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function taskObservationProblems(taskSource, dependencyRows, { strict = false } = {}) {
@@ -1731,16 +1946,19 @@ export function qualifyBatch(input = {}) {
   if (actualQueueDigest !== expectedQueueDigest) return { ...base, status: "rejected", reasonCode: "BATCH_QUEUE_STALE", tasks, postActions, queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the task queue changed while qualification was being evaluated"] };
   const remainingTasks = activeTasks.filter((task) => !taskIsComplete(task) && !task.realBlocked);
   const executableWork = remainingTasks.filter((task) => task.executable || task.running || BATCH_EXECUTABLE_STATES.has(task.status.toLowerCase()) || task.status.toLowerCase() === "unknown");
+  const unknownRepositoryAgents = strictObservation || hasObserver ? mergeObservedRows(observerUnknownRepositoryProcesses(observerResult.observer, "agents"), observerUnknownScopeProcesses(observerResult.observer)) : [];
   const runningAgentSource = strictObservation || hasObserver ? observerArray(observerResult.observer, "agents") : source.runningAgents ?? source.runningSubagents ?? source.inFlightAgents ?? source.activeSubagents ?? source.subagents ?? source.state?.runningAgents;
-  const runningAgents = batchArray(runningAgentSource).filter((row) => row?.role === "unknown-live-process" ? false : observedProcessActive(row));
-  const writes = batchArray(strictObservation || hasObserver ? observerArray(observerResult.observer, "writes") : source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions).filter(observedProcessActive);
+  const runningAgents = mergeObservedRows(batchArray(runningAgentSource), unknownRepositoryAgents).filter((row) => row?.role === "unknown-live-process" ? false : observedProcessActive(row));
+  const unknownRepositoryWrites = strictObservation || hasObserver ? observerUnknownRepositoryProcesses(observerResult.observer, "writes") : [];
+  const writes = mergeObservedRows(batchArray(strictObservation || hasObserver ? observerArray(observerResult.observer, "writes") : source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions), unknownRepositoryWrites).filter(observedProcessActive);
   const writeStatus = String(strictObservation || hasObserver ? "" : source.writeStatus ?? source.writeState ?? source.transactionStatus ?? "").toLowerCase();
   const runningWrites = strictObservation || hasObserver ? writes.length > 0 : source.writeInProgress === true || source.writing === true || BATCH_RUNNING_STATES.has(writeStatus) || writes.length > 0;
   const remainingPrerequisites = activeTasks.filter((task) => !taskIsComplete(task) && !task.realBlocked).map((task) => task.id);
   const blockedWithoutEvidence = activeTasks.filter((task) => BATCH_BLOCKED_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
   if (blockedWithoutEvidence.length > 0) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BLOCKED_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: blockedWithoutEvidence, reasons: [`blocked task lacks a real reason/evidence: ${blockedWithoutEvidence.join(", ")}`] };
   if (remainingTasks.length > 0 || runningAgents.length > 0 || runningWrites) {
-    return { ...base, status: "not-ready", reasonCode: remainingTasks.length > 0 ? "BATCH_WORK_REMAINING" : runningAgents.length > 0 ? "BATCH_SUBAGENTS_RUNNING" : "BATCH_WRITE_IN_PROGRESS", tasks, postActions, executableWork: executableWork.length > 0 ? executableWork : remainingTasks, runningAgents, runningWrites, remainingPrerequisites: remainingTasks.map((task) => task.id), reasons: ["formal batch gates stay at zero while executable work, a subagent, or a write is in flight"] };
+    const unknownRepository = [...unknownRepositoryAgents, ...unknownRepositoryWrites];
+    return { ...base, status: "not-ready", reasonCode: unknownRepository.length > 0 ? "BATCH_UNKNOWN_REPOSITORY_PROCESS" : remainingTasks.length > 0 ? "BATCH_WORK_REMAINING" : runningAgents.length > 0 ? "BATCH_SUBAGENTS_RUNNING" : "BATCH_WRITE_IN_PROGRESS", tasks, postActions, executableWork: executableWork.length > 0 ? executableWork : remainingTasks, runningAgents, runningWrites, remainingPrerequisites: remainingTasks.map((task) => task.id), reasons: unknownRepository.length > 0 ? ["an unknown process may be executing repository work; qualification remains conservative"] : ["formal batch gates stay at zero while executable work, a subagent, or a write is in flight"] };
   }
   const declaredCandidate = source.stableCandidate ?? source.candidate ?? source.state?.candidate;
   const observedCandidate = observerResult.observer?.candidate?.raw ?? null;
@@ -2037,7 +2255,7 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   if (!legacyFixture) return buildDynamicGatePlan({ roster, containment, phase, inputs, previousEvidence, receiptAuthority, gateInvocations, readiness, blockedDependencies, executionPermission, candidateReady, effectiveChanges: false, operational, requireInputObserver, requireCompleteImpact });
   if (!FINAL_GATE_PHASES.includes(phase)) throw planError("GATE_PLAN_PHASE_INVALID", phase);
   const { contained, rosterGroups } = validateRoster(roster, containment);
-  const selected = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, phase }));
+  const selected = contained.selected.map((entry) => ({ ...entry, command: rosterGroups.get(entry.id).command, invocation: null, phase }));
   const coveredBy = contained.coveredBy.map((entry) => ({ ...entry, phase }));
   const blocked = [];
   const requiredInputs = inputKey(inputs);
@@ -2053,36 +2271,78 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   if (executionPermission !== true) blocked.push({ id: "execution-permission", reason: "explicit candidate execution permission is required" });
   const evidence = evidenceDisposition(previousEvidence, inputs);
   blocked.push(...evidence.blocked);
-  return {
+  const legacyGates = selected.map(({ id, rootId, command }) => ({ id, rootId, disposition: "run", status: "run", command: normalizeCommand(command), invocation: null, inputs }));
+  const legacyCoveredBy = coveredBy.map(({ id, rootId, coveredBy: parent }) => ({ id, rootId, coveredBy: parent }));
+  const legacyRequiredRoots = selected.map(({ id, rootId, command }) => ({ id, rootId, command: normalizeCommand(command), invocation: null }));
+  const legacyRequiredSelected = legacyRequiredRoots.map((entry) => ({ ...entry }));
+  const legacyCommandBindings = Object.fromEntries(legacyGates.map(({ id, rootId, command, invocation }) => [id, { id, rootId, command, invocation, phase }]));
+  const legacyContainmentDigest = digestValue(contained.all.map(({ id, rootId, path, command }) => ({ id, rootId, path, command: normalizeCommand(command) })));
+  const legacySelectionDigest = digestValue({ roots: legacyRequiredRoots, gates: legacyGates, selected: legacyRequiredSelected });
+  const legacyIntegrity = {
+    schemaVersion: GATE_PLAN_INTEGRITY_VERSION,
+    containmentDigest: legacyContainmentDigest,
+    commandBindings: legacyCommandBindings,
+    requiredSelected: legacyRequiredSelected,
+    coveredChildren: legacyCoveredBy,
+    requireInputObserver: false,
+    requiredRoots: legacyRequiredRoots,
+    requiredSelectionDigest: legacySelectionDigest,
+  };
+  legacyIntegrity.planDigest = digestValue({
+    phase,
+    inputs,
+    selected: selected.map(({ id, rootId, command }) => ({ id, rootId, command: normalizeCommand(command), invocation: null })),
+    gates: legacyGates.map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs })),
+    coveredBy: legacyCoveredBy,
+    obligations: [],
+    executionOrder: selected.map(({ id }) => id),
+    containmentDigest: legacyContainmentDigest,
+  });
+  const legacyPlan = {
     schemaVersion: FINAL_GATE_PLAN_VERSION,
     phase,
     inputs,
     selected,
     executed: [],
-    coveredBy,
+    gates: legacyGates,
+    coveredBy: legacyCoveredBy,
     reused: evidence.reused,
     invalidated: evidence.invalidated,
     blocked,
+    coverage: {
+      allRootsReported: selected.length === contained.selected.length,
+      allObligationsMapped: true,
+      unmappedObligations: [],
+      mappedGateIds: selected.map(({ id }) => id),
+      selectedRoots: selected.map(({ id }) => id),
+      coveredChildren: legacyCoveredBy.map(({ id }) => id),
+      duplicateExecutionIds: new Set(selected.map(({ id }) => id)).size !== selected.length,
+    },
     execution: { strategy: "serial", maxConcurrent: 1 },
     executionOrder: selected.map(({ id }) => id),
     executionPermission: blocked.length === 0 ? "granted" : "denied",
     executable: blocked.length === 0,
+    integrity: legacyIntegrity,
     rule: "execute selected top-level roots once; contained children are reported, not launched independently",
   };
+  registerPlanContext(legacyPlan, {
+    authority: null,
+    mode: "legacy",
+    roots: structuredClone(legacyIntegrity.requiredRoots),
+    selected: structuredClone(legacyIntegrity.requiredSelected),
+    gates: structuredClone(legacyGates.map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command, invocation, inputs }))),
+    coveredChildren: structuredClone(legacyCoveredBy),
+    selectionDigest: legacyIntegrity.requiredSelectionDigest,
+  });
+  return legacyPlan;
 }
 
 export function recordExecution(plan, results, { blocked: blockedOverride } = {}) {
   if (plan?.executable !== true) throw planError("GATE_PLAN_NOT_EXECUTABLE", "plan has blocked prerequisites");
-  if (plan?.dynamic === true && (!plan.integrity || plan.integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION)) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "dynamic plans require an integrity envelope");
-  const context = plan?.dynamic === true ? DYNAMIC_PLAN_CONTEXTS.get(plan) : null;
-  if (plan?.dynamic === true && context === undefined) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "code-owned planning context is missing");
-  if (context !== null && context !== undefined) {
-    const selected = (plan.selected ?? []).map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation }));
-    const gates = (plan.gates ?? []).map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs }));
-    if (JSON.stringify(selected) !== JSON.stringify(context.selected) || JSON.stringify(gates) !== JSON.stringify(context.gates) || plan.integrity.requiredSelectionDigest !== context.selectionDigest) {
-      throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "required root selection or gate bindings changed after planning");
-    }
-  }
+  const context = plan && typeof plan === "object" ? DYNAMIC_PLAN_CONTEXTS.get(plan) : undefined;
+  if (context === undefined) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "code-owned planning context is missing");
+  const integrityProblems = executionPlanProblems(plan);
+  if (integrityProblems.length > 0) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", integrityProblems.join("; "));
   const rows = Array.isArray(results) ? results : [];
   const selectedIds = new Set((plan?.selected ?? []).map((entry) => entry.id));
   const executedIds = rows.map((entry) => entry?.id).filter(Boolean);
@@ -2097,7 +2357,7 @@ export function recordExecution(plan, results, { blocked: blockedOverride } = {}
   if (plan?.dynamic === true && rows.some((row) => /^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? "")))) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", "fixture root result cannot satisfy a production gate");
   const failed = rows.some((entry) => entry?.ok !== true);
   const next = { ...plan, ...(blockedOverride === undefined ? {} : { blocked: blockedOverride }), executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })), executable: failed ? false : plan.executable, executionPermission: failed ? "denied" : plan.executionPermission };
-  if (context !== null && context !== undefined) DYNAMIC_PLAN_CONTEXTS.set(next, context);
+  DYNAMIC_PLAN_CONTEXTS.set(next, context);
   return next;
 }
 
@@ -2105,15 +2365,18 @@ function executionPlanProblems(plan) {
   const problems = [];
   const integrity = plan?.integrity;
   if (!integrity || integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION) return ["execution integrity envelope is missing"];
-  const context = plan?.dynamic === true ? DYNAMIC_PLAN_CONTEXTS.get(plan) : null;
-  if (plan?.dynamic === true && context === undefined) problems.push("code-owned planning context is missing");
+  const context = plan && typeof plan === "object" ? DYNAMIC_PLAN_CONTEXTS.get(plan) : undefined;
+  if (context === undefined) problems.push("code-owned planning context is missing");
   if (context !== null && context !== undefined) {
+    if (context.mode !== planMode(plan) || context.publicDynamic !== (plan.dynamic === true)) problems.push("public plan mode changed after code-owned planning");
+    if (context.integrityDigest !== null && digestValue(integrity) !== context.integrityDigest) problems.push("integrity envelope changed after code-owned planning");
     const selectedContext = (plan.selected ?? []).map(({ id, rootId, command, invocation }) => ({ id, rootId, command: normalizeCommand(command), invocation }));
     const gatesContext = (plan.gates ?? []).map(({ id, rootId, disposition, command, invocation, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), invocation, inputs }));
     if (JSON.stringify(selectedContext) !== JSON.stringify(context.selected)) problems.push("required selected roots changed after planning");
     if (JSON.stringify(gatesContext) !== JSON.stringify(context.gates)) problems.push("required gate dispositions changed after planning");
     if (integrity.requiredSelectionDigest !== context.selectionDigest) problems.push("required selection authority changed after planning");
     if (JSON.stringify(integrity.requiredRoots ?? []) !== JSON.stringify(context.roots)) problems.push("required root set changed after planning");
+    if (JSON.stringify(integrity.coveredChildren ?? []) !== JSON.stringify(context.coveredChildren ?? [])) problems.push("containment coverage authority changed after planning");
   }
   // The integrity envelope is evidence, not authority.  Re-derive the root
   // command bindings from the checked-in roster and containment declaration so
@@ -2184,9 +2447,8 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
     throw planError("GATE_PLAN_SERIAL_POLICY_INVALID", "same-repository roots must execute serially");
   }
   if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
-  if (plan?.executable !== true || (plan?.blocked ?? []).length > 0) return { ...plan, executed: [] };
-  const planContext = plan?.dynamic === true ? DYNAMIC_PLAN_CONTEXTS.get(plan) : null;
-  const integrityProblems = plan?.dynamic === true || plan?.integrity ? executionPlanProblems(plan) : [];
+  const planContext = plan && typeof plan === "object" ? DYNAMIC_PLAN_CONTEXTS.get(plan) : undefined;
+  const integrityProblems = executionPlanProblems(plan);
   if (integrityProblems.length > 0) {
     return {
       ...plan,
@@ -2197,6 +2459,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
       executionPermission: "denied",
     };
   }
+  if (plan?.executable !== true || (plan?.blocked ?? []).length > 0) return { ...plan, executed: [] };
   const inputReader = typeof getInputs === "function" ? getInputs : currentInputs === undefined ? null : async () => currentInputs;
   if (plan?.integrity?.requireInputObserver === true && inputReader === null) {
     return {

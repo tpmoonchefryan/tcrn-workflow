@@ -24,8 +24,12 @@ import {
 } from "../tools/stop-pact/pact.mjs";
 import {
   createStageCompletionAuthority,
+  createStageCompletionStore,
   issueStageCompletionReceipt,
   qualifyBatch as qualifyStageBatch,
+  loadStageCompletionSource,
+  sealStageCompletionStore,
+  writeStageCompletionStoreReceipt,
 } from "../scripts/final-gate-plan.mjs";
 
 const NOW = "2026-08-07T12:00:00.000Z";
@@ -344,4 +348,35 @@ test("EPIC135 closeout: active Stories need code-owned implementation completion
   const forgedResult = qualifyStageBatch({ ...input, stageCompletionReceipts: [forged, receipts[1]] });
   assert.equal(forgedResult.eligible, false);
   assert.equal(forgedResult.reasonCode, "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE");
+});
+
+test("EPIC135 R2: the operator bridge loads only a sealed code-owned completion source", () => {
+  const binding = { series: "EPIC135", pack: "HC1-HC3-final-machine-closeout", stage: "candidate-final" };
+  const candidate = { id: "candidate-final", digest: "tree-final" };
+  const store = createStageCompletionStore();
+  const input = { ...binding, workId: "work:418", revision: 3, scopeDigest: "scope-418", candidate, queueDigest: "queue-final", agent: "agent:luna" };
+  const written = writeStageCompletionStoreReceipt(store, input);
+  const sealed = sealStageCompletionStore(store);
+  const loaded = loadStageCompletionSource(sealed.manifestPath);
+  assert.equal(loaded.status, "loaded");
+  assert.equal(loaded.receipts.length, 1);
+  assert.equal(loaded.receipts[0].receiptDigest, written.receipt.receiptDigest);
+  assert.match(loaded.source.lifecycle, /authority-query-valid-for-process-lifetime/u);
+  assert.throws(() => loadStageCompletionSource(JSON.stringify(loaded)), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+});
+
+test("EPIC135 R2: unknown repository work in the observer side table blocks qualification", () => {
+  const input = {
+    series: "EPIC135", pack: "HC2", stage: "candidate-final", expectedBinding: { series: "EPIC135", pack: "HC2", stage: "candidate-final" },
+    currentBinding: { series: "EPIC135", pack: "HC2", stage: "candidate-final" }, candidate: { id: "candidate", digest: "tree" }, queueDigest: "queue", currentQueueDigest: "queue", trigger: "formal-batch-gate",
+    tasks: [],
+    runtimeObserver: {
+      queue: { observed: true, digest: "queue", records: [] }, dependencies: { observed: true, records: [] },
+      agents: { observed: true, records: [], unknown: [{ pid: 321, state: "R", scope: "unknown", role: "unknown-repository-process", command: "node scripts/generate-proof-artifacts.mjs" }] },
+      writes: { observed: true, records: [] }, candidate: { observed: true, stable: true, id: "candidate", digest: "tree", records: [] },
+    }, operational: true, observationFresh: true, requireRuntimeObservation: true,
+  };
+  const result = qualifyStageBatch(input);
+  assert.equal(result.eligible, false);
+  assert.equal(result.reasonCode, "BATCH_UNKNOWN_REPOSITORY_PROCESS");
 });
