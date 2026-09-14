@@ -3,8 +3,16 @@
 import { spawnSync } from "node:child_process";
 import { rm } from "node:fs/promises";
 import { basename, resolve } from "node:path";
+import { stopCoverage } from "node:v8";
 
 import { appendProgressIfConfigured, delay } from "./lib/incremental-output.mjs";
+
+// A reaper is lifecycle infrastructure, not a test worker. It may be launched
+// by a direct race probe that supplies NODE_V8_COVERAGE; stopping its collector
+// at startup prevents the reaper's own terminal transition from writing a late
+// coverage document into the directory it is asked to clean. The test worker's
+// collector remains enabled in the separately spawned controller.
+if (process.env.NODE_V8_COVERAGE) stopCoverage();
 
 const [parentPidText, processGroupText, outputDirectory] = process.argv.slice(2);
 const parentPid = Number(parentPidText);

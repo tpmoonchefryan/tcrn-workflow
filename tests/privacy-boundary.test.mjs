@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmod, mkdtemp, readdir, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
 
 import { LocalCommandError, runLocalCommand } from "../scripts/lib/local-command.mjs";
@@ -316,4 +316,39 @@ test("recursive historical tree records preserve privacy-bearing full paths", ()
   );
   assert.ok(findings.some((finding) => finding.startsWith("CONTROL_PLANE_PATH:")));
   assert.ok(findings.some((finding) => finding.startsWith("LOCAL_ABSOLUTE_PATH:")));
+});
+
+test("regex syntax in both historical blobs is not a fake username, while real paths remain red", () => {
+  const historicalBlobIds = [
+    "317076496f96385e9e8e46dbba7f916dc0f1c63b",
+    "5ea8e50a91e65b4494196b44f117faba73d40ce3",
+  ];
+  const engineRoot = resolve(import.meta.dirname, "..");
+  const concretePath = joinParts(["/", "Users", "/", "fixture-user", "/", "private.txt"], "");
+  for (const object of historicalBlobIds) {
+    const result = spawnSync("git", ["cat-file", "-p", object], { cwd: engineRoot, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(
+      scanPrivacyEntries([{ label: `historical:${object}`, kind: "blob", content: result.stdout }], { owner: publicIdentity.login }),
+      [],
+      `regex-only historical blob ${object}`,
+    );
+    const withRealPath = `${result.stdout}\nconst privatePath = ${JSON.stringify(concretePath)};\n`;
+    assert.ok(
+      scanPrivacyEntries([{ label: `historical-plus-data:${object}`, kind: "blob", content: withRealPath }], { owner: publicIdentity.login })
+        .some((finding) => finding.startsWith("LOCAL_ABSOLUTE_PATH:")),
+      `real path appended to ${object}`,
+    );
+  }
+  const escapedRegex = joinParts(["/", "\\/", "Users", "\\/", "fixture-user", "\\/", "private", "\\.", "txt", "/"], "");
+  const quoted = JSON.stringify(concretePath);
+  const joined = `[${JSON.stringify(joinParts(["/", "Users", "/"], ""))},${JSON.stringify(joinParts(["fixture-user", "/private.txt"], ""))}].join("")`;
+  const encoded = Buffer.from(concretePath, "utf8").toString("base64");
+  for (const content of [escapedRegex, quoted, joined, `Buffer.from(${JSON.stringify(encoded)}, "base64")`]) {
+    assert.ok(
+      scanPrivacyEntries([{ label: "concrete-path-form", kind: "source", content }], { owner: publicIdentity.login })
+        .some((finding) => finding.startsWith("LOCAL_ABSOLUTE_PATH:")),
+      content,
+    );
+  }
 });

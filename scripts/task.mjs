@@ -119,24 +119,35 @@ function terminateTestControllerGroup(processGroup) {
 async function runDetachedTestController(arguments_, extraEnvironment) {
   const progressDirectory = await mkdtemp(join(tmpdir(), "tcrn-test-progress-"));
   const progressPath = join(progressDirectory, "events.ndjson");
+  const coverageDirectory = typeof extraEnvironment?.NODE_V8_COVERAGE === "string" ? extraEnvironment.NODE_V8_COVERAGE : null;
   let child;
   try {
+    const controllerEnvironment = {
+      ...process.env,
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
+      NO_COLOR: "1",
+      npm_config_audit: "false",
+      npm_config_fund: "false",
+      npm_config_offline: "true",
+      ...extraEnvironment,
+      TCRN_TEST_CONTROLLER_LOCK_PATH: resolve(repositoryRoot, ".git/tcrn-workflow-output.lock"),
+      TCRN_TEST_CONTROLLER_OUTER_PID: String(process.pid),
+      TCRN_TEST_CONTROLLER_PROGRESS_PATH: progressPath,
+    };
+    // The supervisor and reaper are lifecycle owners, not coverage writers.
+    // Remove the inherited collector only from this child environment; the
+    // worker receives the explicit path below and keeps coverage enabled.
+    delete controllerEnvironment.NODE_V8_COVERAGE;
+    if (coverageDirectory) controllerEnvironment.TCRN_TEST_CONTROLLER_COVERAGE_DIRECTORY = coverageDirectory;
+    else delete controllerEnvironment.TCRN_TEST_CONTROLLER_COVERAGE_DIRECTORY;
     child = spawn(process.execPath, [testControllerBootstrapPath, ...arguments_], {
       cwd: repositoryRoot,
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        COREPACK_ENABLE_DOWNLOAD_PROMPT: "0",
-        NO_COLOR: "1",
-        npm_config_audit: "false",
-        npm_config_fund: "false",
-        npm_config_offline: "true",
-        ...extraEnvironment,
-        TCRN_TEST_CONTROLLER_LOCK_PATH: resolve(repositoryRoot, ".git/tcrn-workflow-output.lock"),
-        TCRN_TEST_CONTROLLER_OUTER_PID: String(process.pid),
-        TCRN_TEST_CONTROLLER_PROGRESS_PATH: progressPath,
-      },
+      // Keep the coverage directory explicit for the worker. The bootstrap
+      // and reaper stop their supervisor-only collectors; NODE_V8_COVERAGE
+      // itself is never globally unset.
+      env: controllerEnvironment,
     });
     assertion(Number.isSafeInteger(child.pid) && child.pid > 0, "TEST_CONTROLLER_PID_INVALID");
     const stdout = [];
@@ -177,6 +188,7 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
       if (remaining <= 0) {
         terminateTestControllerGroup(child.pid);
         await resultOutcome;
+        await waitForProcessGroupExit(child.pid);
         fail("TEST_CONTROLLER_TIMEOUT", `controller exceeded ${timeoutMs}ms`);
       }
       const waitController = new AbortController();
@@ -231,6 +243,7 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
         if (exitOutcome.kind === "timeout") {
           terminateTestControllerGroup(child.pid);
           await resultOutcome;
+          await waitForProcessGroupExit(child.pid);
           fail("TEST_CONTROLLER_TIMEOUT", `controller did not close after ${outcome.value.status}`);
         }
         if (exitOutcome.kind === "error") throw exitOutcome.error;
@@ -244,10 +257,28 @@ async function runDetachedTestController(arguments_, extraEnvironment) {
       fail("TEST_CONTROLLER_PROGRESS_MISSING", JSON.stringify(progress));
     }
     if (completed.code !== 0) {
-      fail("COMMAND_FAILED", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stdout).toString("utf8")}${Buffer.concat(stderr).toString("utf8")}`);
+      fail("COMMAND_FAILED", JSON.stringify({
+        command: [process.execPath, ...arguments_],
+        primaryError: { code: completed.code, signal: completed.signal, reasonCode: "COMMAND_FAILED" },
+        cleanupErrors: progress.cleanupErrors ?? [],
+        raw: { stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") },
+        lastProgress: events.at(-1) ?? null,
+        progress,
+        coverageDirectory,
+        processGroup: child.pid,
+      }));
     }
     if (Buffer.concat(stderr).toString("utf8").trim() !== "") {
-      fail("COMMAND_UNEXPECTED_STDERR", `${process.execPath} ${arguments_.join(" ")}\n${Buffer.concat(stderr).toString("utf8")}`);
+      fail("COMMAND_UNEXPECTED_STDERR", JSON.stringify({
+        command: [process.execPath, ...arguments_],
+        primaryError: { code: completed.code, signal: completed.signal, reasonCode: "COMMAND_UNEXPECTED_STDERR" },
+        cleanupErrors: progress.cleanupErrors ?? [],
+        raw: { stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") },
+        lastProgress: events.at(-1) ?? null,
+        progress,
+        coverageDirectory,
+        processGroup: child.pid,
+      }));
     }
     return { progress };
   } finally {
@@ -546,6 +577,7 @@ async function verifyTestSuite() {
     evaluateSurvivingModuleCoverage,
   } = await import("./coverage-conservation.mjs");
   const coverageDirectory = await mkdtemp(join(tmpdir(), "tcrn-suite-coverage-"));
+  let retainCoverage = false;
   let tests;
   try {
     tests = await runTests({ extraEnvironment: { NODE_V8_COVERAGE: coverageDirectory } });
@@ -572,8 +604,21 @@ async function verifyTestSuite() {
         modules: survivingModules.modules.map(({ module, executedBlocks }) => ({ module, executedBlocks })),
       },
     });
+  } catch (error) {
+    // A failed P1 run is itself evidence. Preserve the complete coverage
+    // directory until the caller has captured its receipt; only successful
+    // runs are disposable. The controller failure detail already contains raw
+    // streams and the final progress event, and this stable path binds them to
+    // the coverage documents that survived the failure.
+    retainCoverage = true;
+    if (error && typeof error === "object") {
+      error.coverageDirectory = coverageDirectory;
+      const detail = `\ncoverageDirectory=${coverageDirectory}`;
+      if (typeof error.message === "string" && !error.message.includes(detail)) error.message += detail;
+    }
+    throw error;
   } finally {
-    await rm(coverageDirectory, { recursive: true, force: true });
+    if (!retainCoverage) await rm(coverageDirectory, { recursive: true, force: true });
   }
 }
 

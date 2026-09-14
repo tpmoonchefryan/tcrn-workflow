@@ -133,6 +133,246 @@ function evaluateStringLiteral(value) {
     .replaceAll("\\'", "'");
 }
 
+// A privacy scan must distinguish a path that appears in program data from the
+// syntax of a regular-expression literal. Decoding every `\\/` in a source
+// file turns a pattern containing an escaped local prefix and a character class into a convincing-looking
+// path and lets its character class provide a fake username. Keep this lexer
+// small and non-executing: it recognizes strings, comments and regex literals,
+// then projects only literal portions of a valid regex into the normalized scan
+// surface. Invalid or ambiguous slash expressions remain untouched and are
+// still covered by the raw scan.
+const regexPrefixWords = new Set([
+  "await", "case", "delete", "do", "else", "in", "instanceof", "new", "of", "return", "throw", "typeof", "void", "yield",
+]);
+const regexPrefixPunctuation = new Set(["(", "[", "{", ",", ";", ":", "=", "!", "?", "&", "|", "+", "-", "*", "%", "^", "~", "<", ">"]);
+const regexMetaEscapes = new Set(["A", "B", "b", "D", "d", "G", "K", "k", "p", "P", "s", "S", "W", "w", "Z", "z"]);
+
+function canStartRegex(previous) {
+  if (previous === null) return true;
+  if (previous.kind === "word") return regexPrefixWords.has(previous.value);
+  return previous.kind === "punctuation" && regexPrefixPunctuation.has(previous.value);
+}
+
+function readQuotedSource(value, start, quote) {
+  let cursor = start + 1;
+  while (cursor < value.length) {
+    if (value[cursor] === "\\") {
+      cursor += 2;
+      continue;
+    }
+    if (value[cursor] === quote) return {end: cursor + 1};
+    if (value[cursor] === "\n" || value[cursor] === "\r") return {end: cursor};
+    cursor += 1;
+  }
+  return {end: value.length};
+}
+
+function readTemplateSource(value, start) {
+  let cursor = start + 1;
+  while (cursor < value.length) {
+    if (value[cursor] === "\\") {
+      cursor += 2;
+      continue;
+    }
+    if (value[cursor] === "`") return {end: cursor + 1};
+    cursor += 1;
+  }
+  return {end: value.length};
+}
+
+function readRegexSource(value, start) {
+  let cursor = start + 1;
+  let inClass = false;
+  let escaped = false;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    if (escaped) {
+      escaped = false;
+      cursor += 1;
+      continue;
+    }
+    if (character === "\\") {
+      escaped = true;
+      cursor += 1;
+      continue;
+    }
+    if (character === "\n" || character === "\r") return null;
+    if (character === "[") {
+      inClass = true;
+      cursor += 1;
+      continue;
+    }
+    if (character === "]" && inClass) {
+      inClass = false;
+      cursor += 1;
+      continue;
+    }
+    if (character === "/" && !inClass) {
+      const body = value.slice(start + 1, cursor);
+      let flagEnd = cursor + 1;
+      while (flagEnd < value.length && /[A-Za-z]/u.test(value[flagEnd])) flagEnd += 1;
+      const flags = value.slice(cursor + 1, flagEnd);
+      try {
+        // Constructor parsing validates the body/flag grammar without ever
+        // executing the expression represented by this literal.
+        new RegExp(body, flags);
+      } catch {
+        return null;
+      }
+      return {end: flagEnd, body};
+    }
+    cursor += 1;
+  }
+  return null;
+}
+
+function decodeRegexEscape(body, cursor) {
+  const next = body[cursor + 1];
+  if (next === undefined) return {text: "", end: cursor + 1};
+  if (next === "x" && /^[0-9a-f]{2}$/iu.test(body.slice(cursor + 2, cursor + 4))) {
+    return {text: String.fromCharCode(Number.parseInt(body.slice(cursor + 2, cursor + 4), 16)), end: cursor + 4};
+  }
+  if (next === "u") {
+    const brace = body[cursor + 2] === "{";
+    const close = brace ? body.indexOf("}", cursor + 3) : -1;
+    const digits = brace ? body.slice(cursor + 3, close < 0 ? body.length : close) : body.slice(cursor + 2, cursor + 6);
+    if (digits.length > 0 && /^[0-9a-f]+$/iu.test(digits) && (!brace || close >= 0)) {
+      try {
+        return {text: String.fromCodePoint(Number.parseInt(digits, 16)), end: brace ? close + 1 : cursor + 6};
+      } catch {
+        return {text: " ", end: brace ? close + 1 : cursor + 6};
+      }
+    }
+  }
+  if (regexMetaEscapes.has(next) || /[0-9]/u.test(next)) return {text: " ", end: cursor + 2};
+  if (next === "c" && body[cursor + 2]) return {text: " ", end: cursor + 3};
+  // Escaped punctuation is a literal in a regex pattern. In particular,
+  // escaped slash and dot are needed to retain concrete path values.
+  return {text: next, end: cursor + 2};
+}
+
+function regexLiteralText(body) {
+  let output = "";
+  let cursor = 0;
+  while (cursor < body.length) {
+    const character = body[cursor];
+    if (character === "\\") {
+      const decoded = decodeRegexEscape(body, cursor);
+      output += decoded.text;
+      cursor = decoded.end;
+      continue;
+    }
+    if (character === "[") {
+      let end = cursor + 1;
+      let escaped = false;
+      while (end < body.length) {
+        if (!escaped && body[end] === "]") {
+          end += 1;
+          break;
+        }
+        if (!escaped && body[end] === "\\") escaped = true;
+        else escaped = false;
+        end += 1;
+      }
+      // A class describes a set of possible characters, not one concrete
+      // username. Leave a separator so surrounding literals cannot form one.
+      output += " ";
+      cursor = end;
+      continue;
+    }
+    if (character === "|" || character === "." || character === "^" || character === "$" || character === "*" || character === "+" || character === "?" || character === "{") {
+      output += " ";
+      if (character === "{") {
+        const close = body.indexOf("}", cursor + 1);
+        cursor = close < 0 ? cursor + 1 : close + 1;
+      } else {
+        cursor += 1;
+      }
+      continue;
+    }
+    if (character === "}" || character === ")" || character === "(" || character === ":") {
+      cursor += 1;
+      continue;
+    }
+    output += character;
+    cursor += 1;
+  }
+  return output;
+}
+
+function normalizeJavascriptRegexLiterals(value) {
+  let output = "";
+  let cursor = 0;
+  let previous = null;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    if (character === "\"" || character === "'") {
+      const token = readQuotedSource(value, cursor, character);
+      output += value.slice(cursor, token.end);
+      cursor = token.end;
+      previous = {kind: "literal", value: "string"};
+      continue;
+    }
+    if (character === "`") {
+      const token = readTemplateSource(value, cursor);
+      output += value.slice(cursor, token.end);
+      cursor = token.end;
+      previous = {kind: "literal", value: "template"};
+      continue;
+    }
+    if (character === "/" && value[cursor + 1] === "/") {
+      const newline = value.indexOf("\n", cursor + 2);
+      const end = newline < 0 ? value.length : newline;
+      output += value.slice(cursor, end);
+      cursor = end;
+      continue;
+    }
+    if (character === "/" && value[cursor + 1] === "*") {
+      const close = value.indexOf("*/", cursor + 2);
+      const end = close < 0 ? value.length : close + 2;
+      output += value.slice(cursor, end);
+      cursor = end;
+      continue;
+    }
+    if (character === "/" && canStartRegex(previous)) {
+      const literal = readRegexSource(value, cursor);
+      if (literal) {
+        output += regexLiteralText(literal.body);
+        cursor = literal.end;
+        previous = {kind: "literal", value: "regex"};
+        continue;
+      }
+    }
+    if (/[A-Za-z_$]/u.test(character)) {
+      let end = cursor + 1;
+      while (end < value.length && /[A-Za-z0-9_$]/u.test(value[end])) end += 1;
+      const word = value.slice(cursor, end);
+      output += word;
+      cursor = end;
+      previous = {kind: "word", value: word};
+      continue;
+    }
+    if (/[0-9]/u.test(character)) {
+      let end = cursor + 1;
+      while (end < value.length && /[A-Za-z0-9_.]/u.test(value[end])) end += 1;
+      output += value.slice(cursor, end);
+      cursor = end;
+      previous = {kind: "literal", value: "number"};
+      continue;
+    }
+    if (character === "+" && value[cursor + 1] === "+" || character === "-" && value[cursor + 1] === "-") {
+      output += value.slice(cursor, cursor + 2);
+      cursor += 2;
+      previous = {kind: "literal", value: "update"};
+      continue;
+    }
+    output += character;
+    cursor += 1;
+    previous = {kind: "punctuation", value: character};
+  }
+  return output;
+}
+
 function decodeBase64(value) {
   try {
     return Buffer.from(value, "base64").toString("utf8");
@@ -154,6 +394,10 @@ export function normalizePrivacyText(content) {
       }
       return line;
     }).join("\n");
+    // Run the regex projection once. Running it on later passes would mistake
+    // a projected concrete path for a second regex
+    // literal and erase the evidence that the first pass intentionally kept.
+    if (pass === 0) normalized = normalizeJavascriptRegexLiterals(normalized);
     const protectedPatternJoins = [];
     normalized = normalized.replace(
       /(\b(?:legacyName|controlDirectory|agentDirectory|localUserPath|privateKeyMarker)\s*=\s*)(\[[^\n]*?\]\s*\.join\(\s*["'][^"']*["']\s*\))/gu,
