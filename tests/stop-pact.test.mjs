@@ -17,7 +17,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +30,7 @@ import {
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "../tools/stop-pact/mode.mjs";
 import { osascriptArgs } from "../tools/stop-pact/notify.mjs";
 import { checkResponseText } from "../tools/stop-pact/response-style-hook.mjs";
-import { buildHookResponse, readZeroSection } from "../scripts/agents-zero-hook.mjs";
+import { buildHookResponse, readOwnerOutputContract, readZeroSection } from "../scripts/agents-zero-hook.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const HOOK = join(HERE, "..", "tools", "stop-pact", "hook.mjs");
@@ -60,6 +60,52 @@ test("STORY-331 re-reads the platform AGENTS section on every prompt", () => {
     assert.equal(readZeroSection(dir).includes("## 一、平台身份"), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("EPIC135: Owner contract pointers resolve structurally and fail closed", () => {
+  const root = mkdtempSync(join(tmpdir(), "agents-owner-pointer-"));
+  const external = mkdtempSync(join(tmpdir(), "agents-owner-contract-"));
+  try {
+    mkdirSync(join(root, "platform-docs"));
+    const contract = "# owner contract\n";
+    writeFileSync(join(root, "platform-docs", "owner-output-contract.md"), contract);
+    writeFileSync(join(root, "AGENTS.md"), "- Owner-facing response: read `platform-docs/owner-output-contract.md`.\n");
+    const relative = readOwnerOutputContract(root);
+    assert.equal(relative.ok, true);
+    assert.equal(relative.text, contract);
+    assert.equal(relative.path, join(root, "platform-docs", "owner-output-contract.md"));
+
+    const absolutePath = join(external, "owner-output-contract.md");
+    writeFileSync(absolutePath, "# external owner contract\n");
+    writeFileSync(join(root, "AGENTS.md"), `- Owner-facing response: read \`${absolutePath}\`.\n`);
+    const absolute = readOwnerOutputContract(root);
+    assert.equal(absolute.ok, true);
+    assert.equal(absolute.path, absolutePath);
+
+    writeFileSync(join(root, "AGENTS.md"), "- Owner-facing response: read `platform-docs/owner-output-contract.md`.\n- Also read `platform-docs/owner-output-contract.md` here.\n");
+    assert.equal(readOwnerOutputContract(root).ok, true, "repeated reference to one pointer is not ambiguous");
+
+    mkdirSync(join(external, "second"));
+    const secondAbsolutePath = join(external, "second", "owner-output-contract.md");
+    writeFileSync(secondAbsolutePath, "# second owner contract\n");
+    writeFileSync(join(root, "AGENTS.md"), `- Owner-facing response: read \`${absolutePath}\`.\n- Owner-facing response: read \`${secondAbsolutePath}\`.\n`);
+    assert.equal(readOwnerOutputContract(root).reasonCode, "OWNER_OUTPUT_POINTER_AMBIGUOUS");
+
+    writeFileSync(join(root, "AGENTS.md"), "- Owner-facing response: read `missing/owner-output-contract.md`.\n");
+    assert.equal(readOwnerOutputContract(root).reasonCode, "OWNER_OUTPUT_POINTER_INVALID");
+
+    writeFileSync(join(root, "AGENTS.md"), "- Owner-facing response: read `platform-docs/owner-output-contract.md`.\n");
+    rmSync(join(root, "platform-docs", "owner-output-contract.md"));
+    assert.equal(readOwnerOutputContract(root).reasonCode, "OWNER_OUTPUT_POINTER_BROKEN");
+
+    writeFileSync(join(root, "AGENTS.md"), "- no Owner pointer\n");
+    assert.equal(readOwnerOutputContract(root).reasonCode, "OWNER_OUTPUT_POINTER_MISSING");
+    assert.equal(buildHookResponse({ hook_event_name: "UserPromptSubmit", audience: "internal", request: { purpose: "owner-output" } }, { root }).hookSpecificOutput.additionalContext, "");
+    assert.equal(buildHookResponse({ hook_event_name: "UserPromptSubmit", audience: "unknown", request: { purpose: "owner-output" } }, { root }).hookSpecificOutput.additionalContext, "");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(external, { recursive: true, force: true });
   }
 });
 

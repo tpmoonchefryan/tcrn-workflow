@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
 // TCRN-CROSS-STORY-421 — the sole executable formal-batch consumer.
 //
 // Hooks only qualify or notify.  This entry acquires fresh native work, process,

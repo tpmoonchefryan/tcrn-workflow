@@ -18,6 +18,7 @@ import test from "node:test";
 
 import { P1_SEQUENCE } from "../scripts/p1-sequence.mjs";
 import { evaluateProofBudget, isNonBlockingProofBudgetWarning } from "../scripts/lib/proof-budget.mjs";
+import { budgetWarningNotices, hasWarningOrError, onlyBudgetWarning } from "../scripts/lib/push-gate-output.mjs";
 import { executeQualifiedBatch } from "../scripts/final-gate-plan.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -125,6 +126,37 @@ test("EPIC135: only the structured budget notice is non-blocking", () => {
     reasonCode: "OTHER_WARNING",
     blocking: false,
   }), false);
+});
+
+test("EPIC135: push-gate budget exemption requires one terminal receipt and no other diagnostics", () => {
+  const boundary = evaluateProofBudget({ proofLines: 24_001, productLines: 10_000, policy: {
+    frozenRatio: 1.5888,
+    warningRatio: 2.4,
+    hardRatio: 2.5,
+    exceptions: [{ id: "fixture", recordedAt: "2026-09-14", ratio: 2.5, rationale: "A bounded fixture threshold for parser coverage." }],
+  } });
+  const budget = { command: "budget", ...boundary };
+  const receipt = (notices) => JSON.stringify({ ok: true, reasonCode: "P1_VERIFIED", notices });
+  const budgetOnly = receipt([budget]);
+  assert.equal(budgetWarningNotices(budgetOnly, "verify:p1").length, 1);
+  assert.equal(onlyBudgetWarning(budgetOnly, "verify:p1"), true);
+  assert.equal(hasWarningOrError(budgetOnly, "verify:p1"), false);
+
+  const sameReceipt = receipt([budget, { command: "typecheck", severity: "warning", reasonCode: "OTHER_WARNING", blocking: true }]);
+  assert.equal(onlyBudgetWarning(sameReceipt, "verify:p1"), false);
+  assert.equal(hasWarningOrError(sameReceipt, "verify:p1"), true);
+
+  const independentLine = `OTHER_WARNING: compiler notice\n${budgetOnly}`;
+  assert.equal(onlyBudgetWarning(independentLine, "verify:p1"), false);
+  assert.equal(hasWarningOrError(independentLine, "verify:p1"), true);
+
+  const otherFirst = `${receipt([{ command: "typecheck", severity: "warning", reasonCode: "OTHER_WARNING" }])}\n${budgetOnly}`;
+  const otherLast = `${budgetOnly}\n${receipt([{ command: "typecheck", severity: "warning", reasonCode: "OTHER_WARNING" }])}`;
+  for (const output of [otherFirst, otherLast]) {
+    assert.deepEqual(budgetWarningNotices(output, "verify:p1"), []);
+    assert.equal(onlyBudgetWarning(output, "verify:p1"), false);
+    assert.equal(hasWarningOrError(output, "verify:p1"), true);
+  }
 });
 
 test("EPIC135: formal batch aggregation preserves budget notices but blocks other warnings", async () => {

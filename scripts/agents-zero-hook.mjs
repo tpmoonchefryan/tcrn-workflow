@@ -8,13 +8,14 @@
 // cannot prevent the host from accepting a prompt.
 
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const DEFAULT_CONTAINER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 export const AGENTS_FILE_NAME = "AGENTS.md";
 export const ZERO_SECTION_HEADING = "## 零、输出行文（硬约束）";
 export const OWNER_CONTRACT_RELATIVE_PATH = "platform-docs/owner-output-contract.md";
+const OWNER_CONTRACT_FILE_NAME = "owner-output-contract.md";
 export const OWNER_AUDIENCE = "owner";
 export const OWNER_ON_DEMAND_EVENTS = Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "SubagentStart"]);
 export const OWNER_ON_DEMAND_PURPOSES = Object.freeze(["owner-output", "owner-review", "owner-response", "owner-facing", "presentation"]);
@@ -68,17 +69,70 @@ export function shouldLoadOwnerContract(input = {}) {
 
 /** Resolve the Owner contract through a pointer in the resident index. */
 export function readOwnerOutputContract(root = containerRoot()) {
+  const missing = (path = OWNER_CONTRACT_RELATIVE_PATH, reasonCode = "OWNER_OUTPUT_POINTER_MISSING") => ({
+    ok: false,
+    reasonCode,
+    path,
+    text: "",
+  });
+  const pointerCandidates = (index) => {
+    const candidates = new Map();
+    let malformed = false;
+    const add = (value) => {
+      if (typeof value !== "string" || value.length === 0) return;
+      const relativePath = value.replace(/^\.\//u, "");
+      if (relativePath === OWNER_CONTRACT_RELATIVE_PATH && !isAbsolute(value)) {
+        candidates.set(`root-relative:${relativePath}`, { path: relativePath, absolute: false });
+      } else if (isAbsolute(value)) {
+        candidates.set(`absolute:${value}`, { path: value, absolute: true });
+      }
+    };
+    const inspect = (fragment) => {
+      const marker = fragment.includes(OWNER_CONTRACT_RELATIVE_PATH)
+        ? OWNER_CONTRACT_RELATIVE_PATH
+        : fragment.includes(OWNER_CONTRACT_FILE_NAME) ? OWNER_CONTRACT_FILE_NAME : null;
+      if (marker === null) return;
+      const end = fragment.indexOf(marker);
+      if (end < 0) return;
+      const candidate = fragment.slice(0, end + marker.length)
+        .replace(/^[=:]+/u, "")
+        .replace(/[.,;!?]+$/u, "");
+      add(candidate);
+      const normalized = candidate.replace(/^\.\//u, "");
+      if (marker === OWNER_CONTRACT_FILE_NAME && normalized !== OWNER_CONTRACT_RELATIVE_PATH && !isAbsolute(candidate)) malformed = true;
+    };
+    for (const line of index.split(/\r?\n/u)) {
+      if (!line.includes(OWNER_CONTRACT_RELATIVE_PATH) && !line.includes(OWNER_CONTRACT_FILE_NAME)) continue;
+      // A pointer is a path-shaped value, not arbitrary prose. Prefer quoted
+      // or code-span fragments, then inspect the whitespace-delimited form.
+      for (const match of line.matchAll(/`([^`]*?)`|"([^"]*?)"|'([^']*?)'/gu)) {
+        inspect(match[1] ?? match[2] ?? match[3] ?? "");
+      }
+      for (const token of line.split(/[\s`"'()[\]{}<>|]+/u)) inspect(token);
+    }
+    return { candidates: [...candidates.values()], malformed };
+  };
   try {
     const indexPath = resolve(root, AGENTS_FILE_NAME);
     const index = readFileSync(indexPath, "utf8");
-    const pointer = index.split(/\r?\n/u).find((line) => line.includes(OWNER_CONTRACT_RELATIVE_PATH) || /owner-output-contract\.md/u.test(line));
-    if (!pointer) return { ok: false, reasonCode: "OWNER_OUTPUT_POINTER_MISSING", path: OWNER_CONTRACT_RELATIVE_PATH, text: "" };
-    const absolute = pointer.includes("/Users/") ? pointer.match(/\/Users\/[^\s)`]+owner-output-contract\.md/u)?.[0] : resolve(root, OWNER_CONTRACT_RELATIVE_PATH);
-    if (!absolute) return { ok: false, reasonCode: "OWNER_OUTPUT_POINTER_MISSING", path: OWNER_CONTRACT_RELATIVE_PATH, text: "" };
-    const text = readFileSync(absolute, "utf8");
-    return text.length > 0 ? { ok: true, reasonCode: "OWNER_OUTPUT_CONTRACT_READY", path: absolute, text } : { ok: false, reasonCode: "OWNER_OUTPUT_POINTER_MISSING", path: absolute, text: "" };
+    const lines = index.split(/\r?\n/u);
+    const mentions = lines.filter((line) => line.includes(OWNER_CONTRACT_RELATIVE_PATH) || line.includes(OWNER_CONTRACT_FILE_NAME));
+    if (mentions.length === 0) return missing();
+    const parsed = pointerCandidates(index);
+    const candidates = parsed.candidates;
+    if (parsed.malformed || candidates.length === 0) return missing(OWNER_CONTRACT_RELATIVE_PATH, "OWNER_OUTPUT_POINTER_INVALID");
+    if (candidates.length !== 1) return missing(OWNER_CONTRACT_RELATIVE_PATH, "OWNER_OUTPUT_POINTER_AMBIGUOUS");
+    const pointer = candidates[0];
+    const absolute = pointer.absolute ? resolve(pointer.path) : resolve(root, pointer.path);
+    let text;
+    try {
+      text = readFileSync(absolute, "utf8");
+    } catch {
+      return missing(absolute, "OWNER_OUTPUT_POINTER_BROKEN");
+    }
+    return text.length > 0 ? { ok: true, reasonCode: "OWNER_OUTPUT_CONTRACT_READY", path: absolute, text } : missing(absolute, "OWNER_OUTPUT_POINTER_BROKEN");
   } catch {
-    return { ok: false, reasonCode: "OWNER_OUTPUT_POINTER_MISSING", path: OWNER_CONTRACT_RELATIVE_PATH, text: "" };
+    return missing();
   }
 }
 

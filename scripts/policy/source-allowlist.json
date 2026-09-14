@@ -344,6 +344,7 @@
     "scripts/lib/proof-budget.mjs",
     "scripts/lib/protocol-proof.mjs",
     "scripts/lib/push-gate-children.mjs",
+    "scripts/lib/push-gate-output.mjs",
     "scripts/lib/rc1-inputs.mjs",
     "scripts/lib/release-tag-gate.mjs",
     "scripts/lib/release-trust.mjs",
