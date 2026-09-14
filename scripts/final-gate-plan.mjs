@@ -2393,7 +2393,7 @@ export async function executeOperationalBatch(input = {}, runner, { readNative =
       }
       return refreshed;
   };
-  const result = await executeQualifiedBatch({ qualification }, runner, { recheck: refresh });
+  const result = await executeQualifiedBatch({ qualification, workspace: input.workspace }, runner, { recheck: refresh });
   return { ...result, schemaVersion: OPERATIONAL_BATCH_VERSION };
 }
 
