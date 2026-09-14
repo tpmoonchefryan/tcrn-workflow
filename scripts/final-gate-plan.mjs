@@ -2275,6 +2275,7 @@ function qualificationRequest(input) {
   const expected = qualification.binding?.expected ?? {};
   const actual = qualification.binding?.actual ?? expected;
   return {
+    workspace: input.workspace ?? qualification.workspace,
     ...expected,
     currentBinding: actual,
     tasks: qualification.tasks,
