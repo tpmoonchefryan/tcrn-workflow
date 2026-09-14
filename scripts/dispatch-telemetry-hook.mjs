@@ -108,6 +108,37 @@ function inputField(input, names, env, envName, maximum = 256, { scope = "all", 
   return boundedText(firstDefined(...values), maximum, { preserveUnknown });
 }
 
+function observedModelObservation(input, env) {
+  const explicit = [];
+  const generic = [];
+  for (const scope of observationScopes(input)) {
+    for (const name of ["observed_model", "observedModel"]) explicit.push(scope[name]);
+    for (const name of ["model", "model_name", "modelName"]) generic.push(scope[name]);
+  }
+  explicit.push(env?.TCRN_TELEMETRY_OBSERVED_MODEL, env?.TCRN_OBSERVED_MODEL);
+  const bounded = (values) => values
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => boundedText(value, 256, { preserveUnknown: true }))
+    .filter((value) => value !== null);
+  const explicitValues = bounded(explicit);
+  const genericValues = bounded(generic);
+  const explicitKnown = [...new Set(explicitValues.filter((value) => !unknownText(value)))];
+  const genericKnown = [...new Set(genericValues.filter((value) => !unknownText(value)))];
+  if (explicitKnown.length > 1 || genericKnown.length > 1 || (explicitKnown.length > 0 && genericKnown.length > 0 && explicitKnown[0] !== genericKnown[0])) {
+    return {
+      value: null,
+      status: "ambiguous",
+      candidates: { explicit: explicitValues, generic: genericValues },
+    };
+  }
+  const value = explicitValues[0] ?? genericValues[0] ?? null;
+  return {
+    value,
+    status: value === null || unknownText(value) ? "unknown" : "available",
+    candidates: { explicit: explicitValues, generic: genericValues },
+  };
+}
+
 function numeric(value) {
   if (typeof value === "string" && value.trim().length > 0) value = Number(value);
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -151,8 +182,41 @@ function sourceEvidence(input, env) {
 }
 
 function sourceEvidenceStatus(evidence) {
-  if (!Array.isArray(evidence) || evidence.length === 0) return "unknown";
-  return evidence.some((entry) => isRecord(entry) && (entry.status === "unknown" || entry.digest === "unknown")) ? "unknown" : "available";
+  return sourceEvidenceSummary(evidence).status;
+}
+
+function unknownText(value) {
+  return typeof value === "string" && UNKNOWN_VALUES.includes(value.trim().toLowerCase());
+}
+
+// Availability answers whether a usable locator survived the bounded hook
+// envelope.  Verifiability is deliberately separate: a locator without a
+// digest, an explicit unknown string/object, or an unknown status cannot be
+// promoted to verified lifecycle evidence.
+function sourceEvidenceSummary(evidence) {
+  if (!Array.isArray(evidence) || evidence.length === 0) return { availability: "unknown", verifiability: "unknown", status: "unknown" };
+  let locatorAvailable = true;
+  let verified = true;
+  for (const entry of evidence) {
+    if (typeof entry === "string") {
+      if (unknownText(entry) || entry.trim().length === 0) locatorAvailable = false;
+      verified = false;
+      continue;
+    }
+    if (!isRecord(entry)) {
+      locatorAvailable = false;
+      verified = false;
+      continue;
+    }
+    const locator = firstDefined(entry.locator, entry.path, entry.ref);
+    const digest = firstDefined(entry.digest, entry.sha256, entry.sourceDigest);
+    const status = firstDefined(entry.status, entry.evidenceStatus);
+    if (typeof locator !== "string" || locator.length === 0 || unknownText(locator)) locatorAvailable = false;
+    if (unknownText(digest) || typeof digest !== "string" || !/^[a-f0-9]{64}$/u.test(digest) || status === "unknown") verified = false;
+  }
+  const availability = locatorAvailable ? "available" : "unknown";
+  const verifiability = verified ? "verified" : "unknown";
+  return { availability, verifiability, status: verified ? "available" : "unknown" };
 }
 
 function usageFrom(input, env) {
@@ -208,10 +272,10 @@ async function telemetryRoot(input, env, containerRoot) {
 
 function payloadFor(input, env, kind) {
   const requestedModel = inputField(input, ["requested_model", "requestedModel", "model_requested"], env, ["TCRN_TELEMETRY_REQUESTED_MODEL", "TCRN_DISPATCH_REQUESTED_MODEL"]);
-  const observedModel = kind === "subagent-stop"
-    ? inputField(input, ["model", "model_name", "modelName", "observed_model", "observedModel"], env, ["TCRN_TELEMETRY_OBSERVED_MODEL", "TCRN_OBSERVED_MODEL"], 256, { scope: "observation", preserveUnknown: true })
-    : null;
+  const modelObservation = kind === "subagent-stop" ? observedModelObservation(input, env) : { value: null, status: "unknown", candidates: { explicit: [], generic: [] } };
+  const observedModel = modelObservation.value;
   const lifecycleEvidence = sourceEvidence(input, env);
+  const evidenceSummary = sourceEvidenceSummary(lifecycleEvidence);
   const configuredHost = boundedText(env?.TCRN_TELEMETRY_HOST ?? env?.TCRN_HOST, 64);
   const host = configuredHost ?? inputField(input, ["host", "host_name", "hostName"], env, [], 64) ?? "unknown-host";
   const event = kind === "subagent-start" ? "SubagentStart" : "SubagentStop";
@@ -225,6 +289,8 @@ function payloadFor(input, env, kind) {
     resolvedTier: inputField(input, ["resolved_tier", "resolvedTier", "actual_tier", "actualTier"], env, ["TCRN_TELEMETRY_RESOLVED_TIER", "TCRN_DISPATCH_RESOLVED_TIER"], 128),
     requestedModel,
     observedModel,
+    observedModelStatus: modelObservation.status,
+    observedModelCandidates: modelObservation.candidates,
     usage: kind === "subagent-stop" ? usageFrom(input, env) : null,
     // Lifecycle fields are explicit host facts.  Missing fields remain null;
     // in particular, an agent/session id is never inferred from a prompt or
@@ -241,6 +307,8 @@ function payloadFor(input, env, kind) {
     sameTaskRunning: booleanValue(input, env, ["same_task_running", "sameTaskRunning", "same-task-running"], ["TCRN_SAME_TASK_RUNNING", "TCRN_DISPATCH_SAME_TASK_RUNNING"]),
     sourceEvidence: lifecycleEvidence,
     sourceEvidenceStatus: sourceEvidenceStatus(lifecycleEvidence),
+    sourceEvidenceAvailability: evidenceSummary.availability,
+    sourceEvidenceVerifiability: evidenceSummary.verifiability,
     source: boundedUtf8(`hook:${host}:${event}`, 128),
     availability: "available",
   };

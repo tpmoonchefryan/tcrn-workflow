@@ -214,6 +214,50 @@ test("STORY-424 R02: declaration-only nested stop telemetry never becomes an obs
   assert.equal(observed.payload.forkTurns, "none");
 });
 
+test("STORY-424 R02: unknown source evidence never masquerades as available or verified", async (t) => {
+  const root = await scratch("tcrn-telemetry-unknown-evidence-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await runTelemetryHook({
+    hook_event_name: "SubagentStop",
+    session_id: "unknown-string",
+    sourceEvidence: ["unknown"],
+  }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_AT: INSTANT(16) } });
+  await runTelemetryHook({
+    hook_event_name: "SubagentStop",
+    session_id: "missing-digest",
+    sourceEvidence: [{ kind: "turn_context", locator: "present-but-unhashed" }],
+  }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_AT: INSTANT(17) } });
+  const records = (await readTelemetryRecords(root, { limit: 10 })).records;
+  const unknownString = records.find((record) => record.session === "unknown-string");
+  const missingDigest = records.find((record) => record.session === "missing-digest");
+  assert.equal(unknownString.payload.sourceEvidenceStatus, "unknown");
+  assert.equal(unknownString.payload.sourceEvidenceAvailability, "unknown");
+  assert.equal(unknownString.payload.sourceEvidenceVerifiability, "unknown");
+  assert.equal(missingDigest.payload.sourceEvidenceStatus, "unknown");
+  assert.equal(missingDigest.payload.sourceEvidenceAvailability, "available");
+  assert.equal(missingDigest.payload.sourceEvidenceVerifiability, "unknown");
+});
+
+test("STORY-424 R02: conflicting explicit and generic model observations remain ambiguous", async (t) => {
+  const root = await scratch("tcrn-telemetry-model-ambiguity-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await runTelemetryHook({
+    hook_event_name: "SubagentStop",
+    session_id: "model-conflict",
+    model: "declared-model",
+    observedModel: "actual-model",
+    requestedModel: "requested-model",
+  }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_AT: INSTANT(18) } });
+  const record = (await readTelemetryRecords(root, { limit: 10 })).records[0];
+  assert.equal(record.payload.observedModel, null);
+  assert.equal(record.payload.observedModelStatus, "ambiguous");
+  assert.deepEqual(record.payload.observedModelCandidates, {
+    explicit: ["actual-model"],
+    generic: ["declared-model"],
+  });
+  assert.equal(record.payload.requestedModel, "requested-model");
+});
+
 test("STORY-393: the dispatch hook cannot mint an observation checkpoint from external input", async (t) => {
   const root = await scratch("tcrn-telemetry-checkpoint-hook-");
   t.after(() => rm(root, { recursive: true, force: true }));
