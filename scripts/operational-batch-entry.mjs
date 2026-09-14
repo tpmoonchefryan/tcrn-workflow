@@ -42,6 +42,17 @@ function getProductionReceiptAuthority() {
   return productionReceiptAuthority;
 }
 
+// The operator bridge is deliberately a code-owned load/create boundary.  A
+// CLI request supplies only the sealed source path; this function creates the
+// fresh opaque authority and receipt view through the validated loader.
+function createStageCompletionAuthorityFromSource(source) {
+  return loadStageCompletionSource(source);
+}
+
+function loadGateReceiptStore(source) {
+  return createStageCompletionAuthorityFromSource(source);
+}
+
 const text = (value) => typeof value === "string" ? value : "";
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const stableJson = (value) => JSON.stringify(value, (_key, child) => {
@@ -416,7 +427,7 @@ export async function executeProductionBatch(request = {}) {
   const completionSource = boundRequest.stageCompletionSource ?? boundRequest.implementationCompletionSource ?? boundRequest.completionSource;
   let stageBridge;
   try {
-    stageBridge = loadStageCompletionSource(completionSource);
+    stageBridge = loadGateReceiptStore(completionSource);
   } catch (error) {
     return {
       schemaVersion: OPERATIONAL_BATCH_ENTRY_VERSION,
