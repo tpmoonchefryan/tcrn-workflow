@@ -168,6 +168,15 @@ test("STORY-424: same-task clarification is explicit and does not restart the in
   const clarified = validateAgentLifecycleEvidence(clarificationInput, clarificationInput);
   assert.equal(clarified.ok, true, JSON.stringify(clarified.problems));
   assert.equal(clarified.status, "green");
+  const minimalClarification = validateAgentLifecycle({
+    phase: "clarification",
+    role: "implementation",
+    pack: "EPIC135",
+    newInstance: false,
+    sameTaskRunning: true,
+    sourceEvidence: [{ kind: "send_message", locator: "parent-rollout#clarification", digest: "2".repeat(64) }],
+  });
+  assert.equal(minimalClarification.ok, true, "clarification does not require a second model/effort declaration");
   const ambiguous = validateAgentLifecycle({ ...clarificationInput, sameTaskRunning: undefined });
   assert.ok(ambiguous.problems.some((problem) => problem.code === "DISPATCH_LIFECYCLE_CLARIFICATION_BINDING_REQUIRED"));
   const restart = validateAgentLifecycle({ ...clarificationInput, newInstance: true });

@@ -205,9 +205,18 @@ export function validateAgentLifecycle(value) {
   const pack = lifecycleField(value, ["pack", "packId"]);
   const model = lifecycleField(value, ["model", "requestedModel"]);
   const effort = lifecycleField(value, ["effort", "reasoningEffort"]);
-  for (const [field, candidate] of [["role", role], ["pack", pack], ["model", model], ["effort", effort]]) {
+  const requiredTextFields = AGENT_LIFECYCLE_FRESH_PHASES.includes(phase) || !AGENT_LIFECYCLE_PHASES.includes(phase)
+    ? [["role", role], ["pack", pack], ["model", model], ["effort", effort]]
+    : [["role", role], ["pack", pack]];
+  for (const [field, candidate] of requiredTextFields) {
     const problem = lifecycleText(candidate, `agentLifecycle.${field}`);
     if (problem) problems.push(problem);
+  }
+  for (const [field, candidate] of [["model", model], ["effort", effort]]) {
+    if (!AGENT_LIFECYCLE_FRESH_PHASES.includes(phase) && AGENT_LIFECYCLE_PHASES.includes(phase) && candidate !== undefined) {
+      const problem = lifecycleText(candidate, `agentLifecycle.${field}`);
+      if (problem) problems.push(problem);
+    }
   }
   const newInstance = lifecycleField(value, ["newInstance", "new-instance"]);
   const forkTurns = lifecycleField(value, ["forkTurns", "fork_turns", "fork-turns"]);
