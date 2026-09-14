@@ -90,6 +90,7 @@ async function fixture(context) {
     "tests/codex-stop-pact.test.mjs": "// route fixture\n",
     "scripts/lib/proof-artifacts.mjs": "// route fixture\n",
     "scripts/lib/p8-workflow-rc.mjs": "// route fixture\n",
+    "scripts/lib/push-gate-output.mjs": "// route fixture\n",
     "docs/releases/0.1.0-rc.2.md": "# historical release fixture\n",
     "docs/releases/0.1.0-rc.3.md": "# historical release fixture\n",
     "docs/releases/0.1.0-rc.4.md": "# release fixture\n",
