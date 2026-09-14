@@ -54,6 +54,7 @@
     "verify:p8": "node scripts/task.mjs p8",
     "verify:portal": "node scripts/verify-portal.mjs",
     "verify:privacy": "node scripts/task.mjs privacy",
+    "verify:privacy-staged": "node scripts/verify-staged-privacy.mjs",
     "verify:source": "node scripts/task.mjs source",
     "verify:budget": "node scripts/task.mjs budget",
     "verify:links": "node scripts/task.mjs links",

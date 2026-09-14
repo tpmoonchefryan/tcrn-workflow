@@ -410,6 +410,7 @@
     "scripts/verify-portal.mjs",
     "scripts/verify-release-trust.mjs",
     "scripts/verify-s6.mjs",
+    "scripts/verify-staged-privacy.mjs",
     "specs/actor-attestation-v1.md",
     "specs/adapter-baseline-v1.md",
     "specs/aos-requirements-v1.md",

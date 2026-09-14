@@ -250,6 +250,22 @@ test("private/raw identifiers and common secret families fail closed", () => {
   }
 });
 
+test("safe runtime construction keeps private URL and host boundaries red without rejecting public URLs", () => {
+  const privateHost = joinParts(["vm-aos", "internal"], ".");
+  const authenticated = joinParts(["https://service", ":", "secret", "@", privateHost, "/repo"], "");
+  const privateSsh = joinParts(["ssh", "://", privateHost, "/repo"], "");
+  const findings = scanPrivacyEntries([
+    { label: "runtime-authenticated", kind: "source", content: authenticated },
+    { label: "runtime-ssh", kind: "source", content: privateSsh },
+    { label: "runtime-host", kind: "source", content: privateHost },
+    { label: "public-url", kind: "source", content: joinParts(["https://example", ".invalid/docs"], "") },
+  ], { owner: publicIdentity.login });
+  assert.ok(findings.some((finding) => finding.startsWith("AUTHENTICATED_URL:source:runtime-authenticated")));
+  assert.ok(findings.some((finding) => finding.startsWith("PRIVATE_SSH_URL:source:runtime-ssh")));
+  assert.ok(findings.some((finding) => finding.startsWith("PRIVATE_HOSTNAME:source:runtime-host")));
+  assert.equal(findings.some((finding) => finding.includes("public-url")), false);
+});
+
 test("private values reconstructed by common obfuscation forms are normalized before scanning", () => {
   const token = ["fixture", "-private.invalid"].join("");
   const hex = [...token].map((character) => `\\x${character.charCodeAt(0).toString(16).padStart(2, "0")}`).join("");
@@ -369,4 +385,39 @@ test("regex literal projection preserves literal colons while removing group syn
       assert.ok(findings.some((finding) => finding.startsWith(`${reasonCode}:`)), `${label}: ${reasonCode}`);
     }
   }
+});
+
+test("staged privacy command scans index bytes before a commit and leaves history scope intact", async (context) => {
+  const root = await emptyFixtureRepository(context, "tcrn-privacy-staged-");
+  const checker = resolve(import.meta.dirname, "../scripts/verify-staged-privacy.mjs");
+  fixtureGit(root, ["remote", "add", "origin", "https://github.com/public-contributor/tcrn-workflow.git"]);
+  await writeFile(join(root, "fixture.txt"), "safe baseline\n");
+  fixtureGit(root, ["add", "fixture.txt"]);
+  fixtureGit(root, ["commit", "-q", "-m", "baseline"]);
+
+  const forbiddenHost = joinParts(["vm-aos", ".internal"], "");
+  const forbidden = joinParts(["https://service", ":", "secret", "@", forbiddenHost, "/repo"], "");
+  const forbiddenSsh = joinParts(["ssh", "://", forbiddenHost, "/repo"], "");
+  await writeFile(join(root, "fixture.txt"), `${forbidden}\n${forbiddenSsh}\n`);
+  fixtureGit(root, ["add", "fixture.txt"]);
+  const red = spawnSync(process.execPath, [checker], { cwd: root, encoding: "utf8", maxBuffer: fixtureMaximumBytes });
+  assert.equal(red.status, 1, red.stderr);
+  assert.equal(red.stderr, "");
+  const redReport = JSON.parse(red.stdout);
+  assert.equal(redReport.reasonCode, "PRIVACY_STAGED_FINDINGS");
+  assert.ok(redReport.findings.some((finding) => finding.startsWith("AUTHENTICATED_URL:")));
+  assert.ok(redReport.findings.some((finding) => finding.startsWith("PRIVATE_SSH_URL:")));
+  assert.ok(redReport.findings.some((finding) => finding.startsWith("PRIVATE_HOSTNAME:")));
+  assert.equal(redReport.scope, "staged-index-increment-only");
+
+  await writeFile(join(root, "fixture.txt"), "safe staged bytes\n");
+  fixtureGit(root, ["add", "fixture.txt"]);
+  const green = spawnSync(process.execPath, [checker], { cwd: root, encoding: "utf8", maxBuffer: fixtureMaximumBytes });
+  assert.equal(green.status, 0, green.stderr);
+  assert.equal(green.stderr, "");
+  const greenReport = JSON.parse(green.stdout);
+  assert.equal(greenReport.reasonCode, "PRIVACY_STAGED_CLEAN");
+  assert.equal(greenReport.stagedPaths, 1);
+  assert.equal(greenReport.objects[0].scanned, true);
+  assert.equal(greenReport.historicalScan, "preserved-by-pnpm-verify:privacy");
 });
