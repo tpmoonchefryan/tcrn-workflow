@@ -1654,9 +1654,12 @@ function implementationCompletionForTask(task, input, queueDigest) {
   if (receipt === null) return { complete: false, provided: true, receipt: null, reason: "implementation completion receipt is absent, forged, or unreadable" };
   const binding = batchBinding(input.expectedBinding ?? input.binding ?? input);
   const stage = batchString(input.stage ?? input.phase) ?? binding.stage;
+  const workspace = batchString(input.workspace);
+  const workspaceBindingRequired = input.operational === true || input.observationFresh === true || input.requireRuntimeObservation === true;
   const problems = [];
   if (receipt.series !== binding.series || receipt.pack !== binding.pack || receipt.stage !== stage) problems.push("series, Pack, or stage drifted");
   if (receipt.revision !== task.revision || receipt.scopeDigest !== task.scopeDigest) problems.push("work revision or scope drifted");
+  if (workspaceBindingRequired && (workspace === null || receipt.workspace !== workspace)) problems.push("workspace binding drifted");
   if (queueDigest !== null && receipt.queueDigest !== queueDigest) problems.push("queue digest drifted");
   if (receipt.agent === null || receipt.agent.length === 0) problems.push("real agent identity is missing");
   return problems.length === 0

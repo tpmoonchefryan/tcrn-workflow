@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -19,6 +19,7 @@ import {
   qualifyBatch,
   qualifyCodexStopBatch,
 } from "../tools/stop-pact/codex-executor.mjs";
+import { executeProductionBatch } from "../scripts/operational-batch-entry.mjs";
 import {
   buildPact,
   writePact,
@@ -310,6 +311,7 @@ test("STORY-421: batch qualification uses real work state, keeps hooks light, an
 
 test("EPIC135 closeout: active Stories need code-owned implementation completion receipts", () => {
   const binding = { series: "EPIC135", pack: "HC1-HC3-final-machine-closeout", stage: "candidate-final" };
+  const workspace = "workspace:qualifier";
   const candidate = { id: "candidate-final", digest: "tree-final" };
   const queueDigest = "queue-final";
   const tasks = [
@@ -322,6 +324,7 @@ test("EPIC135 closeout: active Stories need code-owned implementation completion
     workId: task.id,
     revision: task.revision,
     scopeDigest: task.scopeDigest,
+    workspace,
     candidate,
     queueDigest,
     agent: "agent:luna",
@@ -335,7 +338,7 @@ test("EPIC135 closeout: active Stories need code-owned implementation completion
     writes: { observed: true, digest: "writes-final", records: [] },
     candidate: { observed: true, stable: true, id: candidate.id, digest: candidate.digest, records: [] },
   };
-  const input = { ...binding, expectedBinding: binding, currentBinding: binding, trigger: "formal-batch-gate", tasks, candidate, queueDigest, currentQueueDigest: queueDigest, runtimeObserver, observationFresh: true, operational: true, requireRuntimeObservation: true, stageCompletionAuthority: authority, stageCompletionReceipts: receipts };
+  const input = { ...binding, workspace, expectedBinding: binding, currentBinding: binding, trigger: "formal-batch-gate", tasks, candidate, queueDigest, currentQueueDigest: queueDigest, runtimeObserver, observationFresh: true, operational: true, requireRuntimeObservation: true, stageCompletionAuthority: authority, stageCompletionReceipts: receipts };
   const eligible = qualifyStageBatch(input);
   assert.equal(eligible.status, "eligible");
   assert.equal(eligible.eligible, true);
@@ -350,6 +353,37 @@ test("EPIC135 closeout: active Stories need code-owned implementation completion
   const forgedResult = qualifyStageBatch({ ...input, stageCompletionReceipts: [forged, receipts[1]] });
   assert.equal(forgedResult.eligible, false);
   assert.equal(forgedResult.reasonCode, "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE");
+
+  const wrongWorkspaceAuthority = createStageCompletionAuthority();
+  const wrongWorkspaceReceipts = tasks.map((task) => issueStageCompletionReceipt(wrongWorkspaceAuthority, {
+    ...binding,
+    workId: task.id,
+    revision: task.revision,
+    scopeDigest: task.scopeDigest,
+    workspace: "workspace:wrong",
+    candidate,
+    queueDigest,
+    agent: "agent:luna",
+  }));
+  const wrongWorkspace = qualifyStageBatch({ ...input, stageCompletionAuthority: wrongWorkspaceAuthority, stageCompletionReceipts: wrongWorkspaceReceipts });
+  assert.equal(wrongWorkspace.eligible, false);
+  assert.equal(wrongWorkspace.reasonCode, "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE");
+  assert.ok(wrongWorkspace.tasks.every(({ implementationComplete }) => implementationComplete === false));
+
+  const missingWorkspaceAuthority = createStageCompletionAuthority();
+  const missingWorkspaceReceipts = tasks.map((task) => issueStageCompletionReceipt(missingWorkspaceAuthority, {
+    ...binding,
+    workId: task.id,
+    revision: task.revision,
+    scopeDigest: task.scopeDigest,
+    candidate,
+    queueDigest,
+    agent: "agent:luna",
+  }));
+  const missingWorkspace = qualifyStageBatch({ ...input, stageCompletionAuthority: missingWorkspaceAuthority, stageCompletionReceipts: missingWorkspaceReceipts });
+  assert.equal(missingWorkspace.eligible, false);
+  assert.equal(missingWorkspace.reasonCode, "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE");
+  assert.ok(missingWorkspace.tasks.every(({ implementationComplete }) => implementationComplete === false));
 });
 
 test("EPIC135 R2: the operator bridge loads only a sealed code-owned completion source", () => {
@@ -365,6 +399,52 @@ test("EPIC135 R2: the operator bridge loads only a sealed code-owned completion 
   assert.equal(loaded.receipts[0].receiptDigest, written.receipt.receiptDigest);
   assert.match(loaded.source.lifecycle, /authority-query-valid-for-process-lifetime/u);
   assert.throws(() => loadStageCompletionSource(JSON.stringify(loaded)), (error) => error.reasonCode === "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+});
+
+test("EPIC135 production entry binds admission and native reads to the effective workspace", async () => {
+  const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+  const chainContainer = [".tcrn", "workspace"].join("-");
+  const defaultWorkspace = resolve(repositoryRoot, "../..", chainContainer, "cross-project/workspace");
+  const binding = { series: "EPIC135", pack: "HC1-HC3-final-machine-closeout", stage: "candidate-final" };
+  const root = mkdtempSync(join(tmpdir(), "workspace-binding-entry-"));
+  const source = (sourceWorkspace, candidateId) => {
+    const options = { root: join(root, candidateId), binding };
+    if (sourceWorkspace !== undefined) options.workspace = sourceWorkspace;
+    const store = createStageCompletionStore(options);
+    const receiptInput = { ...binding, workId: "work:418", revision: 3, scopeDigest: "scope-418", candidate: { id: candidateId, digest: "tree-binding" }, queueDigest: "queue-binding", agent: "agent:luna" };
+    if (sourceWorkspace !== undefined) receiptInput.workspace = sourceWorkspace;
+    writeStageCompletionStoreReceipt(store, receiptInput);
+    return sealStageCompletionStore(store).manifestPath;
+  };
+  try {
+    const validSource = source(defaultWorkspace, "candidate-valid");
+    const loader = `import {loadStageCompletionSource} from ${JSON.stringify(fileURLToPath(new URL("../scripts/final-gate-plan.mjs", import.meta.url)))};const result=loadStageCompletionSource(process.argv[1],JSON.parse(process.argv[2]));console.log(JSON.stringify({status:result.status,workspace:result.source.binding.workspace}));`;
+    for (const options of [{}, { workspace: defaultWorkspace }]) {
+      const child = spawnSync(process.execPath, ["--input-type=module", "-e", loader, validSource, JSON.stringify(options)], { encoding: "utf8" });
+      assert.equal(child.status, 0);
+      assert.deepEqual(JSON.parse(child.stdout), { status: "loaded", workspace: defaultWorkspace });
+    }
+    for (const workspaceOption of [undefined, null, defaultWorkspace]) {
+      const request = { ...binding, stageCompletionSource: validSource, securityVeto: true };
+      if (workspaceOption !== undefined) request.workspace = workspaceOption;
+      const result = await executeProductionBatch(request);
+      assert.equal(result.reasonCode, "BATCH_SECURITY_VETO");
+      assert.equal(result.operatorBridge.status, "loaded");
+    }
+
+    for (const invalidSource of [source("workspace:wrong", "candidate-wrong"), source(undefined, "candidate-missing")]) {
+      for (const workspaceOption of [undefined, null, defaultWorkspace]) {
+        const request = { ...binding, stageCompletionSource: invalidSource, securityVeto: true };
+        if (workspaceOption !== undefined) request.workspace = workspaceOption;
+        const result = await executeProductionBatch(request);
+        assert.equal(result.reasonCode, "STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE");
+        assert.equal(result.operatorBridge.status, "not-verifiable");
+        assert.match(result.operatorBridge.reason, /workspace binding differs/u);
+      }
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("EPIC135 R2: sealed source admission is independent, binding-aware, and cross-process", () => {

@@ -426,8 +426,9 @@ async function executeDynamicRoots(qualification) {
 export async function executeProductionBatch(request = {}) {
   const { nativeState: _native, runtimeObserver: _runtime, observer: _observer, stageCompletionAuthority: _callerAuthority, stageCompletionReceipts: _callerReceipts, ...boundRequest } = request && typeof request === "object" ? request : {};
   const completionSource = boundRequest.stageCompletionSource ?? boundRequest.implementationCompletionSource ?? boundRequest.completionSource;
+  const effectiveWorkspace = boundRequest.workspace ?? workspaceDefault;
   const admissionExpectations = {
-    ...(typeof boundRequest.workspace === "string" ? { workspace: boundRequest.workspace } : {}),
+    workspace: effectiveWorkspace,
     expectedBinding: { series: boundRequest.series, pack: boundRequest.pack, stage: boundRequest.stage },
     ...(boundRequest.candidate && typeof boundRequest.candidate === "object" ? { candidate: boundRequest.candidate } : {}),
     ...(Array.isArray(boundRequest.workIds) && boundRequest.workIds.length > 0 ? { workIds: boundRequest.workIds } : {}),
@@ -456,7 +457,7 @@ export async function executeProductionBatch(request = {}) {
     };
   }
   const input = {
-    workspace: boundRequest.workspace ?? workspaceDefault,
+    workspace: effectiveWorkspace,
     engineCli: boundRequest.engineCli ?? resolve(repositoryRoot, "scripts/tcrn-workflow.mjs"),
     workIds: Array.isArray(boundRequest.workIds) ? boundRequest.workIds : [],
     series: boundRequest.series,
