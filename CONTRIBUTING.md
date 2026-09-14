@@ -45,18 +45,25 @@ NEW verification gate — that is, a new `scripts/task.mjs` handler, a new
 `framework-hygiene` — unless the same pull request retires at least the
 equivalent proof mass, or the Owner records a written exception. Claims whose
 category is `runtime-capability` are exempt: they are the product doing its job,
-not proof scaffolding.
+not proof scaffolding. The effective repository-wide hard ceiling is the
+Owner-authorised `hardRatio` in `scripts/policy/proof-budget.json` (`2.50` in
+the current policy). The structured `warningRatio` (`2.40`) reports growth
+above the warning line without blocking; a ratio above the hard ceiling refuses
+the corresponding candidate's formal release.
 
 **Baseline.** At adoption the measured ratio was approximately `1.62`
 (corrected baseline, with the `packages/protocol` package included in product
 mass per its definition), well above the `1.0` threshold, so the rule binds.
 
-**Machine enforcement — 2026-08-19, TCRN-CROSS-STORY-301.** Until this date the
-rule above bound and judged nothing: `pnpm verify:budget` reported the ratio and
-returned success unconditionally, so the rule was enforced by whoever remembered
-it, and the ratio walked from `1.62` to `1.59` while gates were added without any
-of the three named outcomes ever being taken. The verb now refuses a ratio above
-the line recorded in `scripts/policy/proof-budget.json`, and it runs inside P1.
+**Machine enforcement — 2026-08-19, TCRN-CROSS-STORY-301, extended 2026-09-14.**
+Until the first date the rule above bound and judged nothing:
+`pnpm verify:budget` reported the ratio and returned success unconditionally, so
+the rule was enforced by whoever remembered it. The evaluator now reads the
+structured `warningRatio` and `hardRatio` fields, returns a structured
+non-blocking `PROOF_BUDGET_WARNING` for `warningRatio < ratio <= hardRatio`, and
+refuses with `PROOF_BUDGET_EXCEEDED` above `hardRatio`. It runs inside P1 and
+the formal candidate-batch aggregate preserves the budget warning without
+turning it into a generic warnings-as-failure result.
 
 The check is a proxy and is written down as one. The rule is about introducing
 gates; the check measures whether proof mass grew faster than the product it
@@ -66,8 +73,18 @@ ratio while adding no proof at all. Both are accepted rather than papered over,
 because the alternative is asking a script to decide what counts as a gate, and
 that judgement is exactly what went unmade for a year.
 
-The line moves only by an entry naming the ratio it authorises and the reason,
-so the policy file reads as the history of every time this was paid.
+The hard line moves only by an entry naming the ratio it authorises and the
+reason, so the policy file reads as the history of every time this was paid.
+
+**Owner exception — TCRN-CROSS-EPIC-135, 2026-09-14.** The policy entry
+`TCRN-CROSS-EPIC-135-owner-proof-budget-20260914` records the Owner-approved
+`2.50` hard ceiling, `2.40` non-blocking warning, intentional bounded headroom,
+and batch/stage measurement cadence. Development-time Story completion does not
+create a ratio stop; candidate-final/publication boundaries still measure the
+hard line. The entry cites the approving event and artifact and supersedes the
+earlier exact-`2.3728` zero-headroom proposal; the raw LF/four-decimal count,
+historical `frozenRatio`, surface caps, and other warning/error and security
+semantics remain unchanged.
 
 **Recorded exception — OD-22, 2026-08-19, the ratchet's own installation.** The
 first thing the ratchet did was refuse the change that installed it: the verb's
@@ -119,11 +136,12 @@ and that the ratio has never approached `1.0`, so the rule still binds.
 node scripts/task.mjs budget
 ```
 
-It prints `{proofLines, productLines, ratio}` with reason `PROOF_BUDGET_REPORT`
-and always exits `0`. The command is a measurement, not a gate: it is
-intentionally absent from the verification map and from continuous integration,
-precisely so the budget rule does not itself add the kind of gate it governs.
-The rule binds reviewers and the Owner gate, not CI.
+It prints `{proofLines, productLines, ratio}` and the structured threshold result.
+At or below `2.40` the reason is `PROOF_BUDGET_VERIFIED`; above `2.40` and at
+or below `2.50` it is `PROOF_BUDGET_WARNING` with `warning.blocking: false` and
+exit `0`; above `2.50` it is `PROOF_BUDGET_EXCEEDED` and exits `1`. The command
+is already the budget member of P1; its warning is exempted only when the exact
+structured budget notice is present. No generic warning is downgraded.
 
 ## Surface caps — three raw counts, not a ratio (2026-09-05, TCRN-CROSS-STORY-356)
 

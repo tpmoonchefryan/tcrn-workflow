@@ -41,9 +41,11 @@ import { fileURLToPath } from "node:url";
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
 import { pushGateExecutionPlan, ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
+import { isNonBlockingProofBudgetWarning } from "./lib/proof-budget.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
+const governanceNotices = [];
 const timingProbe = process.env.TCRN_PUSH_GATE_TIMING_PROBE === "1";
 const timingEvidencePath = resolve(
   repositoryRoot,
@@ -93,6 +95,48 @@ function run(command, argv) {
   const result = spawnSync(command, argv, { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (result.error) return { ok: false, output: String(result.error.message) };
   return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+}
+
+function budgetWarningNotices(output, script) {
+  if (script !== "verify:p1") return [];
+  const lines = String(output ?? "").split(/\r?\n/u);
+  let receipt = null;
+  const nonJson = [];
+  for (const line of lines) {
+    if (line.trim().length === 0) continue;
+    try {
+      const value = JSON.parse(line);
+      if (value?.reasonCode === "P1_VERIFIED") receipt = value;
+      else nonJson.push(line);
+    } catch {
+      nonJson.push(line);
+    }
+  }
+  const notices = Array.isArray(receipt?.notices) ? receipt.notices : [];
+  const budgetNotices = notices.filter((notice) => notice?.command === "budget");
+  if (budgetNotices.length === 0 || budgetNotices.some((notice) => !isNonBlockingProofBudgetWarning(notice))) return [];
+  return budgetNotices;
+}
+
+function onlyBudgetWarning(output, script) {
+  const budgetNotices = budgetWarningNotices(output, script);
+  if (budgetNotices.length === 0) return false;
+  const lines = String(output ?? "").split(/\r?\n/u);
+  let receipt = null;
+  const nonJson = [];
+  for (const line of lines) {
+    if (line.trim().length === 0) continue;
+    try {
+      const value = JSON.parse(line);
+      if (value?.reasonCode === "P1_VERIFIED") receipt = value;
+      else nonJson.push(line);
+    } catch {
+      nonJson.push(line);
+    }
+  }
+  const notices = Array.isArray(receipt?.notices) ? receipt.notices : [];
+  const withoutBudgetNotices = { ...receipt, notices: notices.filter((notice) => notice?.command !== "budget") };
+  return !/\bwarning\b|\bWARN\b/u.test(`${nonJson.join("\n")}\n${JSON.stringify(withoutBudgetNotices)}`);
 }
 
 await timedStage("gate-containment", async () => {
@@ -329,10 +373,14 @@ for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
     `child:${script}`,
     async () => (timingProbe ? { ok: true, output: "" } : run("pnpm", ["run", "--silent", script])),
   );
+  const budgetNotices = budgetWarningNotices(result.output, script);
+  if (budgetNotices.length > 0) governanceNotices.push(...budgetNotices);
   if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));
   // G-2: a warning is an unfinished error. The reason-code vocabulary never uses the word,
   // so any occurrence is toolchain output that nothing has judged.
-  else if (/\bwarning\b|\bWARN\b/u.test(result.output)) fail(reasonCode, `warning emitted: ${result.output.match(/.*\b(?:warning|WARN)\b.*/u)?.[0]?.slice(0, 200) ?? ""}`);
+  else if (/\bwarning\b|\bWARN\b/u.test(result.output) && !onlyBudgetWarning(result.output, script)) {
+    fail(reasonCode, `warning emitted: ${result.output.match(/.*\b(?:warning|WARN)\b.*/u)?.[0]?.slice(0, 200) ?? ""}`);
+  }
 }
 
 // A gate that rewrote tracked source has changed the bytes being pushed after they were
@@ -351,8 +399,8 @@ process.stdout.write = (chunk, ...arguments_) => {
   return originalStdoutWrite(chunk, ...arguments_);
 };
 const output = failures.length > 0
-  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures }, null, 2)
-  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION });
+  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures, governanceNotices }, null, 2)
+  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION, governanceNotices });
 process.stdout.write(`${output}\n`);
 await writeTimingEvidence(failures.length === 0, stdoutObserved.replace(/\n$/u, ""));
 if (failures.length > 0) {

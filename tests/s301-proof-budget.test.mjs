@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { P1_SEQUENCE } from "../scripts/p1-sequence.mjs";
+import { evaluateProofBudget, isNonBlockingProofBudgetWarning } from "../scripts/lib/proof-budget.mjs";
+import { executeQualifiedBatch } from "../scripts/final-gate-plan.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const policyPath = resolve(repositoryRoot, "scripts/policy/proof-budget.json");
@@ -76,4 +78,69 @@ test("STORY-301: reading the budget policy does not change it", async () => {
   const after = await readFile(policyPath, "utf8");
   assert.equal(after, before);
   await writeFile(policyPath, before);
+});
+
+test("EPIC135: the approved budget thresholds classify every real boundary", async () => {
+  const policy = await readPolicy();
+  assert.equal(policy.warningRatio, 2.4);
+  assert.equal(policy.hardRatio, 2.5);
+  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-EPIC-135-owner-proof-budget-20260914");
+  const cases = [
+    [2.3728, true, "verified"],
+    [2.4, true, "verified"],
+    [2.4001, true, "warning"],
+    [2.5, true, "warning"],
+    [2.5001, false, "rejected"],
+  ];
+  for (const [ratio, ok, status] of cases) {
+    const proofLines = Math.round(ratio * 10_000);
+    const result = evaluateProofBudget({ proofLines, productLines: 10_000, policy });
+    assert.equal(result.ratio, ratio);
+    assert.equal(result.ok, ok, `${ratio}: ok`);
+    assert.equal(result.status, status, `${ratio}: status`);
+    if (status === "warning") {
+      assert.equal(result.reasonCode, "PROOF_BUDGET_WARNING");
+      assert.equal(result.warning.blocking, false);
+      assert.equal(isNonBlockingProofBudgetWarning(result), true);
+    } else if (status === "rejected") {
+      assert.equal(result.reasonCode, "PROOF_BUDGET_EXCEEDED");
+      assert.equal(result.warning, null);
+    } else {
+      assert.equal(result.reasonCode, "PROOF_BUDGET_VERIFIED");
+      assert.equal(result.warning, null);
+    }
+  }
+});
+
+test("EPIC135: only the structured budget notice is non-blocking", () => {
+  assert.equal(isNonBlockingProofBudgetWarning({
+    reasonCode: "PROOF_BUDGET_WARNING",
+    blocking: false,
+  }), true);
+  assert.equal(isNonBlockingProofBudgetWarning({
+    reasonCode: "PROOF_BUDGET_WARNING",
+    blocking: true,
+  }), false);
+  assert.equal(isNonBlockingProofBudgetWarning({
+    reasonCode: "OTHER_WARNING",
+    blocking: false,
+  }), false);
+});
+
+test("EPIC135: formal batch aggregation preserves budget notices but blocks other warnings", async () => {
+  const input = {
+    series: "EPIC135",
+    pack: "HC2",
+    stage: "candidate-final",
+    tasks: [],
+    candidate: { id: "candidate-421", status: "stable", digest: "tree-421" },
+    queueDigest: "queue-421",
+    trigger: "formal-batch-gate",
+  };
+  const budgetWarning = { reasonCode: "PROOF_BUDGET_WARNING", blocking: false };
+  const passed = await executeQualifiedBatch(input, async () => ({ ok: true, governanceNotices: [budgetWarning] }));
+  assert.equal(passed.status, "completed");
+  const blocked = await executeQualifiedBatch(input, async () => ({ ok: true, governanceNotices: [{ reasonCode: "OTHER_WARNING", blocking: false }] }));
+  assert.equal(blocked.status, "failed");
+  assert.equal(blocked.reasonCode, "BATCH_FORMAL_GATE_FAILED");
 });

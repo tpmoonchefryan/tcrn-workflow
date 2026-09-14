@@ -341,6 +341,7 @@
     "scripts/lib/privacy.mjs",
     "scripts/lib/private-token-roster.mjs",
     "scripts/lib/proof-artifacts.mjs",
+    "scripts/lib/proof-budget.mjs",
     "scripts/lib/protocol-proof.mjs",
     "scripts/lib/push-gate-children.mjs",
     "scripts/lib/rc1-inputs.mjs",

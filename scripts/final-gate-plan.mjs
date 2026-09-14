@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { buildContainedExecutionPlan } from "./lib/push-gate-children.mjs";
+import { isNonBlockingProofBudgetWarning } from "./lib/proof-budget.mjs";
 
 export const FINAL_GATE_PLAN_VERSION = "tcrn.gate-execution-plan.v1";
 export const FINAL_GATE_PHASES = Object.freeze(["candidate-final", "publication", "merge-sensitive"]);
@@ -160,6 +161,21 @@ function canonicalInvocation(value, fallback) {
   return normalized;
 }
 
+function runnerGovernanceNotices(result) {
+  const lines = String(result?.stdout ?? "").split(/\r?\n/u).reverse();
+  for (const line of lines) {
+    if (line.trim().length === 0) continue;
+    try {
+      const value = JSON.parse(line);
+      if (Array.isArray(value?.governanceNotices)) return value.governanceNotices;
+    } catch {
+      // The runner's stdout is retained by digest; a non-JSON diagnostic does not
+      // become a governance notice and therefore cannot affect the warning policy.
+    }
+  }
+  return [];
+}
+
 /** Issue and register one receipt from the code-owned runner. */
 export function issueGateReceipt(authority, { entry, result, inputs, invocation } = {}) {
   const state = receiptAuthorityState(authority);
@@ -176,6 +192,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
   const exitCode = Number.isSafeInteger(result.exitCode) ? result.exitCode : Number.isSafeInteger(result.status) ? result.status : null;
   const status = result.ok === true && exitCode === 0 ? "completed" : "failed";
   const reasonCode = result.reasonCode ?? (/PROOF_BUDGET_EXCEEDED/u.test(`${result.stdout ?? ""}\n${result.stderr ?? ""}`) ? "PROOF_BUDGET_EXCEEDED" : null);
+  const governanceNotices = runnerGovernanceNotices(result);
   const document = {
     schemaVersion: GATE_RECEIPT_DOCUMENT_VERSION,
     runnerVersion: RECEIPT_RUNNER_VERSION,
@@ -193,6 +210,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
     inputs: normalizedDigestInput(inputs),
     stdoutSha256: sha256(String(result.stdout ?? "")),
     stderrSha256: sha256(String(result.stderr ?? "")),
+    ...(governanceNotices.length === 0 ? {} : { governanceNotices }),
   };
   const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`, "utf8");
   const path = resolve(state.storeRoot, `${entry.id}-${state.records.size + 1}.json`);
@@ -222,6 +240,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
       phase: document.phase,
       reasonCode,
       invocation: boundInvocation,
+      ...(governanceNotices.length === 0 ? {} : { governanceNotices }),
     },
   });
   state.records.set(path, { descriptor: descriptor.terminalEvidence, evidence: descriptor });
@@ -2287,8 +2306,17 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
   try { result = await runner(initial); } catch (error) {
     return { ...initial, status: "failed", reasonCode: error?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: [], formalGateExecutions: 1, reasons: [String(error?.message ?? error)] };
   }
-  const ok = result?.ok === true || result?.status === "completed" || result?.status === "passed";
-  if (!ok) return { ...initial, status: "failed", reasonCode: result?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: [], formalGateExecutions: 1, result: result ?? null, reasons: ["formal batch runner did not report success"] };
+  const notices = [
+    ...(Array.isArray(result?.governanceNotices) ? result.governanceNotices : []),
+    ...(Array.isArray(result?.warnings) ? result.warnings : []),
+    ...(result?.warning === undefined || result?.warning === null ? [] : [result.warning]),
+  ];
+  const disallowedNotices = notices.filter((notice) => !isNonBlockingProofBudgetWarning(notice));
+  const ok = (result?.ok === true || result?.status === "completed" || result?.status === "passed") && disallowedNotices.length === 0;
+  if (!ok) return { ...initial, status: "failed", reasonCode: result?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: [], formalGateExecutions: 1, result: result ?? null, reasons: [
+    ...(result?.ok === true || result?.status === "completed" || result?.status === "passed" ? [] : ["formal batch runner did not report success"]),
+    ...(disallowedNotices.length > 0 ? ["a non-budget warning is blocking formal batch aggregation"] : []),
+  ] };
   if (typeof recheck === "function") {
     let after;
     try { after = await recheck(input); } catch { after = null; }
