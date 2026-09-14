@@ -26,7 +26,7 @@ import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode, resolveModelFromTranscript, toolUseCount, workedSinceLastBlock } from "./mode.mjs";
 import { notify } from "./notify.mjs";
 import { bindingFailure, recordVerificationObservation, recordVerificationTelemetry, runVerification, verifyPactBinding } from "./verify.mjs";
-import { qualifyBatch } from "../../scripts/final-gate-plan.mjs";
+import { isGovernedBatchSeries, qualifyBatch } from "../../scripts/final-gate-plan.mjs";
 
 const CLI = join(dirname(fileURLToPath(import.meta.url)), "cli.mjs");
 const CLI_INVOCATION = `node ${CLI}`;
@@ -57,7 +57,7 @@ async function main() {
   // Batch-aware Stop events only perform the cheap factual qualification. The
   // formal gate has one entry point and is never launched by a hook firing.
   const batch = batchPayload(hookInput, pact);
-  if (batch !== undefined) {
+  if (batch !== undefined && hookInput.stop_hook_active !== true) {
     qualifyBatch({ ...(batch && typeof batch === "object" ? batch : {}), trigger: "stop-hook" });
     process.exit(0);
     return;
@@ -71,7 +71,11 @@ async function main() {
     return decideLegacyStop(hookInput, pact, sessionId, transcriptPath);
   }
 
-  const binding = verifyPactBinding(pact, sessionId);
+  // EPIC135 Stop hooks only qualify/notify.  They never run the bound
+  // advisory:verify command; the single formal batch entry owns gate execution.
+  const binding = isGovernedBatchSeries(pact) || isGovernedBatchSeries(hookInput)
+    ? { status: "skipped", reason: "governed batch Stop hooks do not execute advisory:verify" }
+    : verifyPactBinding(pact, sessionId);
   if (binding.status === "available") {
     await recordVerificationObservation(pact, sessionId, "start");
     const verification = await runVerification(binding.command, pact.workspace);

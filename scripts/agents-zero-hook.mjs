@@ -16,6 +16,8 @@ export const AGENTS_FILE_NAME = "AGENTS.md";
 export const ZERO_SECTION_HEADING = "## 零、输出行文（硬约束）";
 export const OWNER_CONTRACT_RELATIVE_PATH = "platform-docs/owner-output-contract.md";
 export const OWNER_AUDIENCE = "owner";
+export const OWNER_ON_DEMAND_EVENTS = Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "SubagentStart"]);
+export const OWNER_ON_DEMAND_PURPOSES = Object.freeze(["owner-output", "owner-review", "owner-response", "owner-facing", "presentation"]);
 
 function containerRoot() {
   const supplied = process.env.CLAUDE_PROJECT_DIR;
@@ -48,6 +50,22 @@ function audienceValue(input = {}) {
 
 export const resolveAudience = audienceValue;
 
+function ownerRequest(input = {}) {
+  const request = input?.ownerRequest ?? input?.owner_request ?? input?.contextRequest ?? input?.context_request ?? input?.request;
+  const purpose = typeof request === "object" && request !== null
+    ? request.purpose ?? request.reason ?? request.kind
+    : input?.purpose ?? input?.ownerPurpose ?? input?.owner_purpose;
+  const explicit = request === true || typeof request === "string" && request.trim().length > 0 || request && typeof request === "object";
+  return { explicit, purpose: typeof purpose === "string" ? purpose.trim().toLowerCase() : "" };
+}
+
+/** Owner prose is loaded only for an explicit, bounded host request. */
+export function shouldLoadOwnerContract(input = {}) {
+  const event = typeof input?.hook_event_name === "string" ? input.hook_event_name : input?.hookEventName;
+  const request = ownerRequest(input);
+  return OWNER_ON_DEMAND_EVENTS.includes(event) && request.explicit && OWNER_ON_DEMAND_PURPOSES.includes(request.purpose);
+}
+
 /** Resolve the Owner contract through a pointer in the resident index. */
 export function readOwnerOutputContract(root = containerRoot()) {
   try {
@@ -76,11 +94,12 @@ export function buildHookResponse(input = {}, { root } = {}) {
   }
   const resolvedRoot = root ?? containerRoot();
   const audience = audienceValue(input);
-  const contract = audience === OWNER_AUDIENCE ? readOwnerOutputContract(resolvedRoot) : null;
+  const requestedOwnerContract = audience === OWNER_AUDIENCE && shouldLoadOwnerContract(input);
+  const contract = requestedOwnerContract ? readOwnerOutputContract(resolvedRoot) : null;
   // A legacy heading remains readable for old fixtures only. Production's
   // resident index has no Owner section and internal/unknown audiences never
   // receive the Owner contract.
-  const section = audience === OWNER_AUDIENCE && contract?.ok === true
+  const section = requestedOwnerContract && contract?.ok === true
     ? `[Owner-facing output contract · on-demand]\n${contract.text.trim()}`
     : audience === "missing" || audience === "internal" || audience === "unknown" ? readZeroSection(resolvedRoot)
       : null;
@@ -88,9 +107,9 @@ export function buildHookResponse(input = {}, { root } = {}) {
   return {
     hookSpecificOutput: {
       hookEventName: event,
-      additionalContext: section === null || audience === "internal" || audience === "unknown" ? "" : contract?.ok === true ? section : legacySection === null ? "" : `[平台约束重注入 · AGENTS.md §零]\n${legacySection}`,
+      additionalContext: section === null || audience === "internal" || audience === "unknown" || requestedOwnerContract === false && audience === OWNER_AUDIENCE ? "" : contract?.ok === true ? section : legacySection === null ? "" : `[平台约束重注入 · AGENTS.md §零]\n${legacySection}`,
     },
-    ...(audience === OWNER_AUDIENCE && contract?.ok !== true ? { reasonCode: contract?.reasonCode ?? "OWNER_OUTPUT_POINTER_MISSING" } : {}),
+    ...(requestedOwnerContract && contract?.ok !== true ? { reasonCode: contract?.reasonCode ?? "OWNER_OUTPUT_POINTER_MISSING" } : {}),
   };
 }
 
@@ -100,7 +119,7 @@ export function buildHookResponseWithAudienceEvidence(input = {}, { root } = {})
   return {
     response,
     audience,
-    ownerContract: audience === OWNER_AUDIENCE ? readOwnerOutputContract(root ?? containerRoot()) : { ok: false, reasonCode: "OWNER_OUTPUT_NOT_APPLICABLE" },
+    ownerContract: audience === OWNER_AUDIENCE && shouldLoadOwnerContract(input) ? readOwnerOutputContract(root ?? containerRoot()) : { ok: false, reasonCode: "OWNER_OUTPUT_ON_DEMAND_NOT_REQUESTED" },
   };
 }
 

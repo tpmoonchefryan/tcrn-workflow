@@ -46,6 +46,7 @@
     "verify:isolated": "node scripts/isolated-proof.mjs",
     "verify:map": "node scripts/task.mjs verification-map",
     "report:ceremony-cost": "node scripts/ceremony-cost.mjs --manifest scripts/policy/ceremony-cost-init048.json",
+    "batch:formal": "node scripts/operational-batch-entry.mjs",
     "research:compaction": "node scripts/compaction-prototype.mjs",
     "verify:no-sibling-dependency": "node scripts/task.mjs no-sibling-dependency",
     "verify:offline": "node scripts/task.mjs offline",

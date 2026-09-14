@@ -328,6 +328,7 @@
     "scripts/knowledge-inject-hook.mjs",
     "scripts/knowledge-inject.mjs",
     "scripts/knowledge-language.mjs",
+    "scripts/operational-batch-entry.mjs",
     "scripts/lib/canonical-json.mjs",
     "scripts/lib/canonical-order.d.mts",
     "scripts/lib/canonical-order.mjs",

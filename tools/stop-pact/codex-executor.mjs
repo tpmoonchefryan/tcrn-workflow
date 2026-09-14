@@ -15,7 +15,7 @@ import { decide } from "./decide.mjs";
 import { readPact, writePact, withRuntime } from "./pact.mjs";
 import { resolveMode } from "./mode.mjs";
 import { bindingFailure, recordVerificationObservation, recordVerificationTelemetry, runVerification, runVerificationSync, verifyPactBinding } from "./verify.mjs";
-import { qualifyBatch } from "../../scripts/final-gate-plan.mjs";
+import { isGovernedBatchSeries, qualifyBatch } from "../../scripts/final-gate-plan.mjs";
 
 export { assessBatchQualification, evaluateBatchQualification, executeBatchGate, executeFormalBatchGate, executeQualifiedBatch, qualifyBatch } from "../../scripts/final-gate-plan.mjs";
 
@@ -79,6 +79,7 @@ export function qualifyCodexStopBatch(input, pact) {
 }
 
 function batchGuardResult(input, pact) {
+  if (input?.stop_hook_active === true || input?.stopHookActive === true) return null;
   const qualification = qualifyCodexStopBatch(input, pact);
   if (qualification === null) return null;
   return contextResult(qualification.reasonCode, {
@@ -155,6 +156,10 @@ export function normalizeCodexStopInput(input, pact) {
       toolUseCount,
       stopHookActive,
       cliInvocation,
+      ...(input.series === undefined ? {} : { series: input.series }),
+      ...(input.pack === undefined ? {} : { pack: input.pack }),
+      ...(input.stage === undefined ? {} : { stage: input.stage }),
+      ...(input.workId === undefined ? {} : { workId: input.workId }),
     },
   };
 }
@@ -247,6 +252,10 @@ function verificationResult(pact, verification) {
 
 function runBoundVerification(pact, normalized, runner) {
   if (!pact || pact.active !== true || pact.status !== "running" || normalized.value.stopHookActive === true) return null;
+  // EPIC135 Stop events are qualification/notification hooks only.  The sole
+  // formal batch entry owns any gate execution; an explicit or implicit current
+  // series must never fall back to the historical per-work advisory:verify path.
+  if (isGovernedBatchSeries(pact) || isGovernedBatchSeries(normalized.value)) return null;
   const binding = verifyPactBinding(pact, normalized.value.sessionId);
   if (binding.status !== "available") return bindingFailure(pact, binding);
   return runner(binding.command, pact.workspace);
@@ -288,7 +297,7 @@ export async function executeCodexStopAsync(input, { path } = {}) {
     if (!normalized.ok) return contextResult(normalized.reasonCode);
     const batchGuard = batchGuardResult(input, pact);
     if (batchGuard !== null) return batchGuard;
-    const binding = pact && pact.active === true && pact.status === "running" && !normalized.value.stopHookActive
+    const binding = pact && pact.active === true && pact.status === "running" && !normalized.value.stopHookActive && !isGovernedBatchSeries(pact) && !isGovernedBatchSeries(normalized.value)
       ? verifyPactBinding(pact, normalized.value.sessionId)
       : null;
     const verification = binding?.status === "available"

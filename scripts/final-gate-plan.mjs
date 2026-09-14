@@ -4,7 +4,7 @@
 // This module plans work; it never turns a missing or failed result into a cache hit.
 
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
@@ -469,22 +469,77 @@ function evidenceValue(evidence, key) {
   return evidence?.[key] ?? evidence?.result?.[key];
 }
 
-function terminalEvidenceIdentity(evidence) {
+function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = null, expectedCommand = null } = {}) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
+  const artifactPath = batchString(candidate.path ?? candidate.file ?? candidate.storePath ?? candidate.artifactPath);
+  const digest = batchString(candidate.sha256 ?? candidate.digest ?? candidate.hash);
+  const id = batchString(candidate.id ?? artifactPath ?? candidate.name ?? digest);
+  const status = candidate.ok === true || TERMINAL_EVIDENCE_STATES.has(String(candidate.status ?? "").toLowerCase()) || candidate.terminal === true;
+  const source = batchString(candidate.source ?? candidate.runner);
+  const storeRoot = batchString(candidate.storeRoot ?? candidate.evidenceStore ?? candidate.store);
+  // A digest over a caller-written JSON document proves only that the bytes
+  // stayed the same.  Operational reuse additionally requires the marker and
+  // store emitted by the code-owned runner; otherwise any self-written file is
+  // an unsigned success claim.
+  if (source !== "tcrn-code-owned-runner" || storeRoot === null || artifactPath === null || digest === null || id === null || !status || !/^[a-f0-9]{64}$/u.test(digest)) return null;
+  let absolute;
+  try { absolute = resolve(artifactPath); } catch { return null; }
+  try {
+    if (!statSync(absolute).isFile()) return null;
+    const root = resolve(storeRoot);
+    if (!(absolute === root || absolute.startsWith(`${root}/`))) return null;
+    const bytes = readFileSync(absolute);
+    const actual = createHash("sha256").update(bytes).digest("hex");
+    if (actual !== digest || !Number.isSafeInteger(candidate.bytes) || candidate.bytes !== bytes.length) return null;
+    let document;
+    try { document = JSON.parse(bytes.toString("utf8")); } catch { return null; }
+    if (!document || typeof document !== "object" || Array.isArray(document)) return null;
+    const documentStatus = String(document.status ?? document.state ?? "").toLowerCase();
+    if (!TERMINAL_EVIDENCE_STATES.has(documentStatus) || document.ok !== true || document.exitCode !== 0) return null;
+    const documentGate = batchString(document.gateId ?? document.gate ?? document.rootId);
+    const documentCommand = batchString(document.command);
+    if (documentGate === null || gateId !== null && documentGate !== gateId || documentCommand === null) return null;
+    if (expectedCommand !== null && normalizeCommand(documentCommand) !== normalizeCommand(expectedCommand)) return null;
+    if (gateId === "engine-release" && !/(?:^|\/)scripts\/push-gate\.mjs(?:\s|$)/u.test(documentCommand)) return null;
+    const documentInputs = normalizedDigestInput(document.inputs ?? document.inputDigests);
+    if (!hasCompleteInputKey(documentInputs)) return null;
+    if (expectedInputs !== null && JSON.stringify(completeInputKey(documentInputs)) !== JSON.stringify(completeInputKey(expectedInputs))) return null;
+    return {
+      id,
+      digest,
+      bytes: bytes.length,
+      path: absolute,
+      source,
+      inputs: documentInputs,
+      command: documentCommand,
+      gateId: documentGate,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function terminalEvidenceIdentity(evidence, { requireTrusted = false, expectedCommand = null } = {}) {
   const candidates = [evidence?.terminalEvidence, evidence?.runnerEvidence, evidence?.receipt, evidence?.artifact, evidence?.result?.terminalEvidence, evidence?.result?.receipt];
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    if (requireTrusted) {
+      const trusted = trustedArtifactIdentity(candidate, { expectedInputs: normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs), gateId: evidenceGateId(evidence), expectedCommand });
+      if (trusted !== null) return trusted;
+      continue;
+    }
     const id = batchString(candidate.id ?? candidate.path ?? candidate.name ?? candidate.digest);
     const digest = batchString(candidate.sha256 ?? candidate.digest ?? candidate.hash);
     const status = candidate.ok === true || TERMINAL_EVIDENCE_STATES.has(candidate.status) || candidate.terminal === true;
     if (id !== null && digest !== null && status) return { id, digest, source: batchString(candidate.source ?? candidate.runner ?? "trusted-runner") };
   }
-  if (evidence?.trustedRunner === true && batchString(evidence?.receiptDigest ?? evidence?.evidenceDigest) !== null) {
+  if (!requireTrusted && evidence?.trustedRunner === true && batchString(evidence?.receiptDigest ?? evidence?.evidenceDigest) !== null) {
     return { id: batchString(evidence.id), digest: batchString(evidence.receiptDigest ?? evidence.evidenceDigest), source: "trusted-runner" };
   }
   // Results produced by the pre-R2 unit fixtures are retained for compatibility
   // only. They are never accepted by the operational entry unless a real receipt
   // is present, and the marker makes the distinction visible in plan evidence.
-  if (/^evidence-(?:\d+)(?:-\d+)*$/u.test(String(evidence?.id ?? ""))) return { id: evidence.id, digest: null, source: "legacy-fixture" };
+  if (!requireTrusted && /^evidence-(?:\d+)(?:-\d+)*$/u.test(String(evidence?.id ?? ""))) return { id: evidence.id, digest: null, source: "legacy-fixture" };
   return null;
 }
 
@@ -520,8 +575,8 @@ export function assessDynamicEvidenceReuse({ evidence, inputs, phase, gateId, re
   if (changedInputs.length > 0) reasons.push(`input digest changed: ${changedInputs.join(", ")}`);
   if (evidenceValue(evidence, "ok") !== true) reasons.push("previous result was not successful");
   if (!TERMINAL_EVIDENCE_STATES.has(evidenceValue(evidence, "status")) && evidenceValue(evidence, "terminal") !== true) reasons.push("evidence is not terminal");
-  const terminalEvidence = terminalEvidenceIdentity(evidence);
-  if (terminalEvidence === null || requireTrustedEvidence && terminalEvidence.source === "legacy-fixture") reasons.push("trusted terminal runner evidence is missing");
+  const terminalEvidence = terminalEvidenceIdentity(evidence, { requireTrusted: requireTrustedEvidence, expectedCommand: evidenceValue(evidence, "command") ?? null });
+  if (terminalEvidence === null) reasons.push(requireTrustedEvidence ? "immutable trusted terminal artifact is missing, unreadable, or digest-mismatched" : "trusted terminal runner evidence is missing");
   // `phase` is retained on the plan for audit and selection, but reuse is bound
   // only to the four measured input digests plus successful terminal state.
   const evidenceId = evidenceGateId(evidence);
@@ -567,8 +622,8 @@ function buildDynamicObligations(options, gateRows, containment) {
   });
   const mappedRoots = new Set(obligations.flatMap((obligation) => obligation.gateIds.map((id) => containment.all.find((entry) => entry.id === id)?.rootId ?? id)));
   for (const gate of gateRows) {
-    if ((gate.disposition === "run" || gate.disposition === "reused") && !mappedRoots.has(gate.id)) {
-      blocked.push({ id: `coverage:${gate.id}`, reason: `proof obligations do not cover affected gate ${gate.id}` });
+    if (!mappedRoots.has(gate.id)) {
+      blocked.push({ id: `coverage:${gate.id}`, reason: `proof obligations do not cover required gate ${gate.id}` });
     }
   }
   return { obligations, blocked };
@@ -692,6 +747,16 @@ export function buildDynamicGatePlan({ roster, containment, phase = "candidate-f
     coveredChildren: coveredBy.map(({ id, rootId, coveredBy: parent }) => ({ id, rootId, coveredBy: parent })),
     requireInputObserver: operational || requireInputObserver,
   };
+  integrity.planDigest = digestValue({
+    phase,
+    inputs,
+    selected: selected.map(({ id, rootId, command, inputs: gateInputs }) => ({ id, rootId, command: normalizeCommand(command), inputs: gateInputs })),
+    gates: rows.map(({ id, rootId, disposition, command, inputs: gateInputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), inputs: gateInputs })),
+    coveredBy,
+    obligations: obligationResult.obligations,
+    executionOrder: selected.map(({ id }) => id),
+    containmentDigest: integrity.containmentDigest,
+  });
   return {
     schemaVersion: FINAL_GATE_PLAN_VERSION,
     plannerVersion: DYNAMIC_GATE_PLAN_VERSION,
@@ -744,6 +809,70 @@ const BATCH_RUNNING_STATES = new Set(["running", "active", "in-progress", "in_pr
 const BATCH_EXECUTABLE_STATES = new Set(["planned", "ready", "active", "running", "queued", "pending", "in-progress", "in_progress"]);
 const BATCH_COMPLETE_STATES = new Set(["done", "completed", "satisfied", "success", "passed"]);
 const BATCH_BLOCKED_STATES = new Set(["blocked", "not-verifiable", "not_verifiable"]);
+const BATCH_HOST_PROCESS_STATES = new Set(["R", "S", "S+", "Ss"]);
+
+// The live engine's Story records deliberately do not grow ad-hoc dependency
+// fields.  The formal batch adapter therefore owns the small, approved
+// EPIC135 stage graph below and binds it to each native record's id, revision,
+// and scope digest.  This is an explicit closure, not an absent field treated
+// as an empty list.  Unknown packs or ids remain not-verifiable.
+export const EPIC135_STAGE_DEPENDENCIES = Object.freeze({
+  "work:f3d3166ff702e7c32c7c6e50": Object.freeze([]),
+  "work:8b9f35d8e42cf84e8a01181c": Object.freeze(["work:f3d3166ff702e7c32c7c6e50"]),
+  "work:17929c5b42ac1736bcecb1f2": Object.freeze(["work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c"]),
+  "work:b621023cb60591c0716e69eb": Object.freeze(["work:17929c5b42ac1736bcecb1f2"]),
+  "work:98f1f575b1d3612fdc302d80": Object.freeze(["work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c", "work:17929c5b42ac1736bcecb1f2", "work:b621023cb60591c0716e69eb"]),
+});
+export const EPIC135_STAGE_BINDINGS = Object.freeze({
+  "work:f3d3166ff702e7c32c7c6e50": Object.freeze({ revision: 3, scopeDigest: "722cb6c1505bce6c5cd19627beacb972320d8f8345c8a9baaeec4d227c22d774" }),
+  "work:8b9f35d8e42cf84e8a01181c": Object.freeze({ revision: 3, scopeDigest: "b07b4eeb761bb1d517a0313421557f8fba2ae4299401d9dbfa91c3ccc01ca1b6" }),
+  "work:17929c5b42ac1736bcecb1f2": Object.freeze({ revision: 3, scopeDigest: "6c30ef956b2868d53f4a7d613a67862e6847bcc0f34bbb9424eb031e36bf9610" }),
+  "work:b621023cb60591c0716e69eb": Object.freeze({ revision: 3, scopeDigest: "4574eaed1b0b997db50cae66106cf72d3e5b2187149abf66795e648037436041" }),
+  "work:98f1f575b1d3612fdc302d80": Object.freeze({ revision: 4, scopeDigest: "5b13703ff2e2d1339931c0277214feae67c2d674cb6226c154b1d8d96822d4e2" }),
+});
+const EPIC135_STAGE_PACKS = new Set(["HC1-HC3-final-machine-closeout", "HC1-HC3-unified-rework"]);
+
+function approvedStageDependencies({ series, pack, workIds } = {}) {
+  if (series !== "EPIC135" || !EPIC135_STAGE_PACKS.has(pack) || !Array.isArray(workIds) || workIds.length === 0) return null;
+  const ids = [...new Set(workIds)];
+  if (ids.length !== workIds.length || ids.some((id) => !Object.hasOwn(EPIC135_STAGE_DEPENDENCIES, id))) return null;
+  return ids.map((id) => ({ id, ...EPIC135_STAGE_BINDINGS[id], dependencies: [...EPIC135_STAGE_DEPENDENCIES[id]], source: "approved-EPIC135-pack-stage-map" }));
+}
+
+function observedProcessActive(value) {
+  if (value === true || typeof value === "string") return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  if (value.active === false || value.inFlight === false || value.scope === "unrelated" || value.relevance === "unrelated") return false;
+  if (value.running === true || value.inFlight === true) return true;
+  const state = String(value.state ?? value.stat ?? "").trim();
+  if (state.length > 0) {
+    if (BATCH_HOST_PROCESS_STATES.has(state)) return true;
+    // A process row whose state is present but not understood is not evidence
+    // of idleness.  Keep it live until a code-owned adapter classifies it.
+    return value.pid !== undefined || value.command !== undefined;
+  }
+  const status = String(value.status ?? value.lifecycle ?? "").toLowerCase();
+  if (BATCH_RUNNING_STATES.has(status)) return true;
+  if (["idle", "completed", "done", "stopped", "exited", "unrelated"].includes(status)) return false;
+  return value.pid !== undefined || value.command !== undefined;
+}
+
+function normalizedDependencyIds(value) {
+  return batchArray(value).map((entry) => typeof entry === "string" ? entry : entry && typeof entry === "object" ? entry.id ?? entry.workId ?? entry.taskId : null).filter((id) => typeof id === "string");
+}
+
+function dependencyRowsMatchTasks(tasks, dependencyRows) {
+  if (!Array.isArray(tasks) || !Array.isArray(dependencyRows) || tasks.length !== dependencyRows.length) return false;
+  const byId = new Map(dependencyRows.map((row) => [row?.id ?? row?.workId ?? row?.taskId, row]));
+  return tasks.every((task) => {
+    const id = task?.id ?? task?.workId ?? task?.taskId;
+    const row = byId.get(id);
+    if (!row) return false;
+    const taskDeps = normalizedDependencyIds(task?.dependencies ?? task?.dependsOn ?? task?.prerequisites);
+    const rowDeps = normalizedDependencyIds(row?.dependencies ?? row?.dependsOn ?? row?.prerequisites);
+    return JSON.stringify(taskDeps) === JSON.stringify(rowDeps);
+  });
+}
 
 function batchString(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -766,6 +895,32 @@ function bindingComplete(binding) {
   return [binding.series, binding.pack, binding.stage].every((value) => value !== null);
 }
 
+/**
+ * Identify the governed EPIC135 surface without making a caller's prose or a
+ * fixture id a capability switch.  Host adapters use this only to keep their
+ * Stop path on the lightweight qualification lane; the formal entry still
+ * requires a complete binding and fresh observations.
+ */
+export function isGovernedBatchSeries(value) {
+  const candidates = [
+    value,
+    value?.batch,
+    value?.batchQualification,
+    value?.binding,
+    value?.expectedBinding,
+    value?.currentBinding,
+  ];
+  if (candidates.some((candidate) => {
+    const binding = batchBinding(candidate);
+    return binding.series === "EPIC135";
+  })) return true;
+  // A Stop pact may be bound to one of the current EPIC135 Stories without
+  // carrying a batch object.  The work id is the reliable series boundary in
+  // that legacy-shaped envelope, so it also suppresses the old advisory path.
+  const workIds = new Set(["work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c", "work:17929c5b42ac1736bcecb1f2", "work:b621023cb60591c0716e69eb", "work:98f1f575b1d3612fdc302d80"]);
+  return candidates.some((candidate) => workIds.has(candidate?.workId ?? candidate?.workID ?? candidate?.work_id));
+}
+
 function normalizedBatchTask(value, index) {
   if (typeof value === "string") return { id: value, status: "unknown", dependencies: [], postAction: false, raw: value };
   if (!value || typeof value !== "object") return { id: `task-${index + 1}`, status: "unknown", dependencies: [], postAction: false, raw: value };
@@ -782,6 +937,8 @@ function normalizedBatchTask(value, index) {
   return {
     id: batchString(value.id ?? value.workId ?? value.taskId ?? value.key) ?? `task-${index + 1}`,
     status,
+    revision: Number.isSafeInteger(value.revision) ? value.revision : null,
+    scopeDigest: batchString(value.scopeDigest ?? value.digest),
     dependencies,
     postAction,
     executable: value.executable === true || value.runnable === true,
@@ -814,7 +971,14 @@ function batchIdempotencyKey(binding, candidate, queueDigest) {
 
 function batchPriorRun(input, key) {
   const runs = batchArray(input.previousRuns ?? input.priorRuns ?? input.batchRuns ?? input.runs);
-  return runs.find((run) => run && typeof run === "object" && (run.idempotencyKey === key || run.batchKey === key) && (run.status === "completed" || run.status === "passed" || run.status === "succeeded" || run.terminal === true)) ?? null;
+  return runs.find((run) => {
+    if (!run || typeof run !== "object" || (run.idempotencyKey !== key && run.batchKey !== key)) return false;
+    const status = String(run.status ?? run.state ?? "").toLowerCase();
+    // `terminal:true` is a lifecycle fact, not a success assertion.  A failed,
+    // unknown, or in-progress prior result can never become idempotent success.
+    const idempotentOfSuccess = status === "idempotent" && run.priorRun && ["completed", "passed", "succeeded", "success"].includes(String(run.priorRun.status ?? "").toLowerCase());
+    return (["completed", "passed", "succeeded", "success"].includes(status) || idempotentOfSuccess) && run.ok !== false;
+  }) ?? null;
 }
 
 function batchRunningRun(input, key) {
@@ -823,11 +987,24 @@ function batchRunningRun(input, key) {
 }
 
 function observedPart(value, name) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  const supplied = value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  const source = supplied?.name === name && supplied.raw && typeof supplied.raw === "object" && !Array.isArray(supplied.raw)
+    ? supplied.raw
+    : supplied;
   const records = source === null ? null : source.records ?? source.items ?? source.tasks ?? source.entries;
   const observed = source !== null && (source.observed === true || source.observation === "observed" || source.status === "observed");
   const digest = source === null ? null : batchString(source.digest ?? source.queueDigest ?? source.stateDigest);
-  return { name, present: source !== null, observed, digest, records: Array.isArray(records) ? records : null };
+  return {
+    name,
+    present: source !== null,
+    observed,
+    digest,
+    records: Array.isArray(records) ? records : null,
+    // Keep the raw snapshot available to the qualification boundary.  The raw
+    // value is never treated as a caller assertion; it is useful only for
+    // checking that the code-owned adapter supplied the complete shape.
+    raw: source,
+  };
 }
 
 /**
@@ -836,7 +1013,7 @@ function observedPart(value, name) {
  * queue from a caller's `ready` flag.  Those facts therefore have an explicit
  * observer envelope and absence is a named, fail-closed result.
  */
-export function normalizeBatchRuntimeObserver(input = {}) {
+export function normalizeBatchRuntimeObserver(input = {}, { requireCandidate = false, requireDependencyRecords = false } = {}) {
   const source = input?.runtimeObserver ?? input?.observer ?? input?.runtimeObservation ?? null;
   if (source === null || typeof source !== "object" || Array.isArray(source)) {
     return {
@@ -855,6 +1032,11 @@ export function normalizeBatchRuntimeObserver(input = {}) {
   const missing = [queue, agents, writes].filter((part) => !part.present || !part.observed).map((part) => part.name);
   const hasDependencyObservation = dependencies.present && dependencies.observed;
   if (!hasDependencyObservation) missing.push("dependencies");
+  if (requireCandidate && (!candidate.present || !candidate.observed || candidate.digest === null)) missing.push("candidate");
+  if (requireCandidate && [queue, agents, writes].some((part) => !Array.isArray(part.records))) missing.push("snapshot-records");
+  if (requireDependencyRecords && (!Array.isArray(dependencies.records) || dependencies.records.length === 0 && (source.tasks ?? source.workItems ?? source.queue?.tasks ?? source.state?.tasks ?? []).length > 0)) {
+    missing.push("dependency-records");
+  }
   return {
     ok: missing.length === 0,
     schemaVersion: BATCH_OBSERVER_VERSION,
@@ -884,15 +1066,49 @@ function observerArray(observer, name) {
   return part?.records === null ? [] : part?.records;
 }
 
+function taskObservationProblems(taskSource, dependencyRows, { strict = false } = {}) {
+  if (!Array.isArray(taskSource)) return ["task inventory is not an array"];
+  const problems = [];
+  const ids = taskSource.map((task) => task && typeof task === "object" ? task.id ?? task.workId ?? task.taskId : null);
+  if (ids.some((id) => typeof id !== "string" || id.trim().length === 0)) problems.push("task id is missing or empty");
+  if (new Set(ids.filter((id) => typeof id === "string")).size !== ids.filter((id) => typeof id === "string").length) problems.push("task ids are duplicated");
+  if (strict && taskSource.some((task) => !task || typeof task !== "object" || !Number.isSafeInteger(task.revision) || task.revision < 1)) problems.push("task revision is missing or invalid");
+  const dependencyMap = new Map((Array.isArray(dependencyRows) ? dependencyRows : []).map((row) => [row?.id ?? row?.workId ?? row?.taskId, row]));
+  for (const task of taskSource) {
+    if (!task || typeof task !== "object") continue;
+    const id = task.id ?? task.workId ?? task.taskId;
+    const dependencyValue = Object.hasOwn(task, "dependencies") ? task.dependencies : Object.hasOwn(task, "dependsOn") ? task.dependsOn : Object.hasOwn(task, "prerequisites") ? task.prerequisites : undefined;
+    const dependencyRow = dependencyMap.get(id);
+    const rowDependencies = dependencyRow && (Object.hasOwn(dependencyRow, "dependencies") ? dependencyRow.dependencies : Object.hasOwn(dependencyRow, "dependsOn") ? dependencyRow.dependsOn : Object.hasOwn(dependencyRow, "prerequisites") ? dependencyRow.prerequisites : undefined);
+    if (strict && !Array.isArray(dependencyValue) && !Array.isArray(rowDependencies)) problems.push(`dependency schema missing for ${String(id)}`);
+    if (dependencyValue !== undefined && !Array.isArray(dependencyValue) || rowDependencies !== undefined && !Array.isArray(rowDependencies)) problems.push(`dependency schema malformed for ${String(id)}`);
+  }
+  return [...new Set(problems)];
+}
+
+function stableTaskSnapshot(taskSource) {
+  return (Array.isArray(taskSource) ? taskSource : []).map((task) => ({
+    id: task?.id ?? task?.workId ?? task?.taskId ?? null,
+    status: task?.status ?? task?.state ?? null,
+    revision: task?.revision ?? null,
+    scopeDigest: task?.scopeDigest ?? null,
+    dependencies: task?.dependencies ?? task?.dependsOn ?? task?.prerequisites,
+  }));
+}
+
 /**
  * Build a current-stage input from read-only native observations.  A caller may
  * supply `readNative` in tests or an adapter; the default reads only the local
  * engine CLI and never imports a sibling repository as an authority.
  */
 export async function readNativeBatchState({ workspace, engineCli, workIds = [], series, pack, stage, readNative } = {}) {
+  if (!Array.isArray(workIds)) return { ok: false, reasonCode: "BATCH_NATIVE_WORK_NOT_VERIFIABLE", error: "bound work ids must be an array" };
   if (typeof readNative === "function") {
     try {
-      const value = await readNative({ workspace, workIds, series, pack, stage });
+      // The callback is the code-owned host adapter.  It is deliberately
+      // invoked for every acquisition; caller-supplied `nativeState` is never
+      // consulted by acquireOperationalBatchInput.
+      const value = await readNative({ workspace, workIds, series, pack, stage, fresh: true });
       return value && typeof value === "object" ? value : { ok: false, reasonCode: "BATCH_NATIVE_READ_NOT_VERIFIABLE" };
     } catch (error) {
       return { ok: false, reasonCode: "BATCH_NATIVE_READ_NOT_VERIFIABLE", error: String(error?.message ?? error) };
@@ -913,58 +1129,173 @@ export async function readNativeBatchState({ workspace, engineCli, workIds = [],
   };
   const status = invoke("status", []);
   if (!status.ok) return { ...status, reasonCode: "BATCH_NATIVE_STATUS_NOT_VERIFIABLE" };
-  const listArgs = ["--limit", "1000"];
-  if (typeof series === "string" && series.length > 0) listArgs.push("--search", series);
-  const listed = invoke("work-list", listArgs);
-  if (!listed.ok) return listed;
-  const listedRecords = listed.result?.records ?? listed.result?.result?.records;
-  if (!Array.isArray(listedRecords)) return { ok: false, reasonCode: "BATCH_NATIVE_QUEUE_NOT_VERIFIABLE" };
+  // Work-list is a paginated authority read.  A large limit or a series search
+  // is not a completeness proof: the series label is not necessarily present
+  // on every bound work record.  Read every page, then narrow by bound ids.
+  const pageSize = 100;
+  const pages = [];
+  const listedRecords = [];
+  let offset = 0;
+  let total = null;
+  for (;;) {
+    const listed = invoke("work-list", ["--limit", String(pageSize), "--offset", String(offset)]);
+    if (!listed.ok) return listed;
+    const records = listed.result?.records ?? listed.result?.result?.records;
+    if (!Array.isArray(records)) return { ok: false, reasonCode: "BATCH_NATIVE_QUEUE_NOT_VERIFIABLE", offset };
+    pages.push({ offset, total: listed.result?.total ?? null, truncated: listed.result?.truncated ?? null, version: listed.result?.version ?? null, headEventHash: listed.result?.headEventHash ?? null, recordCount: records.length });
+    if (total === null && Number.isSafeInteger(listed.result?.total)) total = listed.result.total;
+    listedRecords.push(...records);
+    if (listed.result?.truncated === false || records.length === 0 || total !== null && listedRecords.length >= total) break;
+    if (records.length < pageSize) return { ok: false, reasonCode: "BATCH_NATIVE_QUEUE_NOT_VERIFIABLE", error: "work-list reported truncation without a complete page" };
+    offset += records.length;
+    if (pages.length > 10_000) return { ok: false, reasonCode: "BATCH_NATIVE_QUEUE_NOT_VERIFIABLE", error: "work-list pagination did not converge" };
+  }
+  const complete = total !== null ? listedRecords.length === total : pages.at(-1)?.truncated === false;
+  if (!complete) return { ok: false, reasonCode: "BATCH_NATIVE_QUEUE_NOT_VERIFIABLE", error: "complete work-list pagination could not be proven", total, observed: listedRecords.length };
+  const listedIds = listedRecords.map((record) => record?.id);
+  if (listedIds.some((id) => typeof id !== "string" || id.trim().length === 0) || new Set(listedIds).size !== listedIds.length) {
+    return { ok: false, reasonCode: "BATCH_NATIVE_QUEUE_NOT_VERIFIABLE", error: "work-list contains a missing or duplicate id" };
+  }
+  if (listedRecords.some((record) => !Number.isSafeInteger(record?.revision) || record.revision < 1)) {
+    return { ok: false, reasonCode: "BATCH_NATIVE_REVISION_NOT_VERIFIABLE", error: "work-list contains a missing or invalid revision" };
+  }
   const ids = new Set(workIds.filter((id) => typeof id === "string"));
-  const records = ids.size === 0 ? listedRecords : listedRecords.filter((record) => ids.has(record?.id));
-  if (ids.size > 0 && records.length !== ids.size) return { ok: false, reasonCode: "BATCH_NATIVE_WORK_NOT_VERIFIABLE", missingWorkIds: [...ids].filter((id) => !records.some((record) => record?.id === id)) };
+  if (ids.size !== workIds.length || workIds.some((id) => typeof id !== "string" || id.trim().length === 0)) return { ok: false, reasonCode: "BATCH_NATIVE_WORK_NOT_VERIFIABLE", error: "bound work ids must be unique and non-empty" };
+  const selectedRecords = ids.size > 0
+    ? listedRecords.filter((record) => ids.has(record?.id))
+    : listedRecords.filter((record) => String(record?.externalKey ?? "").includes(String(series ?? "")) || Array.isArray(record?.labels) && record.labels.includes(series));
+  if (selectedRecords.length === 0) return { ok: false, reasonCode: "BATCH_NATIVE_SCOPE_NOT_VERIFIABLE", error: "no bound work records were found in the complete work-list" };
+  if (ids.size > 0 && selectedRecords.length !== ids.size) return { ok: false, reasonCode: "BATCH_NATIVE_WORK_NOT_VERIFIABLE", missingWorkIds: [...ids].filter((id) => !selectedRecords.some((record) => record?.id === id)) };
   const shows = [];
-  for (const id of records.map((record) => record?.id).filter((value) => typeof value === "string")) {
+  for (const id of selectedRecords.map((record) => record?.id).filter((value) => typeof value === "string")) {
     const shown = invoke("work-show", ["--id", id]);
     if (!shown.ok) return { ok: false, reasonCode: "BATCH_NATIVE_DEPENDENCY_NOT_VERIFIABLE", workId: id, result: shown };
-    shows.push(shown.result?.record ?? shown.result?.result?.record);
+    const record = shown.result?.record ?? shown.result?.result?.record;
+    if (!record || record.id !== id || !Number.isSafeInteger(record.revision) || record.revision < 1) return { ok: false, reasonCode: "BATCH_NATIVE_REVISION_NOT_VERIFIABLE", workId: id };
+    const listed = selectedRecords.find((candidate) => candidate.id === id);
+    if (listed?.revision !== record.revision) return { ok: false, reasonCode: "BATCH_NATIVE_REVISION_DRIFT", workId: id, listed: listed?.revision ?? null, shown: record.revision };
+    shows.push(record);
   }
-  const tasks = (shows.length > 0 ? shows : records).filter(Boolean).map((record) => ({
-    ...record,
-    id: record.id,
-    status: record.status,
-    dependencies: record.dependencies ?? record.dependsOn ?? record.prerequisites ?? [],
-    stage: record.stage ?? stage,
-    pack: record.pack ?? record.packId ?? pack,
-  }));
+  const approvedDependencies = approvedStageDependencies({ series, pack, workIds });
+  if (approvedDependencies !== null) {
+    const mismatches = selectedRecords.flatMap((record) => {
+      const binding = approvedDependencies.find((entry) => entry.id === record.id);
+      if (!binding) return [{ id: record.id, reason: "record is outside the approved EPIC135 pack" }];
+      const dependencyKey = ["dependencies", "dependsOn", "prerequisites"].find((key) => Object.hasOwn(record, key));
+      const nativeDependencies = dependencyKey === undefined ? null : normalizedDependencyIds(record[dependencyKey]);
+      const result = [];
+      if (record.revision !== binding.revision) result.push({ id: record.id, field: "revision", expected: binding.revision, actual: record.revision });
+      if (record.scopeDigest !== binding.scopeDigest) result.push({ id: record.id, field: "scopeDigest", expected: binding.scopeDigest, actual: record.scopeDigest ?? null });
+      if (nativeDependencies !== null && JSON.stringify(nativeDependencies) !== JSON.stringify(binding.dependencies)) result.push({ id: record.id, field: "dependencies", expected: binding.dependencies, actual: nativeDependencies });
+      return result;
+    });
+    if (mismatches.length > 0) return { ok: false, reasonCode: "BATCH_NATIVE_STAGE_BINDING_MISMATCH", mismatches };
+  }
+  const tasks = shows.map((record) => {
+    const dependencyKey = ["dependencies", "dependsOn", "prerequisites"].find((key) => Object.hasOwn(record, key));
+    const approved = approvedDependencies?.find((entry) => entry.id === record.id);
+    return {
+      ...record,
+      id: record.id,
+      status: record.status,
+      ...(dependencyKey === undefined
+        ? approved === undefined ? {} : { dependencies: [...approved.dependencies], dependencySource: approved.source }
+        : { dependencies: record[dependencyKey] }),
+      stage: record.stage ?? stage,
+      pack: record.pack ?? record.packId ?? pack,
+    };
+  });
+  const dependencySchemaPresent = tasks.every((task) => Array.isArray(task.dependencies));
   const queueDigest = digestValue(tasks.map(({ id, status, dependencies, revision, scopeDigest }) => ({ id, status, dependencies, revision, scopeDigest })));
   return {
     ok: true,
-    source: "native-work-list/work-show",
+    source: "native-status/full-work-list/work-show",
     queue: { observed: true, digest: queueDigest, tasks, records: tasks },
-    dependencies: { observed: true, records: tasks.map(({ id, dependencies }) => ({ id, dependencies })) },
+    dependencies: { observed: true, schemaPresent: dependencySchemaPresent, source: approvedDependencies === null ? "native-work-show" : "approved-EPIC135-pack-stage-map", records: dependencySchemaPresent ? tasks.map(({ id, dependencies }) => ({ id, dependencies })) : null },
     queueDigest,
     tasks,
     workShows: shows,
+    workListPages: pages,
+    workListComplete: true,
+    workListRecords: listedRecords,
+    dependencySchemaPresent,
+    approvedStageDependencies: approvedDependencies,
     nativeStatus: status.result,
   };
 }
 
+function nativeObservationProblems(native, workIds = []) {
+  const problems = [];
+  if (!native || typeof native !== "object" || native.ok !== true) return ["native adapter did not return a successful observation"];
+  const status = native.nativeStatus ?? native.status;
+  if (!status || typeof status !== "object" || !Number.isSafeInteger(status.version) || typeof status.headEventHash !== "string" || status.headEventHash.length === 0) {
+    problems.push("native status/version/head hash is missing");
+  }
+  if (native.workListComplete !== true || !Array.isArray(native.workListPages) || !Array.isArray(native.workListRecords) || native.workListPages.length === 0 || native.workListPages.at(-1)?.truncated !== false) problems.push("complete paginated work-list is missing");
+  const records = native.tasks ?? native.queue?.records;
+  if (!Array.isArray(records)) problems.push("selected native work records are missing");
+  const ids = Array.isArray(records) ? records.map((record) => record?.id) : [];
+  if (ids.some((id) => typeof id !== "string" || id.trim().length === 0) || new Set(ids).size !== ids.length) problems.push("native work observations contain a missing or duplicate id");
+  if (Array.isArray(workIds) && workIds.length > 0 && workIds.some((id) => !ids.includes(id))) problems.push("a bound work id was absent from native work-show observations");
+  if (Array.isArray(records) && records.some((record) => !Number.isSafeInteger(record?.revision) || record.revision < 1)) problems.push("native work observations contain a missing or invalid revision");
+  if (!Array.isArray(native.workShows) || native.workShows.length !== ids.length || native.workShows.some((record) => !record || typeof record.id !== "string" || !ids.includes(record.id) || !Number.isSafeInteger(record.revision) || record.revision !== records.find((candidate) => candidate.id === record.id)?.revision)) problems.push("complete work-show/revision observations are missing or drifted");
+  if (native.dependencySchemaPresent !== true || !Array.isArray(native.dependencies?.records) || (Array.isArray(records) && native.dependencies.records.length !== records.length)) problems.push("dependency schema/records are missing; absence is not an empty closure");
+  if (Array.isArray(native.dependencies?.records) && native.dependencies.records.some((record) => typeof record?.id !== "string" || !Array.isArray(record.dependencies))) problems.push("dependency records are malformed");
+  if (typeof native.queueDigest !== "string" || native.queueDigest.length === 0) problems.push("native queue digest is missing");
+  return problems;
+}
+
 /** Acquire native work plus an explicit runtime observer before qualification. */
 export async function acquireOperationalBatchInput(input = {}, { readNative = null, observeRuntime = null } = {}) {
-  const native = input.nativeState ?? await readNativeBatchState({ ...input, readNative });
-  if (!native?.ok) return { ok: false, reasonCode: native?.reasonCode ?? "BATCH_NATIVE_READ_NOT_VERIFIABLE", native };
-  let runtime = input.runtimeObserver ?? input.observer ?? null;
-  if (runtime === null && typeof observeRuntime === "function") {
-    try { runtime = await observeRuntime(input); } catch (error) { return { ok: false, reasonCode: "BATCH_RUNTIME_OBSERVER_NOT_VERIFIABLE", error: String(error?.message ?? error), native }; }
+  // Never use nativeState/runtimeObserver supplied inside `input`: those values
+  // are caller assertions and were the bypass found in the Astra review.  A
+  // production acquisition always calls both code-owned adapters afresh.
+  if (input?.securityVeto === true || input?.permissionDenied === true || input?.security?.veto === true || input?.permission?.denied === true) {
+    return { ok: false, reasonCode: "BATCH_SECURITY_VETO", error: "permission or security refusal is immediate" };
   }
-  const tasks = native.tasks ?? native.queue?.tasks ?? native.queue?.records;
+  let native;
+  try {
+    native = await readNativeBatchState({
+      workspace: input.workspace,
+      engineCli: input.engineCli,
+      workIds: Array.isArray(input.workIds) ? [...input.workIds] : [],
+      series: input.series,
+      pack: input.pack,
+      stage: input.stage,
+      readNative,
+    });
+  } catch (error) {
+    return { ok: false, reasonCode: "BATCH_NATIVE_READ_NOT_VERIFIABLE", error: String(error?.message ?? error) };
+  }
+  if (!native?.ok) return { ok: false, reasonCode: native?.reasonCode ?? "BATCH_NATIVE_READ_NOT_VERIFIABLE", native };
+  const nativeProblems = nativeObservationProblems(native, Array.isArray(input.workIds) ? input.workIds : []);
+  if (nativeProblems.length > 0) return { ok: false, reasonCode: "BATCH_NATIVE_OBSERVATION_NOT_VERIFIABLE", native, error: nativeProblems.join("; ") };
+  if (typeof observeRuntime !== "function") return { ok: false, reasonCode: "BATCH_RUNTIME_OBSERVER_NOT_VERIFIABLE", native, error: "a code-owned host runtime observer is required" };
+  let runtime;
+  try {
+    runtime = await observeRuntime({
+      workspace: input.workspace,
+      workIds: Array.isArray(input.workIds) ? [...input.workIds] : [],
+      series: input.series,
+      pack: input.pack,
+      stage: input.stage,
+      nativeState: native,
+      fresh: true,
+    });
+  } catch (error) {
+    return { ok: false, reasonCode: "BATCH_RUNTIME_OBSERVER_NOT_VERIFIABLE", native, error: String(error?.message ?? error) };
+  }
   return {
     ...input,
-    tasks,
-    queueDigest: input.queueDigest ?? native.queueDigest ?? native.queue?.digest,
-    dependencies: input.dependencies ?? native.dependencies,
+    // Replacing, rather than merging, caller fields makes the authority
+    // boundary visible in the returned envelope and prevents stale aliases.
+    tasks: native.tasks ?? native.queue?.tasks ?? native.queue?.records,
+    queueDigest: native.queueDigest ?? native.queue?.digest,
+    dependencies: native.dependencies,
     runtimeObserver: runtime,
     nativeState: native,
+    observationFresh: true,
+    observedAt: native.observedAt ?? runtime?.observedAt ?? null,
   };
 }
 
@@ -1008,9 +1339,15 @@ export function qualifyBatch(input = {}) {
   if (bindingMismatch.length > 0) return { ...base, status: "rejected", reasonCode: "BATCH_BINDING_MISMATCH", reasons: bindingMismatch.map((key) => `${key} binding changed`) };
   if (!BATCH_PHASES.includes(actualBinding.stage) && actualBinding.stage !== "development") return { ...base, status: "rejected", reasonCode: "BATCH_STAGE_UNKNOWN", reasons: [`unsupported stage ${actualBinding.stage}`] };
 
-  const observerResult = normalizeBatchRuntimeObserver(source);
-  const taskSource = observerTasks(source, observerResult.observer);
-  const explicitObserver = source.requireRuntimeObservation === true || source.runtimeObserver !== undefined || source.observer !== undefined || source.runtimeObservation !== undefined;
+  const hasObserver = source.runtimeObserver !== undefined || source.observer !== undefined || source.runtimeObservation !== undefined;
+  const strictObservation = source.operational === true || source.observationFresh === true || source.requireRuntimeObservation === true;
+  const observerResult = normalizeBatchRuntimeObserver(source, { requireCandidate: strictObservation, requireDependencyRecords: strictObservation });
+  // In the operational path the host queue is authoritative.  `tasks` carried
+  // on the request is compared for drift, never used to replace that snapshot.
+  const taskSource = (strictObservation || hasObserver) && observerResult.observer?.queue?.records !== null
+    ? observerResult.observer?.queue?.records
+    : observerTasks(source, observerResult.observer);
+  const explicitObserver = strictObservation || hasObserver;
   const legacyFixtureObservation = source.trigger === "formal-batch-gate"
     && source.candidate?.id === "candidate-421" && source.queueDigest === "queue-421"
     && Array.isArray(taskSource) && taskSource.length === 0 && !explicitObserver;
@@ -1018,9 +1355,37 @@ export function qualifyBatch(input = {}) {
   if ((!observerResult.ok && (explicitObserver || taskSource.length === 0 && !legacyFixtureObservation))) {
     return { ...base, status: "not-verifiable", reasonCode: observerResult.reasonCode, tasks: taskSource.map(normalizedBatchTask), observation: observerResult, reasons: [`runtime observations missing or untrusted: ${observerResult.missing.join(", ")}`] };
   }
+  if (hasObserver && taskSource.length > 0 && (!Array.isArray(observerResult.observer?.dependencies?.records) || observerResult.observer.dependencies.records.length !== taskSource.length)) {
+    return { ...base, status: "not-verifiable", reasonCode: "BATCH_DEPENDENCY_SCHEMA_NOT_VERIFIABLE", tasks: taskSource.map(normalizedBatchTask), observation: observerResult, reasons: ["dependency observations are missing or incomplete; an absent schema is not an empty closure"] };
+  }
+  if (hasObserver && Array.isArray(taskSource) && Array.isArray(observerResult.observer?.dependencies?.records)
+    && !dependencyRowsMatchTasks(taskSource, observerResult.observer.dependencies.records)) {
+    return {
+      ...base,
+      status: "rejected",
+      reasonCode: "BATCH_DEPENDENCY_OBSERVATION_MISMATCH",
+      tasks: taskSource.map(normalizedBatchTask),
+      observation: observerResult,
+      reasons: ["observed dependency closure differs from the native task snapshot or approved stage mapping"],
+    };
+  }
+  {
+    const taskProblems = taskObservationProblems(taskSource, observerResult.observer?.dependencies?.records, { strict: strictObservation });
+    if (taskProblems.length > 0) return { ...base, status: "not-verifiable", reasonCode: "BATCH_TASK_OBSERVATION_NOT_VERIFIABLE", tasks: taskSource.map(normalizedBatchTask), observation: observerResult, reasons: taskProblems };
+  }
+  if (hasObserver && Array.isArray(source.tasks) && Array.isArray(observerResult.observer?.queue?.records) && JSON.stringify(stableTaskSnapshot(source.tasks)) !== JSON.stringify(stableTaskSnapshot(observerResult.observer.queue.records))) {
+    return { ...base, status: "rejected", reasonCode: "BATCH_NATIVE_OBSERVATION_MISMATCH", tasks: taskSource.map(normalizedBatchTask), observation: observerResult, reasons: ["caller task snapshot differs from the observed host queue"] };
+  }
+  if (strictObservation) {
+    if (Array.isArray(source.tasks) && JSON.stringify(stableTaskSnapshot(source.tasks)) !== JSON.stringify(stableTaskSnapshot(taskSource))) {
+      return { ...base, status: "rejected", reasonCode: "BATCH_NATIVE_OBSERVATION_MISMATCH", tasks: taskSource.map(normalizedBatchTask), observation: observerResult, reasons: ["caller task snapshot differs from the observed host queue"] };
+    }
+  }
   const expectedQueueDigest = batchString(source.expectedQueueDigest ?? source.queueDigest ?? source.state?.queueDigest);
   const observedQueueDigest = batchString(observerResult.observer?.queue?.digest);
-  const actualQueueDigest = batchString(source.currentQueueDigest ?? source.observedQueueDigest ?? source.state?.currentQueueDigest ?? observedQueueDigest ?? expectedQueueDigest);
+  const actualQueueDigest = strictObservation || hasObserver
+    ? observedQueueDigest
+    : batchString(source.currentQueueDigest ?? source.observedQueueDigest ?? source.state?.currentQueueDigest ?? observedQueueDigest ?? expectedQueueDigest);
   const expectedCandidateRevision = source.expectedCandidateRevision ?? source.candidateRevision;
   const actualCandidateRevision = source.currentCandidateRevision ?? source.state?.candidateRevision ?? expectedCandidateRevision;
   if (expectedCandidateRevision !== undefined && expectedCandidateRevision !== actualCandidateRevision) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", candidateRevision: { expected: expectedCandidateRevision, actual: actualCandidateRevision }, reasons: ["candidate revision changed during qualification"] };
@@ -1043,10 +1408,9 @@ export function qualifyBatch(input = {}) {
       else if (!target.postAction && !BATCH_COMPLETE_STATES.has(target.status.toLowerCase())) unfinishedDependencies.push(`${task.id}->${dependency}`);
     }
   }
-  if (missingDependencies.length > 0 || unfinishedDependencies.length > 0 || blockedDependencies.length > 0) {
+  if (missingDependencies.length > 0 || blockedDependencies.length > 0) {
     return { ...base, status: "not-verifiable", reasonCode: "BATCH_DEPENDENCY_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: [...missingDependencies, ...unfinishedDependencies, ...blockedDependencies], reasons: [
       ...(missingDependencies.length > 0 ? [`missing dependencies: ${missingDependencies.join(", ")}`] : []),
-      ...(unfinishedDependencies.length > 0 ? [`unfinished dependencies: ${unfinishedDependencies.join(", ")}`] : []),
       ...(blockedDependencies.length > 0 ? [`blocked dependencies cannot certify dependents: ${blockedDependencies.join(", ")}`] : []),
     ] };
   }
@@ -1054,21 +1418,23 @@ export function qualifyBatch(input = {}) {
   if (actualQueueDigest !== expectedQueueDigest) return { ...base, status: "rejected", reasonCode: "BATCH_QUEUE_STALE", tasks, postActions, queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the task queue changed while qualification was being evaluated"] };
   const remainingTasks = activeTasks.filter((task) => !BATCH_COMPLETE_STATES.has(task.status.toLowerCase()) && !task.realBlocked);
   const executableWork = remainingTasks.filter((task) => task.executable || task.running || BATCH_EXECUTABLE_STATES.has(task.status.toLowerCase()) || task.status.toLowerCase() === "unknown");
-  const runningAgents = batchArray(source.runningAgents ?? source.runningSubagents ?? source.inFlightAgents ?? source.activeSubagents ?? source.subagents ?? source.state?.runningAgents).filter((agent) => {
-    if (typeof agent === "string") return true;
-    if (!agent || typeof agent !== "object") return false;
-    return agent.running === true || BATCH_RUNNING_STATES.has(String(agent.status ?? agent.state ?? "").toLowerCase());
-  });
-  const writes = batchArray(source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions).filter((write) => write === true || write?.running === true || BATCH_RUNNING_STATES.has(String(write?.status ?? write?.state ?? "").toLowerCase()));
-  const writeStatus = String(source.writeStatus ?? source.writeState ?? source.transactionStatus ?? "").toLowerCase();
-  const runningWrites = source.writeInProgress === true || source.writing === true || BATCH_RUNNING_STATES.has(writeStatus) || writes.length > 0;
+  const runningAgentSource = strictObservation || hasObserver ? observerArray(observerResult.observer, "agents") : source.runningAgents ?? source.runningSubagents ?? source.inFlightAgents ?? source.activeSubagents ?? source.subagents ?? source.state?.runningAgents;
+  const runningAgents = batchArray(runningAgentSource).filter(observedProcessActive);
+  const writes = batchArray(strictObservation || hasObserver ? observerArray(observerResult.observer, "writes") : source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions).filter(observedProcessActive);
+  const writeStatus = String(strictObservation || hasObserver ? "" : source.writeStatus ?? source.writeState ?? source.transactionStatus ?? "").toLowerCase();
+  const runningWrites = strictObservation || hasObserver ? writes.length > 0 : source.writeInProgress === true || source.writing === true || BATCH_RUNNING_STATES.has(writeStatus) || writes.length > 0;
   const remainingPrerequisites = activeTasks.filter((task) => !BATCH_COMPLETE_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
   const blockedWithoutEvidence = activeTasks.filter((task) => BATCH_BLOCKED_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
   if (blockedWithoutEvidence.length > 0) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BLOCKED_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: blockedWithoutEvidence, reasons: [`blocked task lacks a real reason/evidence: ${blockedWithoutEvidence.join(", ")}`] };
   if (remainingTasks.length > 0 || runningAgents.length > 0 || runningWrites) {
     return { ...base, status: "not-ready", reasonCode: remainingTasks.length > 0 ? "BATCH_WORK_REMAINING" : runningAgents.length > 0 ? "BATCH_SUBAGENTS_RUNNING" : "BATCH_WRITE_IN_PROGRESS", tasks, postActions, executableWork: executableWork.length > 0 ? executableWork : remainingTasks, runningAgents, runningWrites, remainingPrerequisites: remainingTasks.map((task) => task.id), reasons: ["formal batch gates stay at zero while executable work, a subagent, or a write is in flight"] };
   }
-  const candidate = batchCandidate(source.stableCandidate ?? source.candidate ?? source.state?.candidate);
+  const declaredCandidate = source.stableCandidate ?? source.candidate ?? source.state?.candidate;
+  const observedCandidate = observerResult.observer?.candidate?.raw ?? null;
+  if (strictObservation && !batchCandidate(observedCandidate).stable) return { ...base, status: "not-verifiable", reasonCode: "BATCH_CANDIDATE_NOT_STABLE", tasks, postActions, remainingPrerequisites, observation: observerResult, candidate: batchCandidate(observedCandidate), reasons: ["the runtime observer did not provide a stable candidate identity and digest"] };
+  const candidate = batchCandidate(strictObservation ? observedCandidate : declaredCandidate);
+  const declaredCandidateDigest = batchCandidate(declaredCandidate).digest;
+  if (strictObservation && declaredCandidateDigest !== null && declaredCandidateDigest !== candidate.digest) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: ["the declared candidate digest differs from the runtime observer snapshot"] };
   if (!candidate.stable) return { ...base, status: "not-verifiable", reasonCode: "BATCH_CANDIDATE_NOT_STABLE", tasks, postActions, remainingPrerequisites, candidate, reasons: ["a stable candidate identity and digest are required"] };
   const observedCandidateDigest = observerResult.observer?.candidate?.digest;
   if (observedCandidateDigest !== null && observedCandidateDigest !== undefined && candidate.digest !== observedCandidateDigest) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: ["the candidate digest differs from the runtime observer snapshot"] };
@@ -1129,8 +1495,9 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     let refreshed;
     try { refreshed = await recheck(input); } catch { refreshed = null; }
     if (refreshed?.securityVeto === true || refreshed?.security?.veto === true || refreshed?.reasonCode === "BATCH_SECURITY_VETO") return { ...initial, status: "rejected", reasonCode: "BATCH_SECURITY_VETO", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["security veto is immediate and is not bypassed by an idempotency key"] };
-    if (!refreshed || refreshed.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "rejected", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["batch binding, queue, candidate, or stage changed before formal execution"] };
+    if (!refreshed) return { ...initial, status: "rejected", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["batch binding, queue, candidate, or stage changed before formal execution"] };
     if (refreshed.eligible !== true || refreshed.formalGateAllowed !== true || !["eligible", "qualified"].includes(refreshed.status)) return { ...initial, status: "rejected", reasonCode: "BATCH_RECHECK_NOT_ELIGIBLE", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: [refreshed.reasons?.join("; ") || "full qualification vetoed the formal run before execution"] };
+    if (refreshed.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "rejected", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["batch binding, queue, candidate, or stage changed before formal execution"] };
   }
   if (typeof runner !== "function") return { ...initial, status: "not-verifiable", reasonCode: "BATCH_FORMAL_RUNNER_REQUIRED", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["formal batch execution requires the registered runner"] };
   let result;
@@ -1143,7 +1510,9 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     let after;
     try { after = await recheck(input); } catch { after = null; }
     if (after?.securityVeto === true || after?.security?.veto === true || after?.reasonCode === "BATCH_SECURITY_VETO") return { ...initial, status: "failed", reasonCode: "BATCH_SECURITY_VETO", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["security veto observed after formal execution; result is invalidated"] };
-    if (!after || after.idempotencyKey !== initial.idempotencyKey || after.eligible !== true || after.formalGateAllowed !== true) return { ...initial, status: "failed", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["batch qualification drifted during formal execution"] };
+    if (!after) return { ...initial, status: "failed", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["batch qualification drifted during formal execution"] };
+    if (after.eligible !== true || after.formalGateAllowed !== true) return { ...initial, status: "failed", reasonCode: "BATCH_RECHECK_NOT_ELIGIBLE", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: [after.reasons?.join("; ") || "full qualification vetoed the result after execution"] };
+    if (after.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "failed", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["batch qualification drifted during formal execution"] };
   }
   return { ...initial, status: "completed", reasonCode: "BATCH_FORMAL_GATE_COMPLETED", formalGateAllowed: false, executed: [result ?? { ok: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["formal batch runner completed once"] };
 }
@@ -1158,6 +1527,18 @@ export const executeFormalBatchGate = executeQualifiedBatch;
  * table, but the returned qualification remains the sole gate input.
  */
 export async function executeOperationalBatch(input = {}, runner, { readNative = null, observeRuntime = null, recheck = null } = {}) {
+  if (input?.securityVeto === true || input?.permissionDenied === true || input?.security?.veto === true || input?.permission?.denied === true) {
+    return {
+      schemaVersion: OPERATIONAL_BATCH_VERSION,
+      status: "rejected",
+      reasonCode: "BATCH_SECURITY_VETO",
+      eligible: false,
+      formalGateAllowed: false,
+      formalGateExecutions: 0,
+      executed: [],
+      reasons: ["permission or security refusal is immediate and cannot be bypassed by a batch key"],
+    };
+  }
   const acquired = await acquireOperationalBatchInput(input, { readNative, observeRuntime });
   if (acquired.ok === false) return {
     schemaVersion: OPERATIONAL_BATCH_VERSION,
@@ -1170,7 +1551,7 @@ export async function executeOperationalBatch(input = {}, runner, { readNative =
     nativeState: acquired.native ?? null,
     reasons: [acquired.error ?? "native work/dependency or runtime observation unavailable"],
   };
-  const observed = normalizeBatchRuntimeObserver(acquired);
+  const observed = normalizeBatchRuntimeObserver(acquired, { requireCandidate: true, requireDependencyRecords: true });
   if (!observed.ok) return {
     schemaVersion: OPERATIONAL_BATCH_VERSION,
     status: "not-verifiable",
@@ -1182,13 +1563,22 @@ export async function executeOperationalBatch(input = {}, runner, { readNative =
     observation: observed,
     reasons: [`runtime observations missing or untrusted: ${observed.missing.join(", ")}`],
   };
-  const qualification = qualifyBatch({ ...acquired, runtimeObserver: acquired.runtimeObserver, requireRuntimeObservation: true, trigger: acquired.trigger ?? "formal-batch-gate" });
+  const qualification = qualifyBatch({ ...acquired, operational: true, runtimeObserver: acquired.runtimeObserver, requireRuntimeObservation: true, trigger: acquired.trigger ?? "formal-batch-gate" });
   if (qualification.eligible !== true || qualification.formalGateAllowed !== true) return { ...qualification, schemaVersion: OPERATIONAL_BATCH_VERSION, executed: [], formalGateExecutions: 0 };
   const refresh = async () => {
-      if (recheck !== null) return recheck(input);
+      // A caller-provided recheck is advisory only.  The code-owned native and
+      // runtime adapters are always re-run so a queue/write/security change
+      // cannot be hidden by a repeated qualification object.
       const next = await acquireOperationalBatchInput(input, { readNative, observeRuntime });
-      if (next.ok === false) return { idempotencyKey: null, reasonCode: next.reasonCode, eligible: false, formalGateAllowed: false };
-      return qualifyBatch({ ...next, runtimeObserver: next.runtimeObserver, requireRuntimeObservation: true, trigger: "formal-batch-gate" });
+      if (next.ok === false) return { idempotencyKey: null, reasonCode: next.reasonCode, eligible: false, formalGateAllowed: false, status: "not-verifiable" };
+      const refreshed = qualifyBatch({ ...next, operational: true, runtimeObserver: next.runtimeObserver, requireRuntimeObservation: true, trigger: "formal-batch-gate" });
+      if (typeof recheck === "function") {
+        try {
+          const advisory = await recheck({ ...input, freshQualification: refreshed });
+          if (advisory?.securityVeto === true || advisory?.security?.veto === true) return { ...refreshed, status: "rejected", reasonCode: "BATCH_SECURITY_VETO", eligible: false, formalGateAllowed: false };
+        } catch { /* the fresh qualification remains authoritative */ }
+      }
+      return refreshed;
   };
   const result = await executeQualifiedBatch({ qualification }, runner, { recheck: refresh });
   return { ...result, schemaVersion: OPERATIONAL_BATCH_VERSION };
@@ -1200,6 +1590,8 @@ const DEVELOPMENT_RULES = Object.freeze([
   { id: "docs", match: (path) => path.startsWith("docs/") || path.endsWith(".md"), checks: ["format-check", "links"] },
   { id: "portal", match: (path) => path.startsWith("portal/"), checks: ["portal"] },
   { id: "engine-source", match: (path) => path.startsWith("packages/") || path.startsWith("tests/"), checks: ["typecheck", "test"] },
+  { id: "engine-runtime", match: (path) => path.startsWith("scripts/") || path.startsWith("tools/"), checks: ["typecheck", "test"] },
+  { id: "engine-metadata", match: (path) => ["package.json", "pnpm-lock.yaml"].includes(path) || path.startsWith("scripts/policy/"), checks: ["typecheck", "test"] },
   { id: "execution-controller", match: (path) => ["scripts/task.mjs", "scripts/test-controller-bootstrap.mjs", "scripts/test-controller-reaper.mjs"].includes(path), checks: ["typecheck", "test"] },
   { id: "gate-declaration", match: (path) => path === "scripts/policy/gate-containment.json" || path === "scripts/lib/push-gate-children.mjs", checks: ["p1-roster"] },
 ]);
@@ -1360,6 +1752,7 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
 
 export function recordExecution(plan, results) {
   if (plan?.executable !== true) throw planError("GATE_PLAN_NOT_EXECUTABLE", "plan has blocked prerequisites");
+  if (plan?.dynamic === true && (!plan.integrity || plan.integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION)) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "dynamic plans require an integrity envelope");
   const rows = Array.isArray(results) ? results : [];
   const selectedIds = new Set((plan?.selected ?? []).map((entry) => entry.id));
   const executedIds = rows.map((entry) => entry?.id).filter(Boolean);
@@ -1368,9 +1761,10 @@ export function recordExecution(plan, results) {
   const missing = [...selectedIds].filter((id) => !executedIds.includes(id));
   if (duplicate || unselected.length > 0 || missing.length > 0) throw planError("GATE_PLAN_EXECUTION_MISMATCH", JSON.stringify({ duplicate, unselected, missing }));
   if (plan?.integrity?.requireInputObserver === true) {
-    const invalid = rows.flatMap((row) => measuredResultProblems(row, plan.inputs));
+    const invalid = rows.flatMap((row) => measuredResultProblems(row, row?.plannedInputs ?? row?.inputs ?? plan.inputs, { requireTrusted: true, expectedCommand: plan.selected?.find((entry) => entry.id === row?.id)?.command ?? null, expectedGateId: row?.id ?? null }));
     if (invalid.length > 0) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", invalid.join("; "));
   }
+  if (plan?.dynamic === true && rows.some((row) => /^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? "")))) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", "fixture root result cannot satisfy a production gate");
   const failed = rows.some((entry) => entry?.ok !== true);
   return { ...plan, executed: rows.map((entry) => ({ ...entry, selected: true, coveredBy: null })), executable: failed ? false : plan.executable, executionPermission: failed ? "denied" : plan.executionPermission };
 }
@@ -1379,6 +1773,40 @@ function executionPlanProblems(plan) {
   const problems = [];
   const integrity = plan?.integrity;
   if (!integrity || integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION) return ["execution integrity envelope is missing"];
+  // The integrity envelope is evidence, not authority.  Re-derive the root
+  // command bindings from the checked-in roster and containment declaration so
+  // a caller cannot edit selected/gates/bindings together and then reseal the
+  // public plan digest around an unrelated command.
+  try {
+    const roster = JSON.parse(readFileSync(defaultRosterPath, "utf8"));
+    const containment = JSON.parse(readFileSync(containmentPath, "utf8"));
+    const authority = validateRoster(roster, containment);
+    const authoritativeRoots = new Map(authority.contained.selected.map((entry) => [entry.id, entry]));
+    for (const entry of plan.selected ?? []) {
+      const root = authoritativeRoots.get(entry?.id);
+      if (!root || entry.rootId !== root.rootId || normalizeCommand(entry.command) !== normalizeCommand(roster.groups.find((group) => group.id === root.id)?.command)) {
+        problems.push(`selected root command is not bound to the code-owned roster for ${entry?.id ?? "unknown"}`);
+      }
+    }
+    for (const entry of plan.gates ?? []) {
+      const authorityEntry = authority.contained.all.find((candidate) => candidate.id === entry?.id);
+      const authorityCommand = authorityEntry === undefined ? null : authority.rosterGroups.get(authorityEntry.rootId)?.command;
+      if (!authorityEntry || normalizeCommand(entry.command) !== normalizeCommand(authorityCommand)) problems.push(`gate command is not bound to the code-owned roster for ${entry?.id ?? "unknown"}`);
+    }
+  } catch (error) {
+    problems.push(`code-owned roster/containment could not be re-read: ${String(error?.reasonCode ?? error?.message ?? error)}`);
+  }
+  const computedPlanDigest = digestValue({
+    phase: plan.phase,
+    inputs: plan.inputs,
+    selected: (plan.selected ?? []).map(({ id, rootId, command, inputs }) => ({ id, rootId, command: normalizeCommand(command), inputs })),
+    gates: (plan.gates ?? []).map(({ id, rootId, disposition, command, inputs }) => ({ id, rootId, disposition, command: normalizeCommand(command), inputs })),
+    coveredBy: plan.coveredBy ?? [],
+    obligations: plan.obligations ?? [],
+    executionOrder: plan.executionOrder ?? [],
+    containmentDigest: integrity.containmentDigest,
+  });
+  if (typeof integrity.planDigest !== "string" || integrity.planDigest !== computedPlanDigest) problems.push("plan integrity digest changed after planning");
   const selected = Array.isArray(plan.selected) ? plan.selected : [];
   const expected = Array.isArray(integrity.requiredSelected) ? integrity.requiredSelected : [];
   if (JSON.stringify(selected.map(({ id, rootId, command }) => ({ id, rootId, command: normalizeCommand(command) }))) !== JSON.stringify(expected)) problems.push("selected roots changed after planning");
@@ -1396,12 +1824,15 @@ function executionPlanProblems(plan) {
   return problems;
 }
 
-function measuredResultProblems(row, expectedInputs) {
+function measuredResultProblems(row, expectedInputs, { requireTrusted = false, expectedCommand = null, expectedGateId = null } = {}) {
   const problems = [];
   const rowInputs = row?.inputs ?? row?.inputDigests;
   if (!hasCompleteInputKey(rowInputs) || JSON.stringify(completeInputKey(rowInputs)) !== JSON.stringify(completeInputKey(expectedInputs))) problems.push("runner did not return the planned four input digests");
-  if (terminalEvidenceIdentity(row) === null) problems.push("runner did not return trusted terminal evidence");
+  if (terminalEvidenceIdentity(row, { requireTrusted, expectedCommand }) === null) problems.push(requireTrusted ? "runner did not return a readable immutable terminal artifact" : "runner did not return trusted terminal evidence");
   if (!TERMINAL_EVIDENCE_STATES.has(row?.status) && row?.terminal !== true) problems.push("runner result is not terminal");
+  if (expectedGateId !== null && row?.gateId !== expectedGateId) problems.push("runner result is bound to the wrong gate");
+  if (requireTrusted && row?.exitCode !== 0) problems.push("runner result did not report exitCode 0");
+  if (/^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? ""))) problems.push("fixture root result cannot satisfy a production gate");
   return problems;
 }
 
@@ -1412,7 +1843,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
   }
   if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
   if (plan?.executable !== true || (plan?.blocked ?? []).length > 0) return { ...plan, executed: [] };
-  const integrityProblems = plan?.integrity ? executionPlanProblems(plan) : [];
+  const integrityProblems = plan?.dynamic === true || plan?.integrity ? executionPlanProblems(plan) : [];
   if (integrityProblems.length > 0) {
     return {
       ...plan,
@@ -1424,12 +1855,6 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
     };
   }
   const inputReader = typeof getInputs === "function" ? getInputs : currentInputs === undefined ? null : async () => currentInputs;
-  const expectedPlanInputs = normalizedDigestInput(plan.inputs);
-  const readCurrentInputs = async () => {
-    if (inputReader === null) return null;
-    try { return normalizedDigestInput(await inputReader()); } catch { return null; }
-  };
-  const initialInputs = await readCurrentInputs();
   if (plan?.integrity?.requireInputObserver === true && inputReader === null) {
     return {
       ...plan,
@@ -1440,21 +1865,34 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
       executionPermission: "denied",
     };
   }
-  if (inputReader !== null && (!hasCompleteInputKey(expectedPlanInputs) || JSON.stringify(completeInputKey(initialInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs)))) {
-    return {
-      ...plan,
-      executed: [],
-      blocked: [...(plan.blocked ?? []), { id: "input-drift", reason: "gate inputs changed before execution" }],
-      invalidated: [...(plan.invalidated ?? []), { id: null, evidenceId: null, reasons: ["gate inputs changed before execution"] }],
-      executable: false,
-      executionPermission: "denied",
-    };
+  // A plan with one aggregate tuple retains the compact pre-gate read.  Plans
+  // carrying per-gate tuples skip this aggregate comparison and read each gate
+  // below, so a legitimate gate-specific tuple can differ from the aggregate.
+  const hasGateSpecificTuple = (plan.selected ?? []).some((entry) => JSON.stringify(completeInputKey(entry.inputs)) !== JSON.stringify(completeInputKey(plan.inputs)));
+  if (inputReader !== null && !hasGateSpecificTuple) {
+    let aggregateInputs = null;
+    try { aggregateInputs = normalizedDigestInput(await inputReader("aggregate", plan)); } catch { aggregateInputs = null; }
+    if (!hasCompleteInputKey(normalizedDigestInput(plan.inputs)) || JSON.stringify(completeInputKey(aggregateInputs)) !== JSON.stringify(completeInputKey(plan.inputs))) {
+      return {
+        ...plan,
+        executed: [],
+        blocked: [...(plan.blocked ?? []), { id: "input-drift", reason: "gate inputs changed before execution" }],
+        invalidated: [...(plan.invalidated ?? []), { id: null, evidenceId: null, reasons: ["gate inputs changed before execution"] }],
+        executable: false,
+        executionPermission: "denied",
+      };
+    }
   }
   const rows = [];
   const blocked = [...(plan.blocked ?? [])];
   for (const entry of plan.selected ?? []) {
+    const expectedInputs = normalizedDigestInput(entry.inputs ?? plan.inputs);
+    const readCurrentInputs = async () => {
+      if (inputReader === null) return null;
+      try { return normalizedDigestInput(await inputReader(entry.id, entry)); } catch { return null; }
+    };
     const beforeInputs = await readCurrentInputs();
-    if (inputReader !== null && JSON.stringify(completeInputKey(beforeInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs))) {
+    if (inputReader !== null && (!hasCompleteInputKey(expectedInputs) || JSON.stringify(completeInputKey(beforeInputs)) !== JSON.stringify(completeInputKey(expectedInputs)))) {
       blocked.push({ id: entry.id, reason: "gate inputs changed before this root started" });
       return { ...plan, executed: rows, blocked, invalidated: [...(plan.invalidated ?? []), { id: entry.id, evidenceId: entry.evidenceId ?? null, reasons: ["gate inputs changed before this root started"] }], executable: false, executionPermission: "denied" };
     }
@@ -1467,13 +1905,14 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
     }
     const row = {
       ...entry,
+      plannedInputs: expectedInputs,
       ...(result && typeof result === "object" ? result : { ok: false, reasonCode: "GATE_ROOT_RESULT_INVALID" }),
       elapsedMs: Math.max(0, Date.now() - startedAt),
     };
     const resultInputs = result?.inputs ?? result?.inputDigests;
     const afterInputs = await readCurrentInputs();
-    const drifted = (inputReader !== null && JSON.stringify(completeInputKey(afterInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs)))
-      || (resultInputs !== undefined && JSON.stringify(completeInputKey(resultInputs)) !== JSON.stringify(completeInputKey(expectedPlanInputs)));
+    const drifted = (inputReader !== null && JSON.stringify(completeInputKey(afterInputs)) !== JSON.stringify(completeInputKey(expectedInputs)))
+      || (resultInputs !== undefined && JSON.stringify(completeInputKey(resultInputs)) !== JSON.stringify(completeInputKey(expectedInputs)));
     if (drifted) {
       row.ok = false;
       row.reasonCode = "GATE_PLAN_INPUT_DRIFT";
@@ -1481,13 +1920,19 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
       blocked.push({ id: entry.id, reason: "gate inputs changed while the root was running" });
     }
     if (plan?.integrity?.requireInputObserver === true) {
-      const measuredProblems = measuredResultProblems(row, expectedPlanInputs);
+      const measuredProblems = measuredResultProblems(row, expectedInputs, { requireTrusted: true, expectedCommand: entry.command, expectedGateId: entry.id });
       if (measuredProblems.length > 0) {
         row.ok = false;
         row.reasonCode = "GATE_PLAN_TERMINAL_EVIDENCE_INVALID";
         row.invalidated = true;
         blocked.push({ id: entry.id, reason: measuredProblems.join("; ") });
       }
+    }
+    if (plan?.dynamic === true && /^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? ""))) {
+      row.ok = false;
+      row.reasonCode = "GATE_PLAN_TERMINAL_EVIDENCE_INVALID";
+      row.invalidated = true;
+      blocked.push({ id: entry.id, reason: "fixture root result cannot satisfy a production gate" });
     }
     if (row.ok !== true) blocked.push({ id: entry.id, reason: row.reasonCode ?? "root execution failed" });
     rows.push(row);

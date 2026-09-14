@@ -136,10 +136,13 @@ export function inspectTranscript(input) {
   return text === null ? { ok: true, skipped: true, text: "" } : { ok: true, skipped: false, text };
 }
 
-export function checkStopInput(input) {
+export function checkStopInput(input, options = {}) {
   const inspected = inspectTranscript(input);
   if (inspected.skipped) return { ok: true, skipped: true, violations: [] };
-  return responseAudienceCheck(inspected.text, input);
+  // The executable host entry requires a real audience binding.  The default
+  // keeps direct library compatibility for old callers; missing/unknown host
+  // fields never select Owner mode at the process boundary.
+  return responseAudienceCheck(inspected.text, input, options);
 }
 
 function readStdin() {
@@ -152,7 +155,7 @@ function readStdin() {
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   try {
-    const result = checkStopInput(readStdin());
+    const result = checkStopInput(readStdin(), { legacyMissing: false });
     if (!result.ok) process.stdout.write(`${JSON.stringify({ decision: "block", reason: responseStyleReason(result) })}\n`);
   } catch {
     // Stop checks are advisory enforcement. Any failure is explicitly fail-open.

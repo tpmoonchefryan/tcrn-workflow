@@ -43,12 +43,16 @@ test("STORY-357 a missing or empty last_assistant_message is skipped, not an err
 });
 
 test("STORY-357 the CLI bridge emits the host block envelope only on a violation", () => {
-  const violating = run({ hook_event_name: "Stop", session_id: "codex-session", last_assistant_message: "前后对比" });
+  const violating = run({ hook_event_name: "Stop", session_id: "codex-session", last_assistant_message: "前后对比", audience: "owner" });
   assert.equal(violating.status, 0);
   const response = JSON.parse(violating.stdout);
   assert.deepEqual(Object.keys(response).sort(), ["decision", "reason"]);
   assert.equal(response.decision, "block");
   assert.ok(response.reason.includes("规则 5"));
+
+  const omittedAudience = run({ hook_event_name: "Stop", session_id: "codex-session", last_assistant_message: "前后对比" });
+  assert.equal(omittedAudience.status, 0);
+  assert.equal(omittedAudience.stdout, "", "an omitted host binding must not infer Owner mode");
 
   const compliant = run({ hook_event_name: "Stop", session_id: "codex-session", last_assistant_message: "一切正常" });
   assert.equal(compliant.status, 0);

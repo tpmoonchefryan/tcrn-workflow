@@ -40,13 +40,13 @@ export function inspectCodexStopInput(input) {
   return text.length === 0 ? { ok: true, skipped: true, text: "" } : { ok: true, skipped: false, text };
 }
 
-export function checkCodexStopInput(input) {
+export function checkCodexStopInput(input, options = {}) {
   const inspected = inspectCodexStopInput(input);
   if (inspected.skipped) return { ok: true, skipped: true, violations: [] };
   // An explicit audience is authoritative for routing.  Legacy callers without
   // a field retain the old direct-library behaviour; internal/unknown bindings
   // never receive Owner-only lexical enforcement.
-  return responseAudienceCheck(inspected.text, input, { legacyMissing: true });
+  return responseAudienceCheck(inspected.text, input, options);
 }
 
 function readStdin() {
@@ -59,7 +59,7 @@ function readStdin() {
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   try {
-    const result = checkCodexStopInput(readStdin());
+    const result = checkCodexStopInput(readStdin(), { legacyMissing: false });
     if (!result.ok) process.stdout.write(`${JSON.stringify({ decision: "block", reason: responseStyleReason(result) })}\n`);
   } catch {
     // Stop checks are advisory enforcement. Any failure is explicitly fail-open.
