@@ -20,12 +20,12 @@
     },
     "scopedDisposition": {
       "schemaVersion": "tcrn.proof-budget-scoped-disposition.v1",
-      "bindingSha256": "3f2a7521e6e78c7ab84f2e85c5c7967e45dab36c4d206dfb3179cd098d386ece",
+      "bindingSha256": "d3fdf10954cf84e213d6a6349af92195989762615b452042492bd070e347aaaf",
       "reasonCode": "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING",
       "disposition": "nonblocking-ratio-only",
       "binding": {
         "schemaVersion": "tcrn.proof-budget-scope-binding.v1",
-        "scopeId": "INIT-051/INC320-SERIAL-430+432-434+FINAL-RED",
+        "scopeId": "INIT-051/INC320/RECEIPT-FREEZE-REPAIR",
         "authority": {
           "ratioDecisionMinutesId": "minutes:23e3f5babf9fcc934bbd8326",
           "ratioOwnerAuthorizationSha256": "4a935bcbe8eb20fddf138db69a5ba365566dda9d3132c24e7e99eaf3129ee30d",
@@ -129,23 +129,23 @@
           }
         ],
         "currentExecution": {
-          "bindingSha256": "6f9d7142ac6c940db0c452f564d8e24bd2be29b39b191d18216d9405ae497f76",
+          "bindingSha256": "3665620350a71e8f4258699d988cfbb50f3fd25a9564e7019a994e986a5be5e7",
           "primaryWork": {
             "externalKey": "TCRN-CROSS-STORY-434",
             "id": "work:1891880eb2925c9c777d1d22",
-            "revision": 1,
-            "scopeDigest": "d619d74e52f707ab1e2b3d29a6416c65410f7f8a5177dd0ce980a90ad0aee761"
+            "revision": 5,
+            "scopeDigest": "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c"
           },
           "bindingKind": "governed-task-role",
           "role": "implementation",
           "personaProfileId": null,
           "phase": "rework",
           "taskClass": "implement",
-          "pack": "INC320/430+432-434+FINAL-RED",
-          "activePackBriefSha256": "265488c5e67d49ac257df90d570a389a2c87dbeffa8732fef9cc1efd6ac4d1d1",
-          "technicalPackSha256": "92dd58c414702f1be8bf13e4b3787e13e510d5b10193f3f7b86809fa7a6ff207",
-          "roleBindingAmendmentSha256": "5a681f7b6c4983cc9f775a87a9b5cbe9d88ae439b0f4c74f7f58b5ff35c13a86",
-          "serialPackRecordSha256": "12083e5b6e39a0436ce67bfbac721912249897f86462d866f2470516539760fb",
+          "pack": "INC320/RECEIPT-FREEZE-REPAIR",
+          "activePackBriefSha256": "95a9cbb72fb6c5a1f6faa0dce211705b9d420f99a73927ee082903eb35c1248c",
+          "technicalPackSha256": "7722329981583f372b2bd0a68f040d0a144bc1419412fa89e89d7da5e46ac800",
+          "roleBindingAmendmentSha256": "2a78827bb0c4917901261f73d7966a5d72741f33a5b0923c79ae4391679ce144",
+          "serialPackRecordSha256": "edadc270c64fa193effc07368dddf514792c33e2c3fc95921fa5b787bbb6d9fc",
           "workIds": [
             "work:7adbe918fcd753cfd695dfdb",
             "work:35924e9a902cd39feb6356cc",
@@ -171,58 +171,66 @@
           ],
           "dispatch": {
             "workspaceId": "workspace:7732a51de4c38afb83bb77cf",
-            "workspaceVersion": 6361,
-            "headEventHash": "111dee8fc7462c867c69ae922a60fc3e6d1a2416047394faf9530856ae26b198",
+            "workspaceVersion": 6369,
+            "headEventHash": "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca",
             "configDigest": "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f",
             "host": "codex",
             "mode": "frontier",
             "resolutionInput": "implement",
             "model": "gpt-5.6-luna",
             "effort": "max",
-            "forkTurns": "none"
+            "forkTurns": "none",
+            "primaryWorkAtSpawn": {
+              "externalKey": "TCRN-CROSS-STORY-434",
+              "id": "work:1891880eb2925c9c777d1d22",
+              "revision": 2,
+              "scopeDigest": "cfc7fab183148c3c09a2616b7bf559422fece73cb0bdaa586285cb2418a5f5d3",
+              "status": "ready"
+            },
+            "nativeToolCallId": null,
+            "nativeToolCallIdDisposition": "parent-owned; not exposed in the bounded child handoff",
+            "sourceEvidenceDigest": null,
+            "sourceEvidenceDigestDisposition": "source content beyond the bound current task input is not promoted to an invented digest"
+          },
+          "sourceAtDispatch": {
+            "engine": {
+              "commit": "3c6e1c7755423d9efbaa475f8f761ab475fade2e",
+              "tree": "5049f04dfc894141b515c4782a0a4d5fe4801637"
+            },
+            "helper": {
+              "commit": "2f5d78cf52814c8c18f5b68de04c300bbabb3ce8",
+              "tree": "b9832720d11de735be5d095d946c65c5036a1791"
+            }
+          },
+          "sourceBoundary": {
+            "engineBaseCommit": "3c6e1c7755423d9efbaa475f8f761ab475fade2e",
+            "initialDirtyFiles": [],
+            "authorizedEnginePaths": [
+              "scripts/dispatch-adapter.mjs",
+              "scripts/lib/proof-budget.mjs",
+              "scripts/policy/proof-budget.json",
+              "tests/dispatch-readiness-compliance.test.mjs",
+              "tests/s301-proof-budget.test.mjs",
+              "verification-map.yaml",
+              "fixtures/rc1/rc1-candidate-proof-manifest.json"
+            ],
+            "archiveRoot": "execution-efficiency-correction-2026-09-15/LUNA-FREEZE-R2"
           }
-        },
-        "sourceBoundary": {
-          "engineBaseCommit": "bae41b39455373d4d7742fbac97bf390750ad376",
-          "initialDirtyFiles": [
-            "CONTRIBUTING.md",
-            "scripts/dispatch-adapter.mjs",
-            "scripts/final-gate-plan.mjs",
-            "scripts/lib/proof-budget.mjs",
-            "scripts/lib/push-gate-output.mjs",
-            "scripts/policy/coverage-baseline.json",
-            "scripts/policy/proof-budget.json",
-            "scripts/push-gate.mjs",
-            "scripts/task.mjs",
-            "tests/dispatch-readiness-compliance.test.mjs",
-            "tests/host-render.test.mjs",
-            "tests/s301-proof-budget.test.mjs"
-          ],
-          "authorizedEnginePaths": [
-            "CONTRIBUTING.md",
-            "docs/architecture/background-resource-governance.md",
-            "scripts/dispatch-adapter.mjs",
-            "scripts/dispatch-readiness-compliance.mjs",
-            "scripts/final-gate-plan.mjs",
-            "scripts/lib/proof-budget.mjs",
-            "scripts/lib/push-gate-output.mjs",
-            "scripts/policy/coverage-baseline.json",
-            "scripts/policy/proof-budget.json",
-            "scripts/push-gate.mjs",
-            "scripts/spawn-guard.mjs",
-            "scripts/task.mjs",
-            "tests/dispatch-readiness-compliance.test.mjs",
-            "tests/host-render.test.mjs",
-            "tests/s301-proof-budget.test.mjs",
-            "tests/spawn-guard.test.mjs",
-            "verification-map.yaml",
-            "fixtures/rc1/rc1-candidate-proof-manifest.json"
-          ],
-          "archiveRoot": "execution-efficiency-correction-2026-09-15/LUNA-SERIAL"
-        },
-        "dispositionBoundary": "only the raw proof-to-product ratio item may be nonblocking; no INIT-prefix or caller-selected-work inheritance",
-        "futurePackRule": "Only current-series 386/399/415-430 plus 432-434 are included in this fresh 434-primary execution binding; 431 and future/missing/wrong work remain hard-refused, and the former R3+430 execution binding is not transferred"
-      }
+        }
+      },
+      "dispositionBoundary": "only the raw proof-to-product ratio item may be nonblocking; no INIT-prefix or caller-selected-work inheritance",
+      "futurePackRule": "Only current-series 386/399/415-430 plus 432-434 are included in this fresh 434-primary execution binding; 431 and future/missing/wrong work remain hard-refused, and the former LUNA-SERIAL execution binding is not transferred",
+      "historicalBindings": [
+        {
+          "scopeId": "INIT-051/INC320-SERIAL-430+432-434+FINAL-RED",
+          "scopePolicySha256": "3f2a7521e6e78c7ab84f2e85c5c7967e45dab36c4d206dfb3179cd098d386ece",
+          "executionSha256": "6f9d7142ac6c940db0c452f564d8e24bd2be29b39b191d18216d9405ae497f76",
+          "pack": "INC320/430+432-434+FINAL-RED",
+          "primaryWorkId": "work:1891880eb2925c9c777d1d22",
+          "dispatchVersion": 6361,
+          "disposition": "retained for historical audit only; not reusable as the current execution"
+        }
+      ]
     },
     "review": "series-end"
   },

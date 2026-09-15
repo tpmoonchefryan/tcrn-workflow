@@ -15,7 +15,7 @@ export const PROOF_BUDGET_VERIFIED_REASON = "PROOF_BUDGET_VERIFIED";
 export const PROOF_BUDGET_SCOPED_NONBLOCKING_REASON = "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING";
 export const PROOF_BUDGET_SCOPE_BINDING_ENV = "TCRN_PROOF_BUDGET_SCOPE_BINDING_SHA256";
 
-const APPROVED_SCOPE_BINDING_SHA256 = "3f2a7521e6e78c7ab84f2e85c5c7967e45dab36c4d206dfb3179cd098d386ece";
+const APPROVED_SCOPE_BINDING_SHA256 = "d3fdf10954cf84e213d6a6349af92195989762615b452042492bd070e347aaaf";
 
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -102,7 +102,7 @@ function configuredScopeBinding(policy) {
     || execution.bindingKind !== "governed-task-role"
     || execution.role !== "implementation" || execution.personaProfileId !== null
     || execution.phase !== "rework" || execution.taskClass !== "implement"
-    || execution.pack !== "INC320/430+432-434+FINAL-RED"
+    || execution.pack !== "INC320/RECEIPT-FREEZE-REPAIR"
     || !/^[a-f0-9]{64}$/u.test(execution.activePackBriefSha256 ?? "")
     || !/^[a-f0-9]{64}$/u.test(execution.technicalPackSha256 ?? "")
     || !/^[a-f0-9]{64}$/u.test(execution.roleBindingAmendmentSha256 ?? "")
@@ -113,8 +113,8 @@ function configuredScopeBinding(policy) {
     || execution.workIds.length !== binding.allowedWork.length
     || binding.allowedWork.some((work) => !execution.workIds.includes(work.id))
     || !dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)
-    || dispatch.workspaceId !== binding.workspaceId || dispatch.workspaceVersion !== 6361
-    || dispatch.headEventHash !== "111dee8fc7462c867c69ae922a60fc3e6d1a2416047394faf9530856ae26b198"
+    || dispatch.workspaceId !== binding.workspaceId || dispatch.workspaceVersion !== 6369
+    || dispatch.headEventHash !== "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca"
     || dispatch.configDigest !== "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f"
     || dispatch.host !== "codex" || dispatch.mode !== "frontier" || dispatch.resolutionInput !== "implement"
     || dispatch.model !== "gpt-5.6-luna" || dispatch.effort !== "max" || dispatch.forkTurns !== "none"

@@ -142,27 +142,45 @@ test("TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocki
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
   assert.equal(policy.warningRatio, 2.4);
   assert.equal(policy.hardRatio, 2.5);
-  assert.equal(binding.scopeId, "INIT-051/INC320-SERIAL-430+432-434+FINAL-RED");
-  assert.equal(binding.currentExecution.pack, "INC320/430+432-434+FINAL-RED");
+  assert.equal(binding.scopeId, "INIT-051/INC320/RECEIPT-FREEZE-REPAIR");
+  assert.equal(binding.currentExecution.pack, "INC320/RECEIPT-FREEZE-REPAIR");
   assert.equal(binding.currentExecution.phase, "rework");
   assert.equal(binding.currentExecution.primaryWork.externalKey, "TCRN-CROSS-STORY-434");
   assert.equal(binding.currentExecution.primaryWork.id, "work:1891880eb2925c9c777d1d22");
-  assert.equal(binding.currentExecution.primaryWork.scopeDigest, "d619d74e52f707ab1e2b3d29a6416c65410f7f8a5177dd0ce980a90ad0aee761");
+  assert.equal(binding.currentExecution.primaryWork.revision, 5);
+  assert.equal(binding.currentExecution.primaryWork.scopeDigest, "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c");
   assert.equal(binding.currentExecution.role, "implementation");
   assert.equal(binding.currentExecution.bindingKind, "governed-task-role");
   assert.equal(binding.currentExecution.personaProfileId, null);
-  assert.equal(binding.currentExecution.dispatch.workspaceVersion, 6361);
-  assert.equal(binding.currentExecution.dispatch.headEventHash, "111dee8fc7462c867c69ae922a60fc3e6d1a2416047394faf9530856ae26b198");
+  assert.equal(binding.currentExecution.dispatch.workspaceVersion, 6369);
+  assert.equal(binding.currentExecution.dispatch.headEventHash, "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca");
   assert.equal(binding.currentExecution.dispatch.configDigest, "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f");
+  assert.equal(binding.currentExecution.dispatch.host, "codex");
+  assert.equal(binding.currentExecution.dispatch.mode, "frontier");
   assert.equal(binding.currentExecution.dispatch.resolutionInput, "implement");
   assert.equal(binding.currentExecution.dispatch.model, "gpt-5.6-luna");
   assert.equal(binding.currentExecution.dispatch.effort, "max");
   assert.equal(binding.currentExecution.dispatch.forkTurns, "none");
+  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.revision, 2);
+  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.scopeDigest, "cfc7fab183148c3c09a2616b7bf559422fece73cb0bdaa586285cb2418a5f5d3");
+  assert.equal(binding.currentExecution.sourceAtDispatch.engine.commit, "3c6e1c7755423d9efbaa475f8f761ab475fade2e");
+  assert.equal(binding.currentExecution.sourceAtDispatch.helper.commit, "2f5d78cf52814c8c18f5b68de04c300bbabb3ce8");
+  assert.equal(binding.currentExecution.sourceBoundary.engineBaseCommit, "3c6e1c7755423d9efbaa475f8f761ab475fade2e");
   for (const field of ["activePackBriefSha256", "technicalPackSha256", "roleBindingAmendmentSha256", "serialPackRecordSha256"]) {
     assert.match(binding.currentExecution[field], /^[a-f0-9]{64}$/u, field);
   }
   assert.equal(binding.allowedWork.length, 21);
+  assert.deepEqual(binding.allowedWork.map((work) => work.externalKey), [
+    "TCRN-CROSS-STORY-386", "TCRN-CROSS-STORY-399", "TCRN-CROSS-STORY-415", "TCRN-CROSS-STORY-416",
+    "TCRN-CROSS-STORY-417", "TCRN-CROSS-STORY-418", "TCRN-CROSS-STORY-419", "TCRN-CROSS-STORY-420",
+    "TCRN-CROSS-STORY-421", "TCRN-CROSS-STORY-422", "TCRN-CROSS-STORY-423", "TCRN-CROSS-STORY-424",
+    "TCRN-CROSS-STORY-425", "TCRN-CROSS-STORY-426", "TCRN-CROSS-STORY-427", "TCRN-CROSS-STORY-428",
+    "TCRN-CROSS-STORY-429", "TCRN-CROSS-STORY-430", "TCRN-CROSS-STORY-432", "TCRN-CROSS-STORY-433",
+    "TCRN-CROSS-STORY-434",
+  ]);
   assert.equal(binding.allowedWork.some((work) => work.externalKey === "TCRN-CROSS-STORY-431"), false);
+  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[0].executionSha256, "6f9d7142ac6c940db0c452f564d8e24bd2be29b39b191d18216d9405ae497f76");
+  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[0].disposition, "retained for historical audit only; not reusable as the current execution");
   const correctionWork = binding.allowedWork.filter((work) => ["TCRN-CROSS-STORY-432", "TCRN-CROSS-STORY-433", "TCRN-CROSS-STORY-434"].includes(work.externalKey));
   assert.equal(correctionWork.length, 3);
   assert.equal(correctionWork.every((work) => binding.currentExecution.workIds.includes(work.id)), true);
@@ -460,7 +478,7 @@ test("TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
   const currentWorkIds = binding.currentExecution.workIds;
   const records = [
-    ...binding.allowedWork.map((work) => ({ ...work, revision: work.id === binding.currentExecution.primaryWork.id ? 1 : 1, scopeDigest: work.id === binding.currentExecution.primaryWork.id ? binding.currentExecution.primaryWork.scopeDigest : `scope-${work.id}`, status: "blocked", dependencies: [], blockedReason: "bounded fixture stage input" })),
+    ...binding.allowedWork.map((work) => ({ ...work, revision: work.id === binding.currentExecution.primaryWork.id ? binding.currentExecution.primaryWork.revision : 1, scopeDigest: work.id === binding.currentExecution.primaryWork.id ? binding.currentExecution.primaryWork.scopeDigest : `scope-${work.id}`, status: "blocked", dependencies: [], blockedReason: "bounded fixture stage input" })),
     ...binding.excludedWork.map((work) => ({ ...work, revision: 1, scopeDigest: "scope-planned-431", status: "planned", dependencies: [] })),
   ];
   const selected = (workIds) => workIds.map((id) => records.find((record) => record.id === id)).filter(Boolean);
@@ -468,9 +486,9 @@ test("TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding
     const tasks = selected(workIds);
     return {
       ok: true,
-      nativeStatus: { workspaceId: binding.workspaceId, version: 6361, headEventHash: "1".repeat(64) },
+      nativeStatus: { workspaceId: binding.workspaceId, version: 6369, headEventHash: "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca" },
       workListComplete: true,
-      workListPages: [{ offset: 0, total: records.length, truncated: false, version: 6361, headEventHash: "1".repeat(64) }],
+      workListPages: [{ offset: 0, total: records.length, truncated: false, version: 6369, headEventHash: "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca" }],
       workListRecords: records,
       workShows: tasks.map(({ id, revision, scopeDigest, status, externalKey }) => ({ id, revision, scopeDigest, status, externalKey })),
       tasks,

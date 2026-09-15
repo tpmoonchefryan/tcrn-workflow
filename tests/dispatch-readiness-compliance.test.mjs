@@ -1,11 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { DISPATCH_BRIEF_DECLARATIONS, DISPATCH_BRIEF_DECLARATION_FIELDS, DISPATCH_BRIEF_FIELDS, DISPATCH_CONTEXT_PACKAGE_SCHEMA_VERSION, DISPATCH_CONTEXT_READ_POLICY, validateAgentLifecycle, validateAgentLifecycleEvidence, validateDispatchBrief, validateStructuredHandoff } from "../scripts/dispatch-readiness-compliance.mjs";
-import { buildBoundedContextPackage, comparePreSpawnReceiptBytes, DISPATCH_PRESPAWN_RECEIPT_SCHEMA, validatePreSpawnAssociation, validatePreSpawnBaseline, validatePreSpawnReceiptBytes, validateTaskRoleBinding } from "../scripts/dispatch-adapter.mjs";
+import { buildBoundedContextPackage, comparePreSpawnReceiptBytes, DISPATCH_PRESPAWN_RECEIPT_SCHEMA, storyScopeFromWorkShow, validatePreSpawnAssociation, validatePreSpawnBaseline, validatePreSpawnReceiptBytes, validateTaskRoleBinding } from "../scripts/dispatch-adapter.mjs";
+import { acquireWorkspaceLease, createProject, createWork, initializeWorkspace, validateWorkspace } from "../dist/build/packages/core/src/index.js";
+
+const ENGINE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SOURCE_CLI = join(ENGINE_ROOT, "scripts/tcrn-workflow.mjs");
+const instant = (second) => `2026-09-16T00:00:${String(second).padStart(2, "0")}Z`;
 
 const storyScope = [
   "Goal 为谁：Owner；目的锚：STORY-209；符合性判据：五要素可复跑；判定人：Owner。",
@@ -448,7 +458,7 @@ function receiptFixture() {
   });
   const effectiveBriefBytes = canonicalReceiptBytes(effectiveBrief);
   const scopeSha256 = createHash("sha256").update(fixture.liveScope, "utf8").digest("hex");
-  const bindingCheck = validateTaskRoleBinding({ binding: fixture.binding, brief: effectiveBrief, liveWork: fixture.liveWork, liveScope: fixture.liveScope, roleContractSha256: fixture.roleContractSha256, technicalPack: effectiveBrief.technicalPack, prepared: fixture.prepared });
+  const bindingCheck = validateTaskRoleBinding({ binding: fixture.binding, brief: effectiveBrief, liveWork: fixture.liveWork, liveScope: fixture.liveScope, roleContractSha256: fixture.roleContractSha256, briefTemplateSha256: fixture.briefTemplateSha256, technicalPack: effectiveBrief.technicalPack, scopeMarkerSha256: fixture.scopeMarkerSha256, prepared: fixture.prepared });
   return {
     schemaVersion: DISPATCH_PRESPAWN_RECEIPT_SCHEMA,
     bindingKind: "governed-task-role",
@@ -497,7 +507,9 @@ function roleBindingFixture() {
   const roleContractSha256 = "e".repeat(64);
   const technicalPackSha256 = "f".repeat(64);
   const scopeMarker = "Prospective next-Sol task binding: bindingKind=governed-task-role; role=acceptance; personaProfileId=null; phase=acceptance; taskClass=acceptance; workId=work:429; pack=PACK-R2; taskNamePrefix=sol_accept.";
-  const liveScope = `${storyScope}\n\n${scopeMarker}\nroleContractSha256=${roleContractSha256}\ntechnicalPackSha256=${technicalPackSha256}`;
+  const briefTemplateSha256 = "9".repeat(64);
+  const scopeMarkerSha256 = createHash("sha256").update(scopeMarker, "utf8").digest("hex");
+  const liveScope = `${storyScope}\n\n${scopeMarker}\nroleContractSha256=${roleContractSha256}\nbriefTemplateSha256=${briefTemplateSha256}\ntechnicalPackSha256=${technicalPackSha256}\nscopeMarkerSha256=${scopeMarkerSha256}`;
   const binding = {
     bindingKind: "governed-task-role",
     role: "acceptance",
@@ -517,6 +529,7 @@ function roleBindingFixture() {
   binding.predecessorEvidence = { path: "previous-sol-terminal-observation.json", sha256: "6".repeat(64) };
   const sourceEvidence = [
     { kind: "artifact", locator: "role-binding.json", digest: roleContractSha256, status: "verified" },
+    { kind: "artifact", locator: "brief-template.json", digest: briefTemplateSha256, status: "verified" },
     { kind: "artifact", locator: "acceptance-pack.md", digest: technicalPackSha256, status: "verified" },
     { kind: "artifact", locator: "previous-sol-terminal-observation.json", digest: "6".repeat(64), status: "verified" },
     { kind: "artifact", locator: "B-star.json", digest: "8".repeat(64), status: "verified" },
@@ -555,10 +568,90 @@ function roleBindingFixture() {
     taskRoleBinding: { ...binding, workId: binding.primaryWorkId },
     technicalPack: { path: "/tmp/acceptance-pack.md", sha256: technicalPackSha256 },
   };
-  const liveWork = { record: { id: "work:429", externalKey: "TCRN-CROSS-STORY-429", revision: 4, scopeDigest: "a".repeat(64), status: "active", tombstone: false } };
+  const liveWork = { advisory: { scope: liveScope }, record: { id: "work:429", externalKey: "TCRN-CROSS-STORY-429", revision: 4, scopeDigest: "a".repeat(64), status: "active", tombstone: false } };
   const prepared = { resolution: { host: "codex", taskClass: "acceptance", mode: "frontier", value: { model: "gpt-5.6-sol", effort: "max" } } };
-  return { roleContractSha256, technicalPackSha256, scopeMarker, liveScope, binding, brief, liveWork, prepared };
+  return { roleContractSha256, briefTemplateSha256, technicalPackSha256, scopeMarkerSha256, scopeMarker, liveScope, binding, brief, liveWork, prepared };
 }
+
+async function sourceCliWorkShowFixture(context) {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-dispatch-work-show-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => ({ kind, path: join(base, kind) }));
+  for (const root of roots) await mkdir(root.path);
+  const workspace = join(base, "workspace");
+  await initializeWorkspace({ roots, externalKey: "DISPATCH-WORK-SHOW", createdAt: instant(0), segmentEventLimit: 32 });
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(1) });
+  let state;
+  try {
+    state = await createProject(workspace, lease, { expectedVersion: 0, occurredAt: instant(2), externalKey: "DISPATCH-PROJECT", name: "Dispatch scope fixture" });
+    const projectId = state.projects.find((record) => record.externalKey === "DISPATCH-PROJECT").id;
+    state = await createWork(workspace, lease, { expectedVersion: state.version, occurredAt: instant(3), projectId, externalKey: "DISPATCH-INIT", kind: "Initiative", parentId: null, title: "Dispatch initiative" });
+    const initiativeId = state.work.find((record) => record.externalKey === "DISPATCH-INIT").id;
+    state = await createWork(workspace, lease, { expectedVersion: state.version, occurredAt: instant(4), projectId, externalKey: "DISPATCH-EPIC", kind: "Epic", parentId: initiativeId, title: "Dispatch epic" });
+    const epicId = state.work.find((record) => record.externalKey === "DISPATCH-EPIC").id;
+    state = await createWork(workspace, lease, { expectedVersion: state.version, occurredAt: instant(5), projectId, externalKey: "DISPATCH-STORY", kind: "Story", parentId: epicId, status: "active", scope: storyScope, title: "Dispatch story" });
+  } finally {
+    await lease.release();
+  }
+  const story = state.work.find((record) => record.externalKey === "DISPATCH-STORY");
+  const child = spawnSync(process.execPath, [SOURCE_CLI, "work-show", "--workspace", workspace, "--id", story.id], {
+    cwd: ENGINE_ROOT,
+    env: process.env,
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+    shell: false,
+  });
+  assert.equal(child.error, undefined, String(child.error?.message ?? ""));
+  assert.equal(child.status, 0, child.stderr);
+  assert.equal(child.stderr, "");
+  const workShow = JSON.parse(child.stdout);
+  const materialized = await validateWorkspace(workspace);
+  const controlledRecord = materialized.work.find((record) => record.id === story.id);
+  return { workShow, controlledRecord };
+}
+
+test("dispatch adapter reads real source CLI work-show advisory.scope and safely rejects incomplete or mismatched scope shapes", async (context) => {
+  const { workShow, controlledRecord } = await sourceCliWorkShowFixture(context);
+  assert.equal(workShow.record.id, controlledRecord.id);
+  assert.equal(Object.hasOwn(workShow.record, "extensions"), false, "the production work-show projection omits record.extensions");
+  assert.equal(workShow.advisory.scope, storyScope);
+  const production = storyScopeFromWorkShow(workShow);
+  assert.equal(production.ok, true, JSON.stringify(production));
+  assert.equal(production.source, "work-show.advisory.scope");
+  assert.equal(production.scope, storyScope);
+
+  const controlled = storyScopeFromWorkShow(controlledRecord);
+  assert.equal(controlled.ok, true, JSON.stringify(controlled));
+  assert.equal(controlled.source, "controlled-record.extensions[advisory:scope]");
+  assert.equal(controlled.scope, storyScope);
+
+  const missing = structuredClone(workShow);
+  delete missing.advisory.scope;
+  const recordOnly = storyScopeFromWorkShow(missing);
+  assert.equal(recordOnly.ok, false);
+  assert.equal(recordOnly.reasonCode, "DISPATCH_WORK_SCOPE_INVALID");
+  assert.equal(storyScopeFromWorkShow(workShow.record).reasonCode, "DISPATCH_WORK_SCOPE_INVALID");
+
+  for (const mutant of [
+    { ...structuredClone(workShow), advisory: { ...workShow.advisory, scope: { value: storyScope } } },
+    { ...structuredClone(workShow), advisory: { ...workShow.advisory, scope: 42 } },
+  ]) {
+    let result;
+    assert.doesNotThrow(() => { result = storyScopeFromWorkShow(mutant); });
+    assert.equal(result.ok, false);
+    assert.equal(result.reasonCode, "DISPATCH_WORK_SCOPE_INVALID");
+  }
+
+  const mismatchRecord = structuredClone(controlledRecord);
+  mismatchRecord.extensions["advisory:scope"] = { ...mismatchRecord.extensions["advisory:scope"], value: `${storyScope}\ncontrolled-record-mismatch` };
+  const mismatch = storyScopeFromWorkShow({ ...workShow, record: mismatchRecord });
+  assert.equal(mismatch.ok, false);
+  assert.equal(mismatch.reasonCode, "DISPATCH_WORK_SCOPE_MISMATCH");
+
+  const wrongTypeRecord = structuredClone(controlledRecord);
+  wrongTypeRecord.extensions["advisory:scope"] = { value: { text: storyScope } };
+  assert.equal(storyScopeFromWorkShow(wrongTypeRecord).reasonCode, "DISPATCH_WORK_SCOPE_INVALID");
+});
 
 test("STORY-424 R2: code-owned role/work/Pack/phase binding is checked against the live scope and brief", () => {
   const fixture = roleBindingFixture();
@@ -568,7 +661,9 @@ test("STORY-424 R2: code-owned role/work/Pack/phase binding is checked against t
     liveWork: value.liveWork,
     liveScope: value.liveScope,
     roleContractSha256: value.roleContractSha256,
+    briefTemplateSha256: value.briefTemplateSha256,
     technicalPack: { path: value.brief.technicalPack.path, sha256: value.technicalPackSha256 },
+    scopeMarkerSha256: value.scopeMarkerSha256,
     prepared: value.prepared,
   });
   const green = validate(fixture);
@@ -588,6 +683,19 @@ test("STORY-424 R2: code-owned role/work/Pack/phase binding is checked against t
     mutate(copy);
     assert.equal(validate(copy).ok, false);
   }
+
+  const callerScope = structuredClone(fixture);
+  callerScope.liveScope = `${storyScope}\ncaller-supplied-scope`;
+  const callerScopeResult = validate(callerScope);
+  assert.equal(callerScopeResult.ok, false);
+  assert.ok(callerScopeResult.problems.some((problem) => problem.code === "DISPATCH_WORK_SCOPE_MISMATCH"));
+
+  const missingBriefDigest = structuredClone(fixture);
+  missingBriefDigest.briefTemplateSha256 = undefined;
+  assert.ok(validate(missingBriefDigest).problems.some((problem) => problem.code === "DISPATCH_BRIEF_TEMPLATE_DIGEST_UNBOUND"));
+  const missingMarkerDigest = structuredClone(fixture);
+  missingMarkerDigest.scopeMarkerSha256 = undefined;
+  assert.ok(validate(missingMarkerDigest).problems.some((problem) => problem.code === "DISPATCH_SCOPE_MARKER_DIGEST_UNBOUND"));
 });
 
 test("STORY-424 R2: stale chain, work, configuration, and source baselines are rejected", () => {
@@ -626,6 +734,8 @@ test("STORY-424 R2: receipt bytes and actual spawn/child association bind the fu
   assert.equal(Object.hasOwn(parsed.receipt, "receiptSha256"), false);
   assert.equal(Object.hasOwn(parsed.receipt, "task_name"), false);
   assert.equal(validatePreSpawnReceiptBytes(Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`)).reasonCode, "DISPATCH_RECEIPT_NOT_CANONICAL");
+  const wrongTemplateDigest = structuredClone(receipt); wrongTemplateDigest.briefTemplate.sha256 = "0".repeat(64);
+  assert.equal(validatePreSpawnReceiptBytes(canonicalReceiptBytes(wrongTemplateDigest)).reasonCode, "DISPATCH_RECEIPT_SCOPE_AUTHORITY_MISSING");
   const selfReferential = structuredClone(receipt); selfReferential.effectiveBrief.content.taskName = "sol_accept_self";
   assert.equal(validatePreSpawnReceiptBytes(canonicalReceiptBytes(selfReferential)).reasonCode, "DISPATCH_RECEIPT_SELF_REFERENCE_FORBIDDEN");
   const staleReceipt = structuredClone(receipt); staleReceipt.baseline.version += 1; staleReceipt.baseline.content.workspace.version += 1; staleReceipt.workspace.version += 1; staleReceipt.source.configuration.version += 1; staleReceipt.effectiveBrief.content.baseline.version += 1; staleReceipt.effectiveBrief.content.contextPackage.current.version += 1;

@@ -179,9 +179,66 @@ function taskRoleTuple(binding) {
   };
 }
 
-export function validateTaskRoleBinding({ binding, brief, liveWork, liveScope, roleContractSha256, technicalPack, prepared } = {}) {
+function controlledRecordStoryScope(record) {
+  if (!isRecord(record) || record.kind !== "Story" || record.tombstone !== false || !isRecord(record.extensions)) {
+    return failure("DISPATCH_WORK_SCOPE_INVALID", "a controlled Story record with structured extensions is required");
+  }
+  const extension = record.extensions["advisory:scope"];
+  if (!isRecord(extension) || typeof extension.value !== "string" || extension.value.trim().length === 0) {
+    return failure("DISPATCH_WORK_SCOPE_INVALID", "the controlled Story record does not carry a non-empty advisory scope string");
+  }
+  let scope;
+  try {
+    scope = storyScopeFromRecord(record);
+  } catch (error) {
+    return failure("DISPATCH_WORK_SCOPE_INVALID", "the controlled Story record scope could not be read", { error: String(error?.message ?? error) });
+  }
+  if (typeof scope !== "string" || scope !== extension.value) {
+    return failure("DISPATCH_WORK_SCOPE_INVALID", "the controlled Story record scope is missing or inconsistent");
+  }
+  return { ok: true, scope, source: "controlled-record.extensions[advisory:scope]" };
+}
+
+/**
+ * Read the scope from the actual `work-show` envelope used by the CLI. The
+ * public work-show projection carries it at `advisory.scope`, not in the
+ * projected `record.extensions`; the record form remains accepted only when
+ * that complete structured extension is present (for controlled core inputs).
+ */
+export function storyScopeFromWorkShow(workShow) {
+  if (!isRecord(workShow)) return failure("DISPATCH_WORK_SCOPE_INVALID", "a structured work-show or controlled work record is required");
+
+  const hasWorkShowScope = isRecord(workShow.advisory) && Object.hasOwn(workShow.advisory, "scope");
+  if (hasWorkShowScope) {
+    const scope = workShow.advisory.scope;
+    if (typeof scope !== "string" || scope.trim().length === 0) {
+      return failure("DISPATCH_WORK_SCOPE_INVALID", "work-show advisory.scope must be a non-empty string", { actualType: scope === null ? "null" : typeof scope });
+    }
+    if (isRecord(workShow.record) && Object.hasOwn(workShow.record, "extensions")) {
+      const recordScope = controlledRecordStoryScope(workShow.record);
+      if (!recordScope.ok) return recordScope;
+      if (recordScope.scope !== scope) {
+        return failure("DISPATCH_WORK_SCOPE_MISMATCH", "work-show advisory.scope differs from the controlled record scope", {
+          advisoryScopeSha256: digestBytes(Buffer.from(scope, "utf8")),
+          recordScopeSha256: digestBytes(Buffer.from(recordScope.scope, "utf8")),
+        });
+      }
+    }
+    return { ok: true, scope, source: "work-show.advisory.scope" };
+  }
+
+  const record = Object.hasOwn(workShow, "record") ? workShow.record : workShow;
+  if (isRecord(record) && Object.hasOwn(record, "extensions")) return controlledRecordStoryScope(record);
+  return failure("DISPATCH_WORK_SCOPE_INVALID", "work-show advisory.scope or a complete controlled Story record is required");
+}
+
+export function validateTaskRoleBinding({ binding, brief, liveWork, liveScope, roleContractSha256, briefTemplateSha256, technicalPack, scopeMarkerSha256, prepared } = {}) {
   const problems = [];
   if (!isRecord(binding)) return failure("DISPATCH_ROLE_BINDING_REQUIRED", "a code-owned task-role binding object is required");
+  const scopeAuthority = storyScopeFromWorkShow(liveWork);
+  const authoritativeScope = scopeAuthority.ok ? scopeAuthority.scope : null;
+  if (!scopeAuthority.ok) problems.push({ code: scopeAuthority.reasonCode ?? "DISPATCH_WORK_SCOPE_INVALID", field: "liveWork.advisory.scope", detail: scopeAuthority.error ?? null });
+  if (scopeAuthority.ok && liveScope !== authoritativeScope) problems.push({ code: "DISPATCH_WORK_SCOPE_MISMATCH", field: "liveScope", expectedSha256: digestBytes(Buffer.from(authoritativeScope, "utf8")), actualSha256: typeof liveScope === "string" ? digestBytes(Buffer.from(liveScope, "utf8")) : null });
   const tuple = taskRoleTuple(binding);
   if (tuple.bindingKind !== "governed-task-role") problems.push({ code: "DISPATCH_BINDING_KIND_INVALID", field: "bindingKind" });
   if (typeof tuple.role !== "string" || tuple.role.trim().length === 0) problems.push({ code: "DISPATCH_ROLE_BINDING_REQUIRED", field: "role" });
@@ -208,9 +265,11 @@ export function validateTaskRoleBinding({ binding, brief, liveWork, liveScope, r
   }
   if (typeof tuple.workId !== "string" || tuple.workId !== liveWork?.record?.id) problems.push({ code: "DISPATCH_WORK_BINDING_MISMATCH", field: "workId", expected: liveWork?.record?.id ?? null, actual: tuple.workId ?? null });
   if (liveWork?.record?.status !== "active" || liveWork?.record?.tombstone !== false) problems.push({ code: "DISPATCH_WORK_NOT_ACTIVE", field: "work.status", actual: liveWork?.record?.status ?? null });
-  if (typeof tuple.scopeMarker === "string" && !String(liveScope ?? "").includes(tuple.scopeMarker)) problems.push({ code: "DISPATCH_SCOPE_MARKER_MISSING", field: "scopeMarker" });
-  if (typeof roleContractSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(roleContractSha256) || !String(liveScope ?? "").includes(roleContractSha256)) problems.push({ code: "DISPATCH_ROLE_CONTRACT_DIGEST_UNBOUND", field: "roleContractSha256" });
-  if (typeof technicalPack?.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(technicalPack.sha256) || !String(liveScope ?? "").includes(technicalPack.sha256)) problems.push({ code: "DISPATCH_PACK_DIGEST_UNBOUND", field: "technicalPack.sha256" });
+  if (typeof tuple.scopeMarker === "string" && !String(authoritativeScope ?? "").includes(tuple.scopeMarker)) problems.push({ code: "DISPATCH_SCOPE_MARKER_MISSING", field: "scopeMarker" });
+  if (typeof roleContractSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(roleContractSha256) || !String(authoritativeScope ?? "").includes(roleContractSha256)) problems.push({ code: "DISPATCH_ROLE_CONTRACT_DIGEST_UNBOUND", field: "roleContractSha256" });
+  if (typeof briefTemplateSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(briefTemplateSha256) || !String(authoritativeScope ?? "").includes(briefTemplateSha256)) problems.push({ code: "DISPATCH_BRIEF_TEMPLATE_DIGEST_UNBOUND", field: "briefTemplateSha256" });
+  if (typeof technicalPack?.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(technicalPack.sha256) || !String(authoritativeScope ?? "").includes(technicalPack.sha256)) problems.push({ code: "DISPATCH_PACK_DIGEST_UNBOUND", field: "technicalPack.sha256" });
+  if (typeof scopeMarkerSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(scopeMarkerSha256) || !String(authoritativeScope ?? "").includes(scopeMarkerSha256)) problems.push({ code: "DISPATCH_SCOPE_MARKER_DIGEST_UNBOUND", field: "scopeMarkerSha256" });
 
   const lifecycle = brief?.agentLifecycle ?? brief?.lifecycle;
   if (!isRecord(brief)) problems.push({ code: "DISPATCH_BRIEF_REQUIRED", field: "brief" });
@@ -219,7 +278,7 @@ export function validateTaskRoleBinding({ binding, brief, liveWork, liveScope, r
   if (brief?.mode !== undefined && brief.mode !== prepared?.resolution?.mode) problems.push({ code: "DISPATCH_MODE_MISMATCH", field: "mode", expected: prepared?.resolution?.mode ?? null, actual: brief.mode });
   const briefWorkId = brief?.workId ?? brief?.storyId;
   if (briefWorkId !== tuple.workId || lifecycle?.workId !== tuple.workId) problems.push({ code: "DISPATCH_WORK_BINDING_MISMATCH", field: "brief.workId", expected: tuple.workId ?? null, actual: briefWorkId ?? lifecycle?.workId ?? null });
-  if (brief?.storyScope !== liveScope) problems.push({ code: "DISPATCH_BRIEF_SCOPE_STALE", field: "storyScope" });
+  if (brief?.storyScope !== authoritativeScope) problems.push({ code: "DISPATCH_BRIEF_SCOPE_STALE", field: "storyScope" });
   if (!isRecord(brief?.taskRoleBinding)) problems.push({ code: "DISPATCH_BRIEF_ROLE_BINDING_MISSING", field: "taskRoleBinding" });
   else {
     for (const field of ["bindingKind", "role", "phase", "taskClass", "workId", "pack", "taskNamePrefix", "scopeMarker"]) {
@@ -577,16 +636,15 @@ export async function preparePreSpawnReceipt({ workspace, roleBindingPath, brief
   const workShowRead = readCliJson(["work-show", "--workspace", workspaceRoot, "--id", workId], "work-show");
   if (!workShowRead.ok) return failure(workShowRead.reasonCode, "current primary work-show read failed", { workShowRead });
   const liveWork = workShowRead.value;
-  const liveScope = liveWork.advisory?.scope;
+  const scopeAuthority = storyScopeFromWorkShow(liveWork);
+  if (!scopeAuthority.ok) return failure(scopeAuthority.reasonCode ?? "DISPATCH_WORK_SCOPE_INVALID", "the live work-show did not expose an authoritative Story scope", { scopeAuthority });
+  const liveScope = scopeAuthority.scope;
   if (status.version !== resolved.source.version || status.headEventHash !== resolved.source.headEventHash || workList.version !== status.version || workList.headEventHash !== status.headEventHash || liveWork.version !== status.version || liveWork.headEventHash !== status.headEventHash) {
     return failure("DISPATCH_CHAIN_READ_DRIFT", "status, dispatch resolution, complete queue, and work-show do not share one chain head", { status: { version: status.version, headEventHash: status.headEventHash }, resolution: resolved.source, queue: { version: workList.version, headEventHash: workList.headEventHash }, workShow: { version: liveWork.version, headEventHash: liveWork.headEventHash } });
   }
   if (listedPrimary.revision !== liveWork.record?.revision || listedPrimary.scopeDigest !== liveWork.record?.scopeDigest || listedPrimary.status !== liveWork.record?.status || liveWork.record?.id !== workId) {
     return failure("DISPATCH_WORK_BINDING_DRIFT", "work-list and primary work-show disagree", { listedPrimary, record: liveWork.record ?? null });
   }
-  const liveScopeFromRecord = storyScopeFromRecord(liveWork.record);
-  if (typeof liveScope !== "string" || liveScopeFromRecord !== liveScope) return failure("DISPATCH_WORK_SCOPE_INVALID", "the live work-show did not expose its current full scope");
-
   const sourceIdentity = readEngineSourceIdentity();
   if (sourceIdentity.ok === false) return sourceIdentity;
   const primaryExternalKey = binding.primaryExternalKey ?? liveWork.record.externalKey;
@@ -639,6 +697,7 @@ export async function preparePreSpawnReceipt({ workspace, roleBindingPath, brief
   }
   const sourceEvidence = [
     { kind: "artifact", locator: bindingInput.path, digest: bindingInput.sha256, status: "verified" },
+    { kind: "artifact", locator: briefInput.path, digest: briefInput.sha256, status: "verified" },
     { kind: "artifact", locator: technicalPackInput.path, digest: technicalPackInput.sha256, status: "verified" },
     ...(predecessorEvidenceInput ? [{ kind: "artifact", locator: predecessorEvidenceInput.path, digest: predecessorEvidenceInput.sha256, status: "verified" }] : []),
     { kind: "work-show", locator: `${workId}@${liveWork.record.revision}`, digest: liveWork.record.scopeDigest, status: "verified" },
@@ -688,7 +747,8 @@ export async function preparePreSpawnReceipt({ workspace, roleBindingPath, brief
     effectiveBrief.contextPackage = buildBoundedContextPackage({ plan: briefTemplate.contextPlan, brief: effectiveBrief, binding, workId, status, liveWork, prepared: resolved });
   }
   Object.assign(effectiveBrief, DISPATCH_BRIEF_DECLARATIONS);
-  const bindingCheck = validateTaskRoleBinding({ binding, brief: effectiveBrief, liveWork, liveScope, roleContractSha256: bindingInput.sha256, technicalPack: { path: technicalPackInput.path, sha256: technicalPackInput.sha256 }, prepared: resolved });
+  const scopeMarkerSha256 = typeof binding.scopeMarker === "string" ? digestBytes(Buffer.from(binding.scopeMarker, "utf8")) : null;
+  const bindingCheck = validateTaskRoleBinding({ binding, brief: effectiveBrief, liveWork, liveScope, roleContractSha256: bindingInput.sha256, briefTemplateSha256: briefInput.sha256, technicalPack: { path: technicalPackInput.path, sha256: technicalPackInput.sha256 }, scopeMarkerSha256, prepared: resolved });
   if (!bindingCheck.ok) return failure("DISPATCH_TASK_BINDING_INVALID", "role/work/Pack/phase is not bound to the live scope and effective brief", { bindingCheck });
   const nativeInput = buildNativeSpawnInput(resolved, lifecycle);
   if (!nativeInput.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "the engine-resolved task binding is not dispatchable", { nativeInput });
@@ -825,8 +885,11 @@ export function validatePreSpawnReceiptBytes(receiptBytes) {
       valueType: effectiveBrief.storyScope === null ? "null" : Array.isArray(effectiveBrief.storyScope) ? "array" : typeof effectiveBrief.storyScope,
     });
   }
-  if (!effectiveBrief.storyScope.includes(taskRole.scopeMarker) || !effectiveBrief.storyScope.includes(receipt.roleContract.sha256) || !effectiveBrief.storyScope.includes(receipt.technicalPack.sha256)) {
-    return failure("DISPATCH_RECEIPT_SCOPE_AUTHORITY_MISSING", "effective brief scope does not carry the role contract, marker, and Pack digests");
+  const scopeMarkerSha256 = digestBytes(Buffer.from(taskRole.scopeMarker, "utf8"));
+  if (!effectiveBrief.storyScope.includes(taskRole.scopeMarker) || !effectiveBrief.storyScope.includes(receipt.roleContract.sha256)
+    || !effectiveBrief.storyScope.includes(receipt.briefTemplate.sha256) || !effectiveBrief.storyScope.includes(receipt.technicalPack.sha256)
+    || !effectiveBrief.storyScope.includes(scopeMarkerSha256)) {
+    return failure("DISPATCH_RECEIPT_SCOPE_AUTHORITY_MISSING", "effective brief scope does not carry the role, brief, marker, and technical Pack digests");
   }
   const lifecycleVerdict = validateAgentLifecycle(lifecycle);
   const briefVerdict = validateDispatchBrief(effectiveBrief);
@@ -836,8 +899,8 @@ export function validatePreSpawnReceiptBytes(receiptBytes) {
   if (stableJson(receipt.briefVerdict) !== stableJson(briefVerdict)) return failure("DISPATCH_RECEIPT_BRIEF_VERDICT_MISMATCH", "stored brief verdict differs from independent validation");
   const lifecycleEvidence = Array.isArray(lifecycle.sourceEvidence) ? lifecycle.sourceEvidence : [];
   const hasVerifiedArtifact = digest => lifecycleEvidence.some(entry => entry?.kind === "artifact" && entry?.digest === digest && entry?.status === "verified");
-  if (!hasVerifiedArtifact(receipt.roleContract.sha256) || !hasVerifiedArtifact(receipt.technicalPack.sha256) || !hasVerifiedArtifact(receipt.baseline.sha256)) {
-    return failure("DISPATCH_RECEIPT_SOURCE_EVIDENCE_INCOMPLETE", "lifecycle evidence must bind the role contract, Pack, and B-star bytes");
+  if (!hasVerifiedArtifact(receipt.roleContract.sha256) || !hasVerifiedArtifact(receipt.briefTemplate.sha256) || !hasVerifiedArtifact(receipt.technicalPack.sha256) || !hasVerifiedArtifact(receipt.baseline.sha256)) {
+    return failure("DISPATCH_RECEIPT_SOURCE_EVIDENCE_INCOMPLETE", "lifecycle evidence must bind the role contract, brief, Pack, and B-star bytes");
   }
   if (!lifecycleEvidence.some(entry => entry?.kind === "work-show" && entry?.digest === receipt.liveWork.scopeDigest && entry?.status === "verified")) {
     return failure("DISPATCH_RECEIPT_WORK_SHOW_EVIDENCE_MISSING", "lifecycle evidence must bind the current primary work-show scope digest");
@@ -876,10 +939,12 @@ export function validatePreSpawnReceiptBytes(receiptBytes) {
   const reconstructedBindingCheck = validateTaskRoleBinding({
     binding: reconstructedBinding,
     brief: effectiveBrief,
-    liveWork: { record: { ...receipt.liveWork, tombstone: false } },
+    liveWork: { advisory: { scope: effectiveBrief.storyScope }, record: { ...receipt.liveWork, tombstone: false } },
     liveScope: effectiveBrief.storyScope,
     roleContractSha256: receipt.roleContract.sha256,
+    briefTemplateSha256: receipt.briefTemplate.sha256,
     technicalPack: receipt.technicalPack,
+    scopeMarkerSha256,
     prepared: { resolution },
   });
   if (!reconstructedBindingCheck.ok || stableJson(receipt.bindingCheck) !== stableJson(reconstructedBindingCheck)) {
