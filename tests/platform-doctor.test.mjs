@@ -22,8 +22,8 @@ function test(name, optionsOrBody, maybeBody) {
   queuedTests.push([name, { ...options, concurrency: true }, body]);
 }
 
-import { adapterIdentityObservations, coreExportedSymbols, inspectChainValidation, inspectPlatform } from "../scripts/platform-doctor.mjs";
-import { GUARDED_TREES, HOSTS, claudeHookSettings, hookEntriesFor } from "../scripts/host-harness.mjs";
+import { adapterIdentityObservations, coreExportedSymbols, inspectChainValidation, inspectHostRenderDrift, inspectPlatform } from "../scripts/platform-doctor.mjs";
+import { GUARDED_TREES, HOSTS, claudeHookSettings, codexHookDocument, hookEntriesFor } from "../scripts/host-harness.mjs";
 import { applyHostHarness } from "../scripts/host-harness-apply.mjs";
 import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
 import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
@@ -164,6 +164,32 @@ test("STORY-371: host-render drift is a named platform check", async (context) =
   assert.equal(check.ok, false);
   assert.equal(check.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
   assert.deepEqual(check.drift, [{ path: ".claude/agents/implement.md" }]);
+});
+
+test("TCRN-CROSS-STORY-429: doctor uses the explicitly selected hooks-only projection", async (context) => {
+  const root = await fixture(context);
+  const repoRoot = join(root, "TCRN Platform", "tcrn-workflow");
+  await mkdir(join(root, ".codex"), { recursive: true });
+  await writeFile(join(root, ".codex", "config.toml"), `model = "user-model"\nmodel_reasoning_effort = "low"\n`);
+  await writeFile(join(root, ".codex", "hooks.json"), `${JSON.stringify(codexHookDocument(repoRoot), null, 2)}\n`);
+  const hostRenderSettings = [
+    { key: "execution.dispatchMode", value: "frontier" },
+    { key: "execution.dispatchTiers", value: JSON.stringify({ codex: {
+      flagship: { model: "approved-flagship", effort: "max" },
+      main: { model: "approved-main", effort: "high" },
+      economy: { model: "approved-economy", effort: "low" },
+    } }) },
+  ];
+  const scoped = await inspectHostRenderDrift(root, { hostRenderSettings, hostRenderHosts: ["codex"], hostRenderRepoRoot: repoRoot, hostRenderScope: "hooks-only" });
+  assert.equal(scoped.ok, true, JSON.stringify(scoped));
+  assert.equal(scoped.scope, "hooks-only");
+  assert.equal(scoped.hosts[0].scope, "hooks-only");
+  assert.deepEqual(scoped.drift, []);
+
+  const full = await inspectHostRenderDrift(root, { hostRenderSettings, hostRenderHosts: ["codex"], hostRenderRepoRoot: repoRoot, hostRenderScope: "full" });
+  assert.equal(full.ok, false, "explicit full doctor scope still detects model configuration drift");
+  assert.equal(full.scope, "full");
+  assert.ok(full.drift.some((entry) => entry.path === ".codex/config.toml"));
 });
 
 test("INC-247: the container-root platform docs location is canonical", async (context) => {

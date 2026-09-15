@@ -2,6 +2,7 @@
 // STORY-371: host-render is a host-owned projection of governed dispatch settings.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -25,6 +26,10 @@ const tiers = (host, flagship, main, economy) => JSON.stringify({ [host]: {
 const settings = (host, mode = "frontier") => [
   { key: "execution.dispatchMode", value: mode },
   { key: "execution.dispatchTiers", value: tiers(host, `${host}-flagship`, `${host}-main`, `${host}-economy`) },
+];
+const emptyDispatchSettings = [
+  { key: "execution.dispatchMode", value: "frontier" },
+  { key: "execution.dispatchTiers", value: "{}" },
 ];
 
 async function existingFor(plan, root) {
@@ -91,15 +96,17 @@ test("STORY-371: Claude rendering preserves user fields, writes tier fields, and
   assert.ok(red.drift.some((entry) => entry.path.endsWith("implement.md")));
 });
 
-test("STORY-371: Codex rendering changes only root model keys and generated hooks", async (t) => {
+test("STORY-371: Codex full rendering changes only root model keys and generated hooks", async (t) => {
   const root = await scratch("tcrn-host-render-codex-");
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, ".codex"), { recursive: true });
   await writeFile(join(root, ".codex", "config.toml"), `model = "old-model"${newline}model_reasoning_effort = "low"${newline}custom = "keep"${newline}${newline}[projects."x"]${newline}model = "nested-model"${newline}`);
   await writeFile(join(root, ".codex", "hooks.json"), `${JSON.stringify({ custom: true, hooks: { User: [{ hooks: [{ type: "command", command: "user-hook" }] }] } }, null, 2)}${newline}`);
   const config = settings("codex", "eco");
-  const first = renderHostPlan({ host: "codex", settings: config, root, repoRoot, existing: new Map() });
-  const plan = renderHostPlan({ host: "codex", settings: config, root, repoRoot, existing: await existingFor(first, root) });
+  const first = renderHostPlan({ host: "codex", scope: "full", settings: config, root, repoRoot, existing: new Map() });
+  const plan = renderHostPlan({ host: "codex", scope: "full", settings: config, root, repoRoot, existing: await existingFor(first, root) });
+  assert.equal(plan.scope, "full");
+  assert.equal(plan.hooksComparable, false);
   assert.equal(plan.resolutions.plan.model, "codex-main");
   const receipt = await applyHostRender(plan, { backupDir: join(root, "backups") });
   assert.equal(receipt.reasonCode, "HOST_RENDER_COMMITTED");
@@ -190,14 +197,16 @@ test("TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order
 
 test("TCRN-CROSS-STORY-417: duplicate exact managed identities refuse before write", async (t) => {
   for (const host of ["claude-code", "codex"]) {
-    const root = await scratch(`tcrn-host-render-duplicate-${host}-`);
-    t.after(() => rm(root, { recursive: true, force: true }));
-    const generated = generatedHooks(host);
-    const hooks = structuredClone(generated);
-    hooks.SubagentStart = [structuredClone(hooks.SubagentStart[0]), structuredClone(hooks.SubagentStart[0]), ...hooks.SubagentStart.slice(1)];
-    const existing = new Map([[hookFilePath(host), JSON.stringify({ hooks })]]);
-    assert.throws(() => renderHostPlan({ host, settings: settings(host), root, repoRoot, existing }), (error) => error?.reasonCode === "HOST_RENDER_MANAGED_IDENTITY_AMBIGUOUS");
-    assert.equal((await readFile(join(root, hookFilePath(host))).catch(() => null)), null, `${host} ambiguity has no write`);
+    for (const scope of ["full", "hooks-only"]) {
+      const root = await scratch(`tcrn-host-render-duplicate-${host}-${scope}-`);
+      t.after(() => rm(root, { recursive: true, force: true }));
+      const generated = generatedHooks(host);
+      const hooks = structuredClone(generated);
+      hooks.SubagentStart = [structuredClone(hooks.SubagentStart[0]), structuredClone(hooks.SubagentStart[0]), ...hooks.SubagentStart.slice(1)];
+      const existing = new Map([[hookFilePath(host), JSON.stringify({ hooks })]]);
+      assert.throws(() => renderHostPlan({ host, scope, settings: settings(host), root, repoRoot, existing }), (error) => error?.reasonCode === "HOST_RENDER_MANAGED_IDENTITY_AMBIGUOUS");
+      assert.equal((await readFile(join(root, hookFilePath(host))).catch(() => null)), null, `${host}/${scope} ambiguity has no write`);
+    }
   }
 });
 
@@ -255,4 +264,180 @@ test("STORY-371: a target change between planning and writing is refused before 
   await writeFile(join(root, ".claude", "settings.json"), "user changed\n");
   await assert.rejects(applyHostRender(plan), (error) => error?.reasonCode === "HOST_RENDER_CONCURRENT_MODIFICATION");
   assert.equal(await readFile(join(root, ".claude", "settings.json"), "utf8"), "user changed\n");
+});
+
+test("TCRN-CROSS-STORY-429: Codex hooks-only ignores and preserves an existing project model config", async (t) => {
+  const root = await scratch("tcrn-host-render-hooks-only-codex-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, ".codex"), { recursive: true });
+  const configBytes = Buffer.from(`# personal project choice\nmodel = "user-model"\nmodel_reasoning_effort = "low"\ncustom = { keep = true }\n\n[projects."x"]\nmodel = "nested-model"\n`, "utf8");
+  await writeFile(join(root, ".codex", "config.toml"), configBytes);
+  const userGroup = { matcher: "User", hooks: [{ type: "command", command: "user-owned-hook" }] };
+  await writeFile(join(root, ".codex", "hooks.json"), `${JSON.stringify({ description: "user metadata", hooks: { User: [userGroup] } }, null, 2)}\n`);
+
+  const config = settings("codex");
+  const first = renderHostPlan({ host: "codex", scope: "hooks-only", settings: config, root, repoRoot, existing: new Map() });
+  const plan = renderHostPlan({ host: "codex", scope: "hooks-only", settings: config, root, repoRoot, existing: await existingFor(first, root) });
+  assert.equal(plan.resolutions.plan.model, "codex-flagship", "a real model resolution must not expand hooks-only scope");
+  assert.deepEqual(plan.files.map((entry) => entry.path), [".codex/hooks.json"]);
+  assert.deepEqual(plan.files[0].ownedFields, ["hooks"]);
+  assert.deepEqual(Object.keys(plan.files[0].expectedManaged), Object.keys(codexHookDocument(repoRoot).hooks));
+
+  const receipt = await applyHostRender(plan, { backupDir: join(root, "backups") });
+  assert.equal(receipt.reasonCode, "HOST_RENDER_COMMITTED");
+  assert.deepEqual(receipt.files.map((entry) => entry.path), [".codex/hooks.json"]);
+  assert.deepEqual(await readFile(join(root, ".codex", "config.toml")), configBytes);
+  const renderedHooks = JSON.parse(await readFile(join(root, ".codex", "hooks.json"), "utf8"));
+  assert.equal(renderedHooks.description, "user metadata");
+  assert.deepEqual(renderedHooks.hooks.User, [userGroup]);
+
+  const doctor = await inspectHostRenderDrift({ host: "codex", scope: "hooks-only", settings: config, root, repoRoot });
+  assert.equal(doctor.ok, true);
+  assert.equal(doctor.scope, "hooks-only");
+  await writeFile(join(root, ".codex", "config.toml"), `model = "changed outside hooks scope"\n`);
+  const ignoredModelDrift = await inspectHostRenderDrift({ host: "codex", scope: "hooks-only", settings: config, root, repoRoot });
+  assert.equal(ignoredModelDrift.ok, true, "hooks-only comparison does not report model/config state");
+});
+
+test("TCRN-CROSS-STORY-429: Claude hooks-only preserves all non-hook settings and backs up exact preimage bytes", async (t) => {
+  const root = await scratch("tcrn-host-render-hooks-only-claude-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, ".claude"), { recursive: true });
+  const before = {
+    model: "owner-selected-model",
+    env: { CLAUDE_CODE_EFFORT_LEVEL: "owner-selected-effort", PRIVATE_USER_FLAG: "keep" },
+    permissions: { allow: ["Read(/**)"], deny: ["Bash(/**)"] },
+    security: { stopOnUnsafe: true, nested: { mode: "strict", values: [null, 3] } },
+    tcrnWorkflowInert: { enabled: false, reason: "user-owned" },
+    userUnknown: { nested: ["retain", { key: "value" }] },
+    hooks: { UserOwnedEvent: [{ matcher: "user", hooks: [{ type: "command", command: "user-hook" }] }] },
+  };
+  const beforeBytes = Buffer.from(`${JSON.stringify(before, null, 2)}\n`, "utf8");
+  await writeFile(join(root, ".claude", "settings.json"), beforeBytes);
+  const config = settings("claude-code");
+  const first = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: config, root, repoRoot, existing: new Map() });
+  const plan = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: config, root, repoRoot, existing: await existingFor(first, root) });
+  assert.deepEqual(plan.files.map((entry) => entry.path), [".claude/settings.json"]);
+  assert.deepEqual(plan.files[0].ownedFields, ["hooks"]);
+
+  const receipt = await applyHostRender(plan, { backupDir: join(root, "backups") });
+  assert.equal(receipt.reasonCode, "HOST_RENDER_COMMITTED");
+  assert.deepEqual(receipt.files.map((entry) => entry.path), [".claude/settings.json"]);
+  const backupBytes = await readFile(join(root, "backups", ".claude", "settings.json"));
+  assert.deepEqual(backupBytes, beforeBytes, "the preimage backup is byte-exact");
+  const afterBytes = await readFile(join(root, ".claude", "settings.json"));
+  const after = JSON.parse(afterBytes.toString("utf8"));
+  const withoutHooks = (value) => {
+    const result = structuredClone(value);
+    delete result.hooks;
+    return result;
+  };
+  assert.deepEqual(withoutHooks(after), withoutHooks(before), "model, env, security, permissions and unknown nested fields stay semantically identical");
+  assert.deepEqual(after.hooks.UserOwnedEvent, before.hooks.UserOwnedEvent);
+  assert.notDeepEqual(afterBytes, beforeBytes, "the JSON file changes only because the authorized hooks change");
+  assert.equal(await readFile(join(root, "CLAUDE.md"), "utf8").catch(() => null), null);
+  assert.equal(await readFile(join(root, ".claude", "agents", "implement.md"), "utf8").catch(() => null), null);
+});
+
+test("TCRN-CROSS-STORY-429: empty model plans still project only hooks for both hosts", async (t) => {
+  for (const host of ["claude-code", "codex"]) {
+    const root = await scratch(`tcrn-host-render-hooks-only-empty-${host}-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const plan = renderHostPlan({ host, scope: "hooks-only", settings: emptyDispatchSettings, root, repoRoot, existing: new Map() });
+    assert.equal(plan.scope, "hooks-only");
+    assert.equal(plan.comparable, false);
+    assert.equal(plan.hooksComparable, true);
+    assert.deepEqual(plan.files.map((entry) => entry.path), [hookFilePath(host)]);
+    const receipt = await applyHostRender(plan);
+    assert.equal(receipt.reasonCode, "HOST_RENDER_COMMITTED");
+    assert.deepEqual(receipt.files.map((entry) => entry.path), [hookFilePath(host)]);
+    if (host === "codex") assert.equal(await readFile(join(root, ".codex", "config.toml"), "utf8").catch(() => null), null);
+    else {
+      assert.equal(await readFile(join(root, "CLAUDE.md"), "utf8").catch(() => null), null);
+      assert.equal(await readFile(join(root, ".claude", "agents", "implement.md"), "utf8").catch(() => null), null);
+    }
+    const doctor = await inspectHostRenderDrift({ host, scope: "hooks-only", settings: emptyDispatchSettings, root, repoRoot });
+    assert.equal(doctor.ok, true);
+    assert.equal(doctor.scope, "hooks-only");
+    assert.equal(doctor.hooksComparable, true);
+  }
+});
+
+test("TCRN-CROSS-STORY-429: hooks-only rejects injected Codex config and Claude model writes before any apply", async (t) => {
+  const codexRoot = await scratch("tcrn-host-render-hooks-only-guard-codex-");
+  t.after(() => rm(codexRoot, { recursive: true, force: true }));
+  const codexPlan = renderHostPlan({ host: "codex", scope: "hooks-only", settings: settings("codex"), root: codexRoot, repoRoot, existing: new Map() });
+  codexPlan.files.push({ path: ".codex/config.toml", content: `model = "injected"\n`, ownedFields: ["model"], beforeSha256: null });
+  await assert.rejects(applyHostRender(codexPlan), (error) => error?.reasonCode === "HOST_RENDER_SCOPE_VIOLATION");
+  assert.equal(await readFile(join(codexRoot, ".codex", "config.toml"), "utf8").catch(() => null), null);
+  assert.equal(await readFile(join(codexRoot, ".codex", "hooks.json"), "utf8").catch(() => null), null);
+
+  const claudeRoot = await scratch("tcrn-host-render-hooks-only-guard-claude-");
+  t.after(() => rm(claudeRoot, { recursive: true, force: true }));
+  await mkdir(join(claudeRoot, ".claude"), { recursive: true });
+  const beforeBytes = Buffer.from(`${JSON.stringify({ model: "user-model", env: { CLAUDE_CODE_EFFORT_LEVEL: "user-effort" }, hooks: {} }, null, 2)}\n`, "utf8");
+  await writeFile(join(claudeRoot, ".claude", "settings.json"), beforeBytes);
+  const claudeFirst = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: settings("claude-code"), root: claudeRoot, repoRoot, existing: new Map() });
+  const claudePlan = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: settings("claude-code"), root: claudeRoot, repoRoot, existing: await existingFor(claudeFirst, claudeRoot) });
+  const forged = JSON.parse(claudePlan.files[0].content);
+  forged.model = "injected-model";
+  claudePlan.files[0].content = `${JSON.stringify(forged, null, 2)}\n`;
+  await assert.rejects(applyHostRender(claudePlan), (error) => error?.reasonCode === "HOST_RENDER_SCOPE_VIOLATION");
+  assert.deepEqual(await readFile(join(claudeRoot, ".claude", "settings.json")), beforeBytes);
+});
+
+test("TCRN-CROSS-STORY-429: native CLI scope selects hooks-only or the explicit full path", async (t) => {
+  const root = await scratch("tcrn-host-render-hooks-only-cli-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const cli = join(repoRoot, "scripts", "host-render.mjs");
+  const args = ["--host", "codex", "--root", root, "--settings", JSON.stringify(settings("codex"))];
+  const hooksPlan = JSON.parse(execFileSync(process.execPath, [cli, ...args, "--scope", "hooks-only", "--plan-only"], { encoding: "utf8" }));
+  assert.equal(hooksPlan.reasonCode, "HOST_RENDER_PLAN_READY");
+  assert.equal(hooksPlan.plan.scope, "hooks-only");
+  assert.deepEqual(hooksPlan.plan.files.map((entry) => entry.path), [".codex/hooks.json"]);
+
+  execFileSync(process.execPath, [cli, ...args, "--hooks-only"], { encoding: "utf8" });
+  assert.equal(await readFile(join(root, ".codex", "config.toml"), "utf8").catch(() => null), null);
+  assert.ok(JSON.parse(await readFile(join(root, ".codex", "hooks.json"), "utf8")).hooks.SubagentStart.length > 0);
+
+  const fullPlan = JSON.parse(execFileSync(process.execPath, [cli, ...args, "--scope", "full", "--plan-only"], { encoding: "utf8" }));
+  assert.equal(fullPlan.plan.scope, "full");
+  assert.ok(fullPlan.plan.files.some((entry) => entry.path === ".codex/config.toml"));
+});
+
+test("TCRN-CROSS-STORY-429: the six authorized per-host hook changes do not alter other managed or user groups", async (t) => {
+  for (const host of ["claude-code", "codex"]) {
+    const root = await scratch(`tcrn-host-render-hooks-only-delta-${host}-`);
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const generated = generatedHooks(host);
+    const beforeHooks = structuredClone(generated);
+    const telemetry = (event) => generated[event].find((group) => group.hooks?.some((hook) => hook.command?.includes("dispatch-telemetry-hook.mjs")));
+    const knowledge = generated.SubagentStart.find((group) => group.hooks?.some((hook) => hook.command?.includes("knowledge-inject-hook.mjs")));
+    assert.ok(telemetry("SubagentStart"));
+    assert.ok(telemetry("SubagentStop"));
+    assert.ok(knowledge);
+    const legacyStart = withoutHostSuffix(telemetry("SubagentStart"), host);
+    const legacyStop = withoutHostSuffix(telemetry("SubagentStop"), host);
+    beforeHooks.SubagentStart = beforeHooks.SubagentStart.map((group) => JSON.stringify(group) === JSON.stringify(telemetry("SubagentStart")) ? legacyStart : group);
+    beforeHooks.SubagentStart = beforeHooks.SubagentStart.filter((group) => JSON.stringify(group) !== JSON.stringify(knowledge));
+    beforeHooks.SubagentStop = beforeHooks.SubagentStop.map((group) => JSON.stringify(group) === JSON.stringify(telemetry("SubagentStop")) ? legacyStop : group);
+    const userGroup = { matcher: "UserOwned", timeout: null, metadata: { retain: [1, { nested: true }] }, hooks: [{ type: "command", command: "user hook" }] };
+    beforeHooks.UserPromptSubmit.push(userGroup);
+    const beforeDocument = host === "claude-code"
+      ? { model: "user-model", env: { CLAUDE_CODE_EFFORT_LEVEL: "user-effort", USER_FLAG: null }, permissions: { deny: ["Bash(/**)"] }, security: { nested: { retain: true } }, hooks: beforeHooks }
+      : { description: "user metadata", hooks: beforeHooks };
+    const existing = new Map([[hookFilePath(host), JSON.stringify(beforeDocument)]]);
+    const plan = renderHostPlan({ host, scope: "hooks-only", settings: settings(host), root, repoRoot, existing });
+    assert.deepEqual(plan.files.map((entry) => entry.path), [hookFilePath(host)]);
+    const file = plan.files[0];
+    const actual = JSON.parse(file.content);
+    const expected = structuredClone(beforeDocument);
+    const startIndex = expected.hooks.SubagentStart.findIndex((group) => JSON.stringify(group) === JSON.stringify(legacyStart));
+    const stopIndex = expected.hooks.SubagentStop.findIndex((group) => JSON.stringify(group) === JSON.stringify(legacyStop));
+    expected.hooks.SubagentStart[startIndex] = telemetry("SubagentStart");
+    expected.hooks.SubagentStart.push(knowledge);
+    expected.hooks.SubagentStop[stopIndex] = telemetry("SubagentStop");
+    assert.deepEqual(actual, expected, `${host}: exactly two telemetry replacements and one full task-bound knowledge group addition`);
+    assert.deepEqual(actual.hooks.UserPromptSubmit.at(-1), userGroup, `${host}: unowned user group and metadata are retained`);
+  }
 });

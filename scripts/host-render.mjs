@@ -20,6 +20,7 @@ import { claudeHookSettings, codexHookDocument, hookEntriesFor } from "./host-ha
 const execFileAsync = promisify(execFile);
 export const HOST_RENDER_VERSION = "tcrn.host-render.v1";
 export const HOST_RENDER_HOSTS = Object.freeze(["claude-code", "codex"]);
+export const HOST_RENDER_SCOPES = Object.freeze(["full", "hooks-only"]);
 export const HOST_RENDER_AGENT_DIRECTORY = ".claude/agents";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CLAUDE_SETTINGS_PATH = ".claude/settings.json";
@@ -30,6 +31,14 @@ const CLAUDE_EFFORT_ENV = "CLAUDE_CODE_EFFORT_LEVEL";
 
 function failure(reasonCode, message, details = {}) {
   throw Object.assign(new Error(message), { reasonCode, ...details });
+}
+
+function renderScope(value) {
+  const scope = value === undefined ? "full" : value;
+  if (!HOST_RENDER_SCOPES.includes(scope)) {
+    failure("HOST_RENDER_SCOPE_INVALID", `scope must be one of ${HOST_RENDER_SCOPES.join(", ")}`);
+  }
+  return scope;
 }
 
 function text(value, label) {
@@ -290,20 +299,23 @@ function managedAgent(source) {
   return { model: frontmatterValue(parsed.fields, "model"), effort: frontmatterValue(parsed.fields, "effort") };
 }
 
-export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROOT, existing = undefined, includeHooksWithoutModel = false } = {}) {
+export function renderHostPlan({ host, mode, scope = "full", settings, root, repoRoot = REPO_ROOT, existing = undefined } = {}) {
   text(host, "host");
   if (!HOST_RENDER_HOSTS.includes(host)) failure("HOST_RENDER_HOST_UNKNOWN", `host must be one of ${HOST_RENDER_HOSTS.join(", ")}`);
+  const selectedScope = renderScope(scope);
+  const hooksOnly = selectedScope === "hooks-only";
   const { config, mode: selectedMode } = readConfig(settings, mode);
   const classes = Object.keys(config.classes).sort();
   const resolutions = Object.fromEntries(classes.map((taskClass) => [taskClass, resolved(config, host, taskClass, selectedMode)]));
   const values = existing === undefined ? null : existing;
   const get = (path) => existingValue(values, path);
   const files = [];
-  if (resolutions.plan === null && !includeHooksWithoutModel) {
+  if (resolutions.plan === null && !hooksOnly) {
     return {
       schemaVersion: HOST_RENDER_VERSION,
       host,
       mode: selectedMode,
+      scope: selectedScope,
       root: root ? resolve(root) : null,
       repoRoot: resolve(repoRoot),
       resolutions,
@@ -318,30 +330,36 @@ export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROO
     const current = parseJson(get(CLAUDE_SETTINGS_PATH), CLAUDE_SETTINGS_PATH);
     const expectedHooks = claudeHookSettings();
     const next = structuredClone(current);
-    if (plan !== null) {
+    if (plan !== null && !hooksOnly) {
       next.model = plan.model;
       next.env = { ...(next.env && typeof next.env === "object" && !Array.isArray(next.env) ? next.env : {}), [CLAUDE_EFFORT_ENV]: plan.effort };
     }
     next.hooks = mergeClaudeHooks(next.hooks, expectedHooks, "claude-code");
-    const settingsManagedExpected = plan === null ? { model: current.model, effort: current.env?.[CLAUDE_EFFORT_ENV], hooks: expectedHooks } : { model: plan.model, effort: plan.effort, hooks: expectedHooks };
-    const settingsManagedActual = { model: current.model, effort: current.env?.[CLAUDE_EFFORT_ENV], hooks: managedClaudeHooks(current.hooks, expectedHooks, "claude-code") };
+    const settingsManagedExpected = hooksOnly
+      ? { hooks: expectedHooks }
+      : { model: plan.model, effort: plan.effort, hooks: expectedHooks };
+    const settingsManagedActual = hooksOnly
+      ? { hooks: managedClaudeHooks(current.hooks, expectedHooks, "claude-code") }
+      : { model: current.model, effort: current.env?.[CLAUDE_EFFORT_ENV], hooks: managedClaudeHooks(current.hooks, expectedHooks, "claude-code") };
     const settingsContent = `${JSON.stringify(next, null, 2)}\n`;
-    files.push(pathEntry(CLAUDE_SETTINGS_PATH, settingsContent, ["model", `env.${CLAUDE_EFFORT_ENV}`, "hooks"], get(CLAUDE_SETTINGS_PATH), settingsManagedActual, settingsManagedExpected));
-    files.push(pathEntry(CLAUDE_BRIDGE_PATH, "@AGENTS.md\n", ["content"], get(CLAUDE_BRIDGE_PATH), get(CLAUDE_BRIDGE_PATH), "@AGENTS.md\n"));
-    for (const taskClass of classes) {
-      const value = resolutions[taskClass];
-      if (value === null) continue;
-      const path = `${HOST_RENDER_AGENT_DIRECTORY}/${taskClass}.md`;
-      const currentAgent = get(path);
-      const content = updateAgent(currentAgent ?? "", value);
-      files.push(pathEntry(path, content, ["frontmatter.model", "frontmatter.effort"], currentAgent, managedAgent(currentAgent), { model: value.model, effort: value.effort }));
+    files.push(pathEntry(CLAUDE_SETTINGS_PATH, settingsContent, hooksOnly ? ["hooks"] : ["model", `env.${CLAUDE_EFFORT_ENV}`, "hooks"], get(CLAUDE_SETTINGS_PATH), settingsManagedActual, settingsManagedExpected));
+    if (!hooksOnly) {
+      files.push(pathEntry(CLAUDE_BRIDGE_PATH, "@AGENTS.md\n", ["content"], get(CLAUDE_BRIDGE_PATH), get(CLAUDE_BRIDGE_PATH), "@AGENTS.md\n"));
+      for (const taskClass of classes) {
+        const value = resolutions[taskClass];
+        if (value === null) continue;
+        const path = `${HOST_RENDER_AGENT_DIRECTORY}/${taskClass}.md`;
+        const currentAgent = get(path);
+        const content = updateAgent(currentAgent ?? "", value);
+        files.push(pathEntry(path, content, ["frontmatter.model", "frontmatter.effort"], currentAgent, managedAgent(currentAgent), { model: value.model, effort: value.effort }));
+      }
     }
   } else {
     const plan = resolutions.plan;
-    const currentConfig = get(CODEX_CONFIG_PATH) ?? "";
-    const nextConfig = plan === null ? currentConfig : updateToml(currentConfig, { model: plan.model, model_reasoning_effort: plan.effort });
-    const expectedConfig = plan === null ? { model: rootTomlValue(currentConfig, "model"), effort: rootTomlValue(currentConfig, "model_reasoning_effort") } : { model: plan.model, effort: plan.effort };
-    if (plan !== null) {
+    if (plan !== null && !hooksOnly) {
+      const currentConfig = get(CODEX_CONFIG_PATH) ?? "";
+      const nextConfig = updateToml(currentConfig, { model: plan.model, model_reasoning_effort: plan.effort });
+      const expectedConfig = { model: plan.model, effort: plan.effort };
       files.push(pathEntry(CODEX_CONFIG_PATH, nextConfig, ["model", "model_reasoning_effort"], get(CODEX_CONFIG_PATH), { model: rootTomlValue(currentConfig, "model"), effort: rootTomlValue(currentConfig, "model_reasoning_effort") }, expectedConfig));
     }
     const expectedHooks = codexHookDocument(repoRoot).hooks;
@@ -354,22 +372,26 @@ export function renderHostPlan({ host, mode, settings, root, repoRoot = REPO_ROO
     schemaVersion: HOST_RENDER_VERSION,
     host,
     mode: selectedMode,
+    scope: selectedScope,
     root: root ? resolve(root) : null,
     repoRoot: resolve(repoRoot),
     resolutions,
     files,
     drift,
     comparable: resolutions.plan !== null,
-    hooksComparable: includeHooksWithoutModel,
-    reasonCode: resolutions.plan === null ? (drift.length === 0 ? "HOST_RENDER_HOOKS_CURRENT" : "HOST_RENDER_HOOKS_DRIFTED") : drift.length === 0 ? "HOST_RENDER_CURRENT" : "HOST_RENDER_DRIFTED",
+    hooksComparable: hooksOnly,
+    reasonCode: hooksOnly
+      ? drift.length === 0 ? "HOST_RENDER_HOOKS_CURRENT" : "HOST_RENDER_HOOKS_DRIFTED"
+      : drift.length === 0 ? "HOST_RENDER_CURRENT" : "HOST_RENDER_DRIFTED",
   };
 }
 
 export async function inspectHostRenderDrift(options = {}) {
+  const scope = renderScope(options.scope);
   const root = resolve(text(options.root, "root"));
-  const first = renderHostPlan({ ...options, root, includeHooksWithoutModel: true, existing: new Map() });
+  const first = renderHostPlan({ ...options, root, scope, existing: new Map() });
   const existing = await readExisting(root, first.files.map((entry) => entry.path));
-  const plan = renderHostPlan({ ...options, root, includeHooksWithoutModel: true, existing });
+  const plan = renderHostPlan({ ...options, root, scope, existing });
   const comparable = plan.comparable || plan.hooksComparable === true;
   return {
     name: "hostRenderDrift",
@@ -377,6 +399,7 @@ export async function inspectHostRenderDrift(options = {}) {
     reasonCode: !comparable ? "PLATFORM_HOST_RENDER_UNCONFIGURED" : plan.drift.length === 0 ? "PLATFORM_HOST_RENDER_CURRENT" : "PLATFORM_HOST_RENDER_DRIFTED",
     host: plan.host,
     mode: plan.mode,
+    scope: plan.scope,
     comparable,
     hooksComparable: plan.hooksComparable === true,
     drift: plan.drift,
@@ -412,7 +435,14 @@ function safeTarget(root, relativePath) {
 }
 
 export async function applyHostRender(plan, { backupDir = undefined } = {}) {
-  if (!plan || plan.schemaVersion !== HOST_RENDER_VERSION || typeof plan.root !== "string") failure("HOST_RENDER_PLAN_INVALID", "host render plan");
+  if (!plan || plan.schemaVersion !== HOST_RENDER_VERSION || typeof plan.root !== "string" || !Array.isArray(plan.files)) failure("HOST_RENDER_PLAN_INVALID", "host render plan");
+  const scope = renderScope(plan.scope);
+  if (scope === "hooks-only") {
+    const expectedPath = plan.host === "claude-code" ? CLAUDE_SETTINGS_PATH : plan.host === "codex" ? CODEX_HOOKS_PATH : null;
+    if (expectedPath === null || plan.files.length !== 1 || plan.files[0]?.path !== expectedPath || stableJson(plan.files[0]?.ownedFields) !== stableJson(["hooks"]) || typeof plan.files[0]?.content !== "string") {
+      failure("HOST_RENDER_SCOPE_VIOLATION", "hooks-only plans may contain only the host hook projection", { host: plan.host, paths: plan.files.map((entry) => entry?.path ?? null) });
+    }
+  }
   const root = resolve(plan.root);
   const changes = plan.files.filter((entry) => entry.content !== null);
   const before = new Map();
@@ -422,6 +452,19 @@ export async function applyHostRender(plan, { backupDir = undefined } = {}) {
     before.set(entry.path, bytes);
     const expectedBefore = entry.beforeSha256 === null ? null : entry.beforeSha256;
     if ((bytes === null ? null : digest(bytes)) !== expectedBefore) failure("HOST_RENDER_CONCURRENT_MODIFICATION", entry.path);
+    if (scope === "hooks-only") {
+      const beforeDocument = parseJson(bytes?.toString("utf8") ?? null, entry.path);
+      const afterDocument = parseJson(entry.content, entry.path);
+      if (!Object.hasOwn(afterDocument, "hooks")) failure("HOST_RENDER_SCOPE_VIOLATION", "hooks-only content must contain a hooks field", { host: plan.host, path: entry.path });
+      const withoutHooks = (value) => {
+        const clone = structuredClone(value);
+        delete clone.hooks;
+        return clone;
+      };
+      if (stableJson(withoutHooks(beforeDocument)) !== stableJson(withoutHooks(afterDocument))) {
+        failure("HOST_RENDER_SCOPE_VIOLATION", "hooks-only content changed non-hook host fields", { host: plan.host, path: entry.path });
+      }
+    }
   }
   const writes = changes.filter((entry) => before.get(entry.path)?.toString("utf8") !== entry.content || before.get(entry.path) === null);
   if (writes.length === 0) return { reasonCode: "HOST_RENDER_ALREADY_CURRENT", host: plan.host, mode: plan.mode, wrote: false, files: [], backupDir: null, drift: [] };
@@ -489,9 +532,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const settings = settingsJson === undefined ? await workspaceSettings(resolve(workspace)) : JSON.parse(settingsJson);
     const renderRoot = resolve(root);
     const repoRoot = flag(argv, "repo-root") ?? REPO_ROOT;
-    const includeHooksWithoutModel = argv.includes("--hooks-only");
-    const preliminary = renderHostPlan({ host, mode, settings, root: renderRoot, repoRoot, includeHooksWithoutModel, existing: new Map() });
-    const plan = renderHostPlan({ host, mode, settings, root: renderRoot, repoRoot, includeHooksWithoutModel, existing: await readExisting(renderRoot, preliminary.files.map((entry) => entry.path)) });
+    const requestedScope = flag(argv, "scope");
+    const hooksOnlyAlias = argv.includes("--hooks-only");
+    if (requestedScope !== undefined && hooksOnlyAlias && requestedScope !== "hooks-only") failure("HOST_RENDER_SCOPE_CONFLICT", "--hooks-only conflicts with --scope full");
+    const scope = renderScope(requestedScope ?? (hooksOnlyAlias ? "hooks-only" : "full"));
+    const preliminary = renderHostPlan({ host, mode, scope, settings, root: renderRoot, repoRoot, existing: new Map() });
+    const plan = renderHostPlan({ host, mode, scope, settings, root: renderRoot, repoRoot, existing: await readExisting(renderRoot, preliminary.files.map((entry) => entry.path)) });
     const result = argv.includes("--plan-only") ? { reasonCode: "HOST_RENDER_PLAN_READY", plan: { ...plan, files: plan.files.map(({ content, ...entry }) => ({ ...entry, afterSha256: digest(content) })) } } : await applyHostRender(plan, { backupDir: flag(argv, "backup-dir") });
     process.stdout.write(`${JSON.stringify(result)}\n`);
   } catch (error) {

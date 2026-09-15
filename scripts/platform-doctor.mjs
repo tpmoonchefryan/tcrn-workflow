@@ -1346,18 +1346,20 @@ export async function inspectHostRenderDrift(root, options) {
   if (!Array.isArray(settings)) return check("hostRenderDrift", true, { comparable: false, reasonCode: "PLATFORM_HOST_RENDER_UNREADABLE", source: "dispatch settings + host-render projection" });
   const hosts = Array.isArray(options.hostRenderHosts) && options.hostRenderHosts.length > 0 ? options.hostRenderHosts : ["claude-code", "codex"];
   const repoRoot = options.hostRenderRepoRoot ?? join(root, "TCRN Platform", "tcrn-workflow");
+  const scope = options.hostRenderScope ?? "hooks-only";
   const rows = [];
   for (const host of hosts) {
     try {
-      rows.push(await inspectRenderedHostDrift({ host, settings, root, repoRoot }));
+      rows.push(await inspectRenderedHostDrift({ host, settings, root, repoRoot, scope }));
     } catch (error) {
-      rows.push({ name: "hostRenderDrift", host, ok: false, comparable: true, reasonCode: error?.reasonCode ?? "PLATFORM_HOST_RENDER_FAILED", error: String(error?.message ?? error) });
+      rows.push({ name: "hostRenderDrift", host, scope, ok: false, comparable: true, reasonCode: error?.reasonCode ?? "PLATFORM_HOST_RENDER_FAILED", error: String(error?.message ?? error) });
     }
   }
   const comparable = rows.some((row) => row.comparable || row.hooksComparable);
   const drift = rows.flatMap((row) => row.drift ?? []);
   return check("hostRenderDrift", drift.length === 0, {
     reasonCode: !comparable ? "PLATFORM_HOST_RENDER_UNCONFIGURED" : drift.length === 0 ? "PLATFORM_HOST_RENDER_CURRENT" : "PLATFORM_HOST_RENDER_DRIFTED",
+    scope,
     comparable,
     workspace: workspace ?? null,
     hosts: rows,
@@ -2840,16 +2842,27 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
   return { ok: !firstFailure, reasonCode: firstFailure?.reasonCode ?? "PLATFORM_LAYOUT_HEALTHY", checks, observations };
 }
 
-function platformRootFromArgv(argv) {
-  const index = argv.indexOf("--platform-root");
-  if (index < 0 || !argv[index + 1] || argv[index + 1].startsWith("--")) return null;
-  if (argv.some((argument, argumentIndex) => argumentIndex !== index && argumentIndex !== index + 1 && argument.startsWith("--"))) return null;
-  return argv[index + 1];
+function platformOptionsFromArgv(argv) {
+  const rootIndex = argv.indexOf("--platform-root");
+  if (rootIndex < 0 || !argv[rootIndex + 1] || argv[rootIndex + 1].startsWith("--")) return null;
+  const scopeIndex = argv.indexOf("--host-render-scope");
+  const scope = scopeIndex < 0 ? "hooks-only" : argv[scopeIndex + 1];
+  if (scopeIndex >= 0 && (!scope || scope.startsWith("--") || !["full", "hooks-only"].includes(scope))) return null;
+  const consumed = new Set([rootIndex, rootIndex + 1]);
+  if (scopeIndex >= 0) { consumed.add(scopeIndex); consumed.add(scopeIndex + 1); }
+  if (argv.some((argument, argumentIndex) => !consumed.has(argumentIndex))) return null;
+  if (argv.filter((argument) => argument === "--platform-root").length !== 1 || argv.filter((argument) => argument === "--host-render-scope").length > 1) return null;
+  return { platformRoot: argv[rootIndex + 1], hostRenderScope: scope };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const platformRoot = platformRootFromArgv(process.argv.slice(2));
-  const result = await inspectPlatform(platformRoot);
-  process.stdout.write(`${JSON.stringify(result)}\n`);
-  process.exitCode = result.ok ? 0 : 1;
+  const args = platformOptionsFromArgv(process.argv.slice(2));
+  if (args === null) {
+    process.stdout.write(`${JSON.stringify({ ok: false, reasonCode: "PLATFORM_DOCTOR_ARGUMENTS_INVALID", expected: "--platform-root <path> [--host-render-scope full|hooks-only]" })}\n`);
+    process.exitCode = 2;
+  } else {
+    const result = await inspectPlatform(args.platformRoot, { hostRenderScope: args.hostRenderScope });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    process.exitCode = result.ok ? 0 : 1;
+  }
 }
