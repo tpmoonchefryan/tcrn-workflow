@@ -6,7 +6,7 @@
 // the chain prevents execution detail from becoming append-only scope, while
 // making the old "missing element means no dispatch" rule executable.
 
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, resolve, sep } from "node:path";
 
 import { validateStoryScope } from "./story-scope-compliance.mjs";
@@ -32,6 +32,19 @@ export const VERIFICATION_PHASES = Object.freeze([
   "publication",
   "merge-sensitive",
 ]);
+
+// INC320/432: a context plan extends the existing dispatch brief; it is not a
+// second retrieval service or an operating-system sandbox. The adapter binds
+// this declarative plan to live role/work/Pack and workspace observations before
+// it becomes part of a pre-spawn receipt.
+export const DISPATCH_CONTEXT_PACKAGE_SCHEMA_VERSION = "tcrn.dispatch-context-package.v1";
+export const DISPATCH_CONTEXT_READ_POLICY = Object.freeze({
+  defaultReadOnlyTimeoutMs: 60_000,
+  maximumInlineOutputBytes: 8_192,
+  maximumMatches: 100,
+  overflowDisposition: "partial-with-next-scope",
+  searchOrder: Object.freeze(["manifest", "explicit-files", "bounded-directories"]),
+});
 
 // TCRN-CROSS-STORY-424: execution evidence is additive to the five dispatch
 // elements above.  A brief remains a transport object, while this small
@@ -701,6 +714,149 @@ function verificationPlanProblems(plan) {
   return { problems, checked: true };
 }
 
+function contextStringList(value, field, { allowEmpty = false } = {}) {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0)) {
+    return [{ field, message: `${field} must be ${allowEmpty ? "a list" : "a non-empty list"}`, code: "DISPATCH_CONTEXT_INDEX_INVALID" }];
+  }
+  if (value.some((entry) => typeof entry !== "string" || entry.trim().length === 0 || entry.length > 1_024 || entry.includes("\u0000") || !entry.isWellFormed())) {
+    return [{ field, message: `${field} must contain bounded non-empty strings`, code: "DISPATCH_CONTEXT_INDEX_INVALID" }];
+  }
+  if (new Set(value).size !== value.length) {
+    return [{ field, message: `${field} must not contain duplicate entries`, code: "DISPATCH_CONTEXT_INDEX_DUPLICATE" }];
+  }
+  return [];
+}
+
+function isRecord(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function rejectUnknownContextFields(value, allowed, field) {
+  if (!isRecord(value)) return [];
+  const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
+  return unknown.length === 0
+    ? []
+    : [{ field, message: `unknown context package fields: ${unknown.join(", ")}`, code: "DISPATCH_CONTEXT_PACKAGE_FIELD_UNKNOWN" }];
+}
+
+function contextPlanProblems(plan, brief) {
+  if (brief.contextPlanRequired !== undefined && typeof brief.contextPlanRequired !== "boolean") {
+    return [{ field: "contextPlanRequired", message: "contextPlanRequired must be boolean", code: "DISPATCH_CONTEXT_REQUIRED_INVALID" }];
+  }
+  if (plan === undefined) {
+    return brief.contextPlanRequired === true
+      ? [{ field: "contextPlan", message: "a required bounded context plan is missing", code: "DISPATCH_CONTEXT_PLAN_REQUIRED" }]
+      : [];
+  }
+  if (plan === null || typeof plan !== "object" || Array.isArray(plan)) {
+    return [{ field: "contextPlan", message: "contextPlan must be an object", code: "DISPATCH_CONTEXT_PLAN_INVALID" }];
+  }
+  const problems = [];
+  const allowedFields = new Set(["purpose", "decisionIndex", "resultIndex", "rawInputs", "allowedDirectories"]);
+  const unknown = Object.keys(plan).filter((key) => !allowedFields.has(key));
+  if (unknown.length > 0) problems.push({ field: "contextPlan", message: `unknown contextPlan fields: ${unknown.join(", ")}`, code: "DISPATCH_CONTEXT_PLAN_FIELD_UNKNOWN" });
+  if (typeof plan.purpose !== "string" || plan.purpose.trim().length === 0 || plan.purpose.length > 512 || plan.purpose.includes("\u0000") || !plan.purpose.isWellFormed()) {
+    problems.push({ field: "contextPlan.purpose", message: "contextPlan purpose must be a bounded task purpose", code: "DISPATCH_CONTEXT_PURPOSE_REQUIRED" });
+  }
+  problems.push(...contextStringList(plan.decisionIndex, "contextPlan.decisionIndex"));
+  problems.push(...contextStringList(plan.resultIndex, "contextPlan.resultIndex"));
+  problems.push(...contextStringList(plan.rawInputs, "contextPlan.rawInputs"));
+  problems.push(...contextStringList(plan.allowedDirectories, "contextPlan.allowedDirectories", { allowEmpty: true }));
+  const root = typeof brief.repositoryRoot === "string" && brief.repositoryRoot.trim().length > 0 ? resolve(brief.repositoryRoot) : null;
+  for (const directory of Array.isArray(plan.allowedDirectories) ? plan.allowedDirectories : []) {
+    const segments = directory.split(/[\\/]/u);
+    if (isAbsolute(directory) || directory.startsWith("~") || directory.includes("$HOME") || directory.includes("*") || segments.includes("..") || directory === "." || directory === "") {
+      problems.push({ field: "contextPlan.allowedDirectories", message: `${directory} is not an explicit bounded relative directory`, code: "DISPATCH_CONTEXT_DIRECTORY_UNBOUNDED" });
+      continue;
+    }
+    if (root === null) {
+      problems.push({ field: "contextPlan.allowedDirectories", message: "repositoryRoot is required to resolve a bounded directory", code: "DISPATCH_CONTEXT_DIRECTORY_NOT_VERIFIABLE" });
+      continue;
+    }
+    const absolute = resolve(root, directory);
+    if (absolute === root || !absolute.startsWith(`${root}${sep}`)) {
+      problems.push({ field: "contextPlan.allowedDirectories", message: `${directory} resolves to the repository root or outside it`, code: "DISPATCH_CONTEXT_DIRECTORY_UNBOUNDED" });
+      continue;
+    }
+    try {
+      const actual = realpathSync(absolute);
+      const realRoot = realpathSync(root);
+      const stats = statSync(actual);
+      if (actual === realRoot || !actual.startsWith(`${realRoot}${sep}`) || !stats.isDirectory()) {
+        problems.push({ field: "contextPlan.allowedDirectories", message: `${directory} does not resolve to a bounded directory inside repositoryRoot`, code: "DISPATCH_CONTEXT_DIRECTORY_NOT_VERIFIABLE" });
+      }
+    } catch {
+      problems.push({ field: "contextPlan.allowedDirectories", message: `${directory} does not resolve to an existing directory`, code: "DISPATCH_CONTEXT_DIRECTORY_NOT_VERIFIABLE" });
+    }
+  }
+  return problems;
+}
+
+function contextPackageProblems(contextPackage, brief) {
+  if (contextPackage === undefined) {
+    return brief.contextPlanRequired === true || brief.contextPlan !== undefined
+      ? [{ field: "contextPackage", message: "the pre-spawn context package is missing", code: "DISPATCH_CONTEXT_PACKAGE_REQUIRED" }]
+      : [];
+  }
+  if (contextPackage === null || typeof contextPackage !== "object" || Array.isArray(contextPackage)) {
+    return [{ field: "contextPackage", message: "contextPackage must be an object", code: "DISPATCH_CONTEXT_PACKAGE_INVALID" }];
+  }
+  const problems = [];
+  if (!isRecord(brief.contextPlan)) problems.push({ field: "contextPlan", message: "a code-owned context package requires its source contextPlan", code: "DISPATCH_CONTEXT_PLAN_REQUIRED" });
+  problems.push(...rejectUnknownContextFields(contextPackage, ["schemaVersion", "purpose", "task", "current", "inputs", "readPolicy", "resourcePolicy", "limitation"], "contextPackage"));
+  const roleBinding = brief.taskRoleBinding;
+  const lifecycle = brief.agentLifecycle ?? brief.lifecycle;
+  if (contextPackage.schemaVersion !== DISPATCH_CONTEXT_PACKAGE_SCHEMA_VERSION) problems.push({ field: "contextPackage.schemaVersion", message: "contextPackage schemaVersion is unsupported", code: "DISPATCH_CONTEXT_PACKAGE_SCHEMA_INVALID" });
+  if (contextPackage.purpose !== brief.contextPlan?.purpose) problems.push({ field: "contextPackage.purpose", message: "context package purpose must match the brief context plan", code: "DISPATCH_CONTEXT_PACKAGE_PURPOSE_MISMATCH" });
+  const task = contextPackage.task;
+  problems.push(...rejectUnknownContextFields(task, ["role", "workId", "pack", "phase"], "contextPackage.task"));
+  const taskFieldsPresent = isRecord(task) && [task.role, task.workId, task.pack, task.phase].every((value) => typeof value === "string" && value.trim().length > 0);
+  if (!taskFieldsPresent || task.role !== roleBinding?.role || task.workId !== (roleBinding?.workId ?? brief.workId ?? brief.storyId) || task.pack !== roleBinding?.pack || task.phase !== (roleBinding?.phase ?? lifecycle?.phase)) {
+    problems.push({ field: "contextPackage.task", message: "context package role/work/Pack/phase must match the dispatch binding", code: "DISPATCH_CONTEXT_PACKAGE_BINDING_MISMATCH" });
+  }
+  const current = contextPackage.current;
+  problems.push(...rejectUnknownContextFields(current, ["workspaceId", "version", "headEventHash", "configDigest", "workRevision", "scopeDigest"], "contextPackage.current"));
+  if (!current || typeof current !== "object" || Array.isArray(current) || typeof current.workspaceId !== "string" || current.workspaceId.trim().length === 0 || !Number.isSafeInteger(current.version) || current.version < 1 || !/^[a-f0-9]{64}$/u.test(String(current.headEventHash ?? "")) || !/^[a-f0-9]{64}$/u.test(String(current.configDigest ?? "")) || !Number.isSafeInteger(current.workRevision) || current.workRevision < 1 || !/^[a-f0-9]{64}$/u.test(String(current.scopeDigest ?? ""))) {
+    problems.push({ field: "contextPackage.current", message: "context package must bind current chain/config/work revision and scope digest", code: "DISPATCH_CONTEXT_PACKAGE_CURRENT_INVALID" });
+  }
+  if (isRecord(brief.baseline) && (current?.version !== brief.baseline.version || current?.headEventHash !== brief.baseline.headEventHash)) {
+    problems.push({ field: "contextPackage.current", message: "context package current chain head differs from the brief baseline", code: "DISPATCH_CONTEXT_PACKAGE_BASELINE_MISMATCH" });
+  }
+  const inputs = contextPackage.inputs;
+  problems.push(...rejectUnknownContextFields(inputs, ["filePointers", "allowedDirectories", "decisionIndex", "resultIndex", "rawInputs"], "contextPackage.inputs"));
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    problems.push({ field: "contextPackage.inputs", message: "context package inputs are required", code: "DISPATCH_CONTEXT_PACKAGE_INPUTS_INVALID" });
+  } else {
+    for (const field of ["filePointers", "decisionIndex", "resultIndex", "rawInputs"]) {
+      const entries = inputs[field];
+      if (!Array.isArray(entries) || entries.length === 0 || entries.some((entry) => typeof entry !== "string" || entry.trim().length === 0)) {
+        problems.push({ field: `contextPackage.inputs.${field}`, message: `${field} must contain explicit relevant input references`, code: "DISPATCH_CONTEXT_PACKAGE_INPUTS_INVALID" });
+      }
+    }
+    if (JSON.stringify(inputs.filePointers) !== JSON.stringify(brief.filePointers) || JSON.stringify(inputs.decisionIndex) !== JSON.stringify(brief.contextPlan?.decisionIndex) || JSON.stringify(inputs.resultIndex) !== JSON.stringify(brief.contextPlan?.resultIndex) || JSON.stringify(inputs.rawInputs) !== JSON.stringify(brief.contextPlan?.rawInputs)) {
+      problems.push({ field: "contextPackage.inputs", message: "context package indexes must match the brief's declared inputs", code: "DISPATCH_CONTEXT_PACKAGE_INDEX_MISMATCH" });
+    }
+    if (JSON.stringify(inputs.allowedDirectories) !== JSON.stringify(brief.contextPlan?.allowedDirectories)) {
+      problems.push({ field: "contextPackage.inputs.allowedDirectories", message: "context package search roots must match the brief's bounded directories", code: "DISPATCH_CONTEXT_PACKAGE_DIRECTORY_MISMATCH" });
+    }
+  }
+  const readPolicy = contextPackage.readPolicy;
+  problems.push(...rejectUnknownContextFields(readPolicy, ["defaultReadOnlyTimeoutMs", "maximumInlineOutputBytes", "maximumMatches", "overflowDisposition", "searchOrder"], "contextPackage.readPolicy"));
+  if (!readPolicy || typeof readPolicy !== "object" || Array.isArray(readPolicy) || readPolicy.defaultReadOnlyTimeoutMs !== DISPATCH_CONTEXT_READ_POLICY.defaultReadOnlyTimeoutMs || readPolicy.maximumInlineOutputBytes !== DISPATCH_CONTEXT_READ_POLICY.maximumInlineOutputBytes || readPolicy.maximumMatches !== DISPATCH_CONTEXT_READ_POLICY.maximumMatches || readPolicy.overflowDisposition !== DISPATCH_CONTEXT_READ_POLICY.overflowDisposition || JSON.stringify(readPolicy.searchOrder) !== JSON.stringify(DISPATCH_CONTEXT_READ_POLICY.searchOrder)) {
+    problems.push({ field: "contextPackage.readPolicy", message: "bounded read defaults must preserve 60s timeout, small window, capped hits, manifest-first search and explicit partial results", code: "DISPATCH_CONTEXT_READ_POLICY_INVALID" });
+  }
+  const resourcePolicy = contextPackage.resourcePolicy;
+  problems.push(...rejectUnknownContextFields(resourcePolicy, ["ownerKey", "registrationRequired", "signalOnlyOwnedGroups", "verifyAllChildrenTerminal"], "contextPackage.resourcePolicy"));
+  const expectedOwnerKey = `task:${roleBinding?.workId ?? brief.workId ?? brief.storyId}:${roleBinding?.pack ?? ""}`;
+  if (!resourcePolicy || typeof resourcePolicy !== "object" || Array.isArray(resourcePolicy) || resourcePolicy.ownerKey !== expectedOwnerKey || resourcePolicy.registrationRequired !== true || resourcePolicy.signalOnlyOwnedGroups !== true || resourcePolicy.verifyAllChildrenTerminal !== true) {
+    problems.push({ field: "contextPackage.resourcePolicy", message: "process cleanup must be task-keyed and limited to registered owned groups with terminal verification", code: "DISPATCH_CONTEXT_RESOURCE_POLICY_INVALID" });
+  }
+  if (contextPackage.limitation !== "This package is a bounded dispatch contract, not a host-wide search sandbox or proof of native payload delivery.") {
+    problems.push({ field: "contextPackage.limitation", message: "context package must preserve its enforcement boundary", code: "DISPATCH_CONTEXT_PACKAGE_LIMITATION_MISSING" });
+  }
+  return problems;
+}
+
 function declarationProblems(brief) {
   return DISPATCH_BRIEF_DECLARATION_FIELDS
     .filter((field) => brief[field] !== DISPATCH_BRIEF_DECLARATIONS[field])
@@ -963,6 +1119,8 @@ export function validateDispatchBrief(brief) {
   for (const problem of budgets.problems) problems.push(problem);
   const verificationPlan = verificationPlanProblems(brief.verificationPlan);
   problems.push(...verificationPlan.problems);
+  problems.push(...contextPlanProblems(brief.contextPlan, brief));
+  problems.push(...contextPackageProblems(brief.contextPackage, brief));
   const lifecycleRequired = brief.lifecycleRequired === true || brief.requireFreshInstance === true;
   const workBinding = authoritativeWorkBinding(brief);
   if (workBinding.unique.length > 1) {

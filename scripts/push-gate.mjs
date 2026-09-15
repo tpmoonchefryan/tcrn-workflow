@@ -35,17 +35,20 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { performance } from "node:perf_hooks";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
 import { pushGateExecutionPlan, ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
-import { budgetWarningNotices, hasWarningOrError, onlyBudgetWarning } from "./lib/push-gate-output.mjs";
+import { PROOF_BUDGET_SCOPE_BINDING_ENV } from "./lib/proof-budget.mjs";
+import { budgetWarningNotices, hasWarningOrError, inspectStructuredChildOutput, onlyBudgetWarning, validateStructuredChildExpectations } from "./lib/push-gate-output.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
 const governanceNotices = [];
+const childResults = [];
+const budgetScopeOptions = { scopeBindingSha256: process.env[PROOF_BUDGET_SCOPE_BINDING_ENV] };
 const timingProbe = process.env.TCRN_PUSH_GATE_TIMING_PROBE === "1";
 const timingEvidencePath = resolve(
   repositoryRoot,
@@ -83,8 +86,8 @@ async function writeTimingEvidence(ok, stdoutObserved) {
   await writeFile(timingEvidencePath, `${JSON.stringify(evidence, null, 2)}\n`, "utf8");
 }
 
-function fail(reasonCode, detail) {
-  failures.push({ reasonCode, detail });
+function fail(reasonCode, detail, diagnostic = undefined) {
+  failures.push({ reasonCode, detail, ...(diagnostic === undefined ? {} : { diagnostic }) });
 }
 
 function read(relativePath) {
@@ -95,6 +98,50 @@ function run(command, argv) {
   const result = spawnSync(command, argv, { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (result.error) return { ok: false, output: String(result.error.message) };
   return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+}
+
+function runChild(command, argv) {
+  const result = spawnSync(command, argv, { cwd: repositoryRoot, encoding: null, maxBuffer: 256 * 1024 * 1024 });
+  const stdout = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout ?? "");
+  const stderr = Buffer.isBuffer(result.stderr) ? result.stderr : Buffer.from(result.stderr ?? "");
+  return {
+    ok: result.error === undefined && result.status === 0,
+    command: [command, ...argv],
+    cwd: repositoryRoot,
+    exitCode: result.status ?? 1,
+    signal: result.signal ?? null,
+    error: result.error ? { name: result.error.name, code: result.error.code, message: result.error.message } : null,
+    stdout,
+    stderr,
+    output: `${stdout.toString("utf8")}${stderr.toString("utf8")}`,
+  };
+}
+
+async function retainChildOutput(script, result, assessment) {
+  const runId = new Date().toISOString().replace(/[^0-9A-Za-z]/gu, "-");
+  const directory = resolve(repositoryRoot, "dist/evidence/push-gate-children", runId);
+  await mkdir(directory, { recursive: true });
+  const safeScript = script.replace(/[^0-9A-Za-z._-]/gu, "-");
+  const base = resolve(directory, safeScript);
+  const stdoutPath = `${base}.stdout`;
+  const stderrPath = `${base}.stderr`;
+  const exitPath = `${base}.exit.json`;
+  const exit = { status: result.exitCode, signal: result.signal, error: result.error };
+  await writeFile(stdoutPath, result.stdout, { mode: 0o600 });
+  await writeFile(stderrPath, result.stderr, { mode: 0o600 });
+  await writeFile(exitPath, `${JSON.stringify(exit)}\n`, { mode: 0o600 });
+  const entry = {
+    script,
+    command: result.command,
+    cwd: result.cwd,
+    exit,
+    stdout: { path: relative(repositoryRoot, stdoutPath), bytes: result.stdout.length, sha256: createHash("sha256").update(result.stdout).digest("hex") },
+    stderr: { path: relative(repositoryRoot, stderrPath), bytes: result.stderr.length, sha256: createHash("sha256").update(result.stderr).digest("hex") },
+    exitRecord: { path: relative(repositoryRoot, exitPath), bytes: Buffer.byteLength(`${JSON.stringify(exit)}\n`), sha256: createHash("sha256").update(`${JSON.stringify(exit)}\n`).digest("hex") },
+    assessment,
+  };
+  await writeFile(`${base}.json`, `${JSON.stringify(entry, null, 2)}\n`, { mode: 0o600 });
+  return entry;
 }
 
 await timedStage("gate-containment", async () => {
@@ -326,18 +373,87 @@ await timedStage("tag-ancestry", async () => {
 //      would push the wall clock at the 180s escalation trigger which exists to protect
 //      the "run it on every change" discipline. Before a push is the right frequency for
 //      a check that asks whether the proofs still bite.
+let childExpectations = { sourceFiles: undefined, guardIds: undefined, ...budgetScopeOptions };
+let childExpectationsFailure = null;
+try {
+  const sourcePolicy = JSON.parse(await read("scripts/policy/source-allowlist.json"));
+  const guardRegistry = JSON.parse(await read("scripts/policy/guard-registry.json"));
+  const currentHead = run("git", ["rev-parse", "HEAD"]);
+  const validated = validateStructuredChildExpectations({
+    sourceFiles: sourcePolicy?.allowedFiles,
+    guardIds: Array.isArray(guardRegistry?.guards) ? guardRegistry.guards.map((guard) => guard?.id) : undefined,
+    p8BasisCommit: currentHead.ok ? currentHead.output : undefined,
+  });
+  if (!validated.ok) {
+    childExpectationsFailure = { reasonCode: validated.reasonCode, findings: validated.findings };
+    fail("PUSH_GATE_CHILD_SCHEMA_EXPECTATIONS_INVALID", "current source/guard schema cannot authorize P8/guard terminal parsing", {
+      code: validated.reasonCode,
+      location: "scripts/policy/source-allowlist.json|scripts/policy/guard-registry.json|git rev-parse HEAD",
+      findings: validated.findings,
+    });
+  } else {
+    childExpectations = { sourceFiles: validated.sourceFiles, guardIds: validated.guardIds, p8BasisCommit: validated.p8BasisCommit, ...budgetScopeOptions };
+  }
+} catch (error) {
+  childExpectationsFailure = {
+    reasonCode: error?.reasonCode ?? "CHILD_SCHEMA_EXPECTATIONS_UNREADABLE",
+    location: "scripts/policy/source-allowlist.json|scripts/policy/guard-registry.json",
+    message: String(error?.message ?? error),
+  };
+  fail("PUSH_GATE_CHILD_SCHEMA_EXPECTATIONS_UNREADABLE", "source/guard schema preflight failed before P8/guard children", childExpectationsFailure);
+}
+
 for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
+  if (script !== "verify:p1" && childExpectationsFailure !== null) {
+    childResults.push({
+      script,
+      command: ["pnpm", "run", "--silent", script],
+      cwd: repositoryRoot,
+      exit: { status: null, signal: null, error: null },
+      stdout: { path: null, bytes: 0, sha256: null },
+      stderr: { path: null, bytes: 0, sha256: null },
+      notStarted: true,
+      assessment: { ok: false, reasonCode: "CHILD_PREFLIGHT_BLOCKED", findings: [childExpectationsFailure] },
+    });
+    continue;
+  }
   const result = await timedStage(
     `child:${script}`,
-    async () => (timingProbe ? { ok: true, output: "" } : run("pnpm", ["run", "--silent", script])),
+    async () => (timingProbe
+      ? { ok: true, command: ["pnpm", "run", "--silent", script], cwd: repositoryRoot, exitCode: 0, signal: null, error: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), output: "" }
+      : runChild("pnpm", ["run", "--silent", script])),
   );
-  const budgetNotices = budgetWarningNotices(result.output, script);
+  const budgetNotices = budgetWarningNotices(result.output, script, budgetScopeOptions);
   if (budgetNotices.length > 0) governanceNotices.push(...budgetNotices);
-  if (!result.ok) fail(reasonCode, result.output.trim().split("\n").slice(-3).join(" | ").slice(0, 300));
+  const p1Diagnostic = script === "verify:p1"
+    && hasWarningOrError(result.output, script, budgetScopeOptions)
+    && !onlyBudgetWarning(result.output, script, budgetScopeOptions);
+  const assessment = timingProbe
+    ? { ok: true, reasonCode: "TIMING_PROBE_SYNTHETIC_OUTPUT", findings: [] }
+    : script === "verify:p1"
+      ? { ok: !p1Diagnostic, reasonCode: p1Diagnostic ? "P1_DIAGNOSTIC_PRESENT" : "P1_WARNING_RULE_CLEAR", findings: p1Diagnostic ? [{ code: "P1_DIAGNOSTIC_PRESENT", location: "$.stdout|$.stderr" }] : [] }
+      : inspectStructuredChildOutput({ stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, signal: result.signal }, script, childExpectations);
+  const retained = await retainChildOutput(script, result, assessment);
+  childResults.push(retained);
+  if (!result.ok) fail(reasonCode, `child exit ${result.exitCode}${result.signal ? ` signal ${result.signal}` : ""}`, {
+    code: "PUSH_GATE_CHILD_EXIT_NONZERO",
+    location: "$.exit",
+    rawOutput: retained,
+  });
   // G-2: a warning is an unfinished error. The reason-code vocabulary never uses the word,
   // so any occurrence is toolchain output that nothing has judged.
-  else if (hasWarningOrError(result.output, script) && !onlyBudgetWarning(result.output, script)) {
-    fail(reasonCode, `warning emitted: ${result.output.match(/.*\b(?:warning|WARN)\b.*/u)?.[0]?.slice(0, 200) ?? ""}`);
+  else if (p1Diagnostic) {
+    fail(reasonCode, `warning emitted: ${result.output.match(/.*\b(?:warning|WARN)\b.*/u)?.[0]?.slice(0, 200) ?? ""}`, {
+      code: "PUSH_GATE_P1_DIAGNOSTIC",
+      location: "$.stdout|$.stderr",
+      rawOutput: retained,
+    });
+  } else if (script !== "verify:p1" && !assessment.ok) {
+    fail(reasonCode, `child output rejected: ${assessment.reasonCode}`, {
+      code: assessment.reasonCode,
+      findings: assessment.findings,
+      rawOutput: retained,
+    });
   }
 }
 
@@ -358,8 +474,8 @@ process.stdout.write = (chunk, ...arguments_) => {
 };
 const noticeFields = governanceNotices.length === 0 ? {} : { governanceNotices };
 const output = failures.length > 0
-  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures, ...noticeFields }, null, 2)
-  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION, ...noticeFields });
+  ? JSON.stringify({ ok: false, reasonCode: "PUSH_GATE_BLOCKED", failures, childResults, ...noticeFields }, null, 2)
+  : JSON.stringify({ ok: true, reasonCode: "PUSH_GATE_VERIFIED", version: P8_VERSION, childResults, ...noticeFields });
 process.stdout.write(`${output}\n`);
 await writeTimingEvidence(failures.length === 0, stdoutObserved.replace(/\n$/u, ""));
 if (failures.length > 0) {

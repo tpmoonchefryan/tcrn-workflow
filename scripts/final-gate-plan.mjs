@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { buildContainedExecutionPlan } from "./lib/push-gate-children.mjs";
-import { isNonBlockingProofBudgetWarning } from "./lib/proof-budget.mjs";
+import { isNonBlockingProofBudgetWarning, validateProofBudgetScopeBinding } from "./lib/proof-budget.mjs";
 
 export const FINAL_GATE_PLAN_VERSION = "tcrn.gate-execution-plan.v1";
 export const FINAL_GATE_PHASES = Object.freeze(["candidate-final", "publication", "merge-sensitive"]);
@@ -2291,6 +2291,65 @@ function qualificationRequest(input) {
   };
 }
 
+function scopedBudgetBatchBinding(input) {
+  const validation = validateProofBudgetScopeBinding(input?.proofBudgetScopeBinding);
+  if (!validation.ok) return { ok: false, reasonCode: "BATCH_PROOF_BUDGET_SCOPE_BINDING_INVALID" };
+  const binding = input.proofBudgetScopeBinding;
+  const execution = binding.currentExecution;
+  const ids = input.workIds;
+  const exactWorkIds = Array.isArray(ids)
+    && JSON.stringify([...ids].sort()) === JSON.stringify([...execution.workIds].sort());
+  if (input.series !== "INIT-051"
+    || input.pack !== execution.pack
+    || input.primaryWorkId !== execution.primaryWork.id
+    || input.scopeDigest !== execution.primaryWork.scopeDigest
+    || input.role !== execution.role
+    || input.phase !== execution.phase
+    || input.taskClass !== execution.taskClass
+    || input.personaProfileId !== execution.personaProfileId
+    || !exactWorkIds) {
+    return { ok: false, reasonCode: "BATCH_PROOF_BUDGET_SCOPE_CONTEXT_MISMATCH" };
+  }
+  return { ...validation, ok: true };
+}
+
+function proofBudgetNoticeAllowed(notice, input) {
+  if (notice?.reasonCode !== "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING") {
+    return isNonBlockingProofBudgetWarning(notice);
+  }
+  const binding = scopedBudgetBatchBinding(input);
+  return binding.ok === true
+    && isNonBlockingProofBudgetWarning(notice, { scopeBindingSha256: binding.executionSha256 });
+}
+
+function scopedBudgetNativeProblems(input, acquired) {
+  if (input?.proofBudgetScopeBinding === undefined) return [];
+  const bindingCheck = scopedBudgetBatchBinding(input);
+  if (!bindingCheck.ok) return [bindingCheck.reasonCode];
+  const binding = input.proofBudgetScopeBinding;
+  const native = acquired?.nativeState;
+  const status = native?.nativeStatus ?? native?.status;
+  if (!native || native.ok !== true || !status || status.workspaceId !== binding.workspaceId) {
+    return ["native workspace does not match the authorized ratio scope"];
+  }
+  if (native.workListComplete !== true || !Array.isArray(native.workListRecords) || !Array.isArray(native.workShows)) {
+    return ["complete native work-list and work-show evidence is required for the authorized ratio scope"];
+  }
+  const records = new Map(native.workListRecords.map((record) => [record?.id, record]));
+  const missing = binding.allowedWork.filter((work) => {
+    const record = records.get(work.id);
+    return !record || record.externalKey !== work.externalKey;
+  });
+  if (missing.length > 0) return [`authorized work set differs from the live queue: ${missing.map((work) => work.externalKey).join(", ")}`];
+  const primary = binding.currentExecution.primaryWork;
+  const shown = native.workShows.find((record) => record?.id === primary.id);
+  if (!shown || shown.externalKey !== primary.externalKey || shown.revision !== primary.revision || shown.scopeDigest !== primary.scopeDigest) {
+    return ["primary live work-show differs from the authorized ratio scope"];
+  }
+  if (binding.excludedWork.some((work) => input.workIds?.includes(work.id))) return ["excluded future work is present in the active ratio execution set"];
+  return [];
+}
+
 /** Execute the only formal batch entry point after a fresh qualification. */
 export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}) {
   const initial = qualifyBatch(qualificationRequest(input));
@@ -2313,7 +2372,7 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     ...(Array.isArray(result?.warnings) ? result.warnings : []),
     ...(result?.warning === undefined || result?.warning === null ? [] : [result.warning]),
   ];
-  const disallowedNotices = notices.filter((notice) => !isNonBlockingProofBudgetWarning(notice));
+  const disallowedNotices = notices.filter((notice) => !proofBudgetNoticeAllowed(notice, input));
   const ok = (result?.ok === true || result?.status === "completed" || result?.status === "passed") && disallowedNotices.length === 0;
   if (!ok) return { ...initial, status: "failed", reasonCode: result?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: [], formalGateExecutions: 1, result: result ?? null, reasons: [
     ...(result?.ok === true || result?.status === "completed" || result?.status === "passed" ? [] : ["formal batch runner did not report success"]),
@@ -2364,6 +2423,18 @@ export async function executeOperationalBatch(input = {}, runner, { readNative =
     nativeState: acquired.native ?? null,
     reasons: [acquired.error ?? "native work/dependency or runtime observation unavailable"],
   };
+  const budgetScopeProblems = scopedBudgetNativeProblems(input, acquired);
+  if (budgetScopeProblems.length > 0) return {
+    schemaVersion: OPERATIONAL_BATCH_VERSION,
+    status: "not-verifiable",
+    reasonCode: "BATCH_PROOF_BUDGET_SCOPE_NOT_VERIFIABLE",
+    eligible: false,
+    formalGateAllowed: false,
+    formalGateExecutions: 0,
+    executed: [],
+    nativeState: acquired.nativeState ?? null,
+    reasons: budgetScopeProblems,
+  };
   const observed = normalizeBatchRuntimeObserver(acquired, { requireCandidate: true, requireDependencyRecords: true });
   if (!observed.ok) return {
     schemaVersion: OPERATIONAL_BATCH_VERSION,
@@ -2393,7 +2464,22 @@ export async function executeOperationalBatch(input = {}, runner, { readNative =
       }
       return refreshed;
   };
-  const result = await executeQualifiedBatch({ qualification, workspace: input.workspace }, runner, { recheck: refresh });
+  const result = await executeQualifiedBatch({
+    qualification,
+    workspace: input.workspace,
+    ...(input.proofBudgetScopeBinding === undefined ? {} : {
+      series: input.series,
+      pack: input.pack,
+      primaryWorkId: input.primaryWorkId,
+      scopeDigest: input.scopeDigest,
+      role: input.role,
+      phase: input.phase,
+      taskClass: input.taskClass,
+      personaProfileId: input.personaProfileId,
+      workIds: input.workIds,
+      proofBudgetScopeBinding: input.proofBudgetScopeBinding,
+    }),
+  }, runner, { recheck: refresh });
   return { ...result, schemaVersion: OPERATIONAL_BATCH_VERSION };
 }
 

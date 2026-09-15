@@ -96,7 +96,7 @@ test("STORY-371: Claude rendering preserves user fields, writes tier fields, and
   assert.ok(red.drift.some((entry) => entry.path.endsWith("implement.md")));
 });
 
-test("STORY-371: Codex full rendering changes only root model keys and generated hooks", async (t) => {
+test("STORY-371: Codex rendering changes only root model keys and generated hooks", async (t) => {
   const root = await scratch("tcrn-host-render-codex-");
   t.after(() => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, ".codex"), { recursive: true });

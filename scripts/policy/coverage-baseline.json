@@ -396,13 +396,31 @@
       ]
     },
     "tests/dispatch-readiness-compliance.test.mjs": {
-      "testCount": 4,
-      "assertionCount": 12,
+      "testCount": 22,
+      "assertionCount": 132,
       "testNames": [
         "dispatch brief accepts all five execution elements",
         "removing each dispatch element is a stable red leg",
         "empty and non-string dispatch entries do not count as equipment",
-        "a dispatch brief without a compliant Story scope is refused"
+        "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations",
+        "a dispatch brief without a compliant Story scope is refused",
+        "STORY-412 verification cadence is optional for old briefs but strict when declared",
+        "INC-320/432: the existing brief carries a bounded, live-bound context package",
+        "STORY-424: a fresh round binds role, Pack, model, effort, new instance, fork none, and source evidence",
+        "STORY-424: missing lifecycle and inherited/old-instance fresh rounds are red",
+        "STORY-424: same-task clarification is explicit and does not restart the instance",
+        "STORY-424: prompt claims cannot stand in for source evidence and handoff bindings must agree",
+        "STORY-424 R01: the structured handoff is compared with the brief authority, not just with itself",
+        "STORY-424 R01: a terminal predecessor cannot be reused when declaration omitted its fresh agent id",
+        "STORY-424 R01: observed work binding cannot drift while the role and Pack remain equal",
+        "STORY-424 R01: clarification without a real running agent and send_message stays unknown",
+        "STORY-424: real spawn plus child turn context is green, while task-id/compaction-only reuse is red",
+        "STORY-424 R01: every missing observed identity/fact is structured unknown, never an exception",
+        "STORY-424 R01: outer work binding is retained while explicit inner/source contradictions are red",
+        "STORY-424 R2: code-owned role/work/Pack/phase binding is checked against the live scope and brief",
+        "STORY-424 R2: stale chain, work, configuration, and source baselines are rejected",
+        "STORY-424 R2: receipt bytes and actual spawn/child association bind the full digest and resolved tuple",
+        "STORY-424 R3: missing and wrong-type storyScope return structured red instead of throwing"
       ]
     },
     "tests/ds-component-css-observation.test.mjs": {
@@ -1511,16 +1529,25 @@
       ]
     },
     "tests/s301-proof-budget.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 34,
+      "testCount": 16,
+      "assertionCount": 107,
       "testNames": [
         "STORY-301: the proof budget runs inside the gate train",
         "STORY-301: the budget verb refuses a ratio above the recorded line",
         "STORY-301: every recorded exception says what it authorises and why",
         "STORY-301: reading the budget policy does not change it",
         "EPIC135: the approved budget thresholds classify every real boundary",
-        "EPIC135: only the structured budget notice is non-blocking",
-        "EPIC135: formal batch aggregation preserves budget notices but blocks other warnings"
+        "EPIC135: only the complete structured budget notice is non-blocking",
+        "TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocking for the exact bound closure",
+        "TCRN-CROSS-STORY-430: missing, caller-invented, future, or malformed bindings stay hard-red",
+        "EPIC135: push-gate budget exemption requires one terminal receipt and no other diagnostics",
+        "TCRN-CROSS-STORY-430: scoped exceeded notice is shared by P1/push and never hides a real error",
+        "INC-320/433: P8 and guard schema expectations must be complete before those children can start",
+        "EPIC135: exact P8 archive member paths are typed data, not diagnostics",
+        "EPIC135: exact guard ids are typed data only after count and registry identity match",
+        "EPIC135: P8 and guard diagnostics remain red outside validated typed data",
+        "EPIC135: formal batch aggregation preserves budget notices but blocks other warnings",
+        "TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding against native work"
       ]
     },
     "tests/s303-dispatch-citations.test.mjs": {
@@ -1557,14 +1584,16 @@
       ]
     },
     "tests/spawn-guard.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 16,
+      "testCount": 9,
+      "assertionCount": 32,
       "testNames": [
         "spawn-guard: register appends and list round-trips",
         "spawn-guard: deregister removes exactly the pgid and self-heals a corrupt line",
         "spawn-guard: a non-numeric --pgid is rejected, never a silent no-op",
         "spawn-guard: concurrent appends do not lose a registration",
         "spawn-guard: detectFromTable reports residue against a fixture process table",
+        "INC-320/432: task-scoped detection ignores unowned groups and keeps missing ownership unknown",
+        "INC-320/432: owned-group deregistration requires exact owner and terminal children",
         "spawn-guard: registryPath derives the transient sibling of a workspace root",
         "spawn-guard: parseFlags rejects a dangling flag"
       ]
@@ -2031,8 +2060,8 @@
       ]
     },
     "tests/host-render.test.mjs": {
-      "testCount": 10,
-      "assertionCount": 59,
+      "testCount": 16,
+      "assertionCount": 113,
       "testNames": [
         "STORY-371: Claude rendering preserves user fields, writes tier fields, and proves idempotent drift",
         "STORY-371: Codex rendering changes only root model keys and generated hooks",
@@ -2043,7 +2072,13 @@
         "TCRN-CROSS-STORY-417: generated event shape is not coerced when the target is incompatible",
         "TCRN-CROSS-STORY-417: duplicate nonmatching user groups and unknown event values remain intact",
         "STORY-371: an empty main tier is an explicit no-write plan",
-        "STORY-371: a target change between planning and writing is refused before any host write"
+        "STORY-371: a target change between planning and writing is refused before any host write",
+        "TCRN-CROSS-STORY-429: Codex hooks-only ignores and preserves an existing project model config",
+        "TCRN-CROSS-STORY-429: Claude hooks-only preserves all non-hook settings and backs up exact preimage bytes",
+        "TCRN-CROSS-STORY-429: empty model plans still project only hooks for both hosts",
+        "TCRN-CROSS-STORY-429: hooks-only rejects injected Codex config and Claude model writes before any apply",
+        "TCRN-CROSS-STORY-429: native CLI scope selects hooks-only or the explicit full path",
+        "TCRN-CROSS-STORY-429: the six authorized per-host hook changes do not alter other managed or user groups"
       ]
     }
   }

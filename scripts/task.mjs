@@ -60,7 +60,7 @@ import {
 import { delay, PROGRESS_WAIT_MAX_MS, readProgressDelta, summarizeProgress, waitForProgress } from "./lib/incremental-output.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
-import { evaluateProofBudget } from "./lib/proof-budget.mjs";
+import { evaluateProofBudget, PROOF_BUDGET_SCOPE_BINDING_ENV } from "./lib/proof-budget.mjs";
 
 installNoNetworkGuard();
 
@@ -79,15 +79,16 @@ const noNetworkImport = pathToFileURL(resolve(repositoryRoot, "scripts/no-networ
 const testControllerBootstrapPath = resolve(repositoryRoot, "scripts/test-controller-bootstrap.mjs");
 
 class TaskError extends Error {
-  constructor(reasonCode, message) {
+  constructor(reasonCode, message, details = null) {
     super(message);
     this.name = "TaskError";
     this.reasonCode = reasonCode;
+    this.details = details;
   }
 }
 
-function fail(reasonCode, message) {
-  throw new TaskError(reasonCode, message);
+function fail(reasonCode, message, details = null) {
+  throw new TaskError(reasonCode, message, details);
 }
 
 function assertion(condition, reasonCode, detail = "") {
@@ -1480,14 +1481,33 @@ async function reportBudget() {
       productLines += newlines;
     }
   }
-  const policy = await readJson(resolve(repositoryRoot, "scripts/policy/proof-budget.json"));
+  let policy;
   let evaluated;
   try {
-    evaluated = evaluateProofBudget({ proofLines, productLines, policy });
+    policy = await readJson(resolve(repositoryRoot, "scripts/policy/proof-budget.json"));
+    evaluated = evaluateProofBudget({
+      proofLines,
+      productLines,
+      policy,
+      scopeBindingSha256: process.env[PROOF_BUDGET_SCOPE_BINDING_ENV],
+    });
   } catch (error) {
-    fail(error?.reasonCode ?? "PROOF_BUDGET_POLICY_INVALID", error?.message ?? "proof budget policy is invalid");
+    const ratio = productLines === 0 ? 0 : Number((proofLines / productLines).toFixed(4));
+    fail(error?.reasonCode ?? "PROOF_BUDGET_POLICY_INVALID", error?.message ?? "proof budget policy is invalid", {
+      proofBudget: {
+        proofLines,
+        productLines,
+        ratio,
+        status: "rejected",
+        rawStatus: "unknown",
+        rawReasonCode: error?.reasonCode ?? "PROOF_BUDGET_POLICY_INVALID",
+        blocking: true,
+        warningRatio: typeof policy?.warningRatio === "number" ? policy.warningRatio : null,
+        hardRatio: typeof policy?.hardRatio === "number" ? policy.hardRatio : null,
+      },
+    });
   }
-  if (!evaluated.ok) fail(evaluated.reasonCode, evaluated.error);
+  if (!evaluated.ok) fail(evaluated.reasonCode, evaluated.error, { proofBudget: evaluated });
   return success(evaluated.reasonCode, {
     ...evaluated,
     ...(evaluated.warning === null ? {} : { notice: evaluated.warning }),
@@ -1570,7 +1590,7 @@ async function invoke(name) {
     return result;
   } catch (error) {
     const reasonCode = errorReason(error);
-    await recordEvidence(name, false, reasonCode, error.message);
+    await recordEvidence(name, false, reasonCode, error?.details ? { message: error.message, ...error.details } : error.message);
     throw error;
   }
 }
@@ -1579,6 +1599,7 @@ try {
   const result = await withExclusiveOutputSession(repositoryRoot, async () => invoke(command));
   process.stdout.write(`${JSON.stringify({ ok: true, command, ...result })}\n`);
 } catch (error) {
-  process.stderr.write(`${JSON.stringify({ ok: false, command, reasonCode: errorReason(error), error: error.message })}\n`);
+  const details = error?.details && typeof error.details === "object" && !Array.isArray(error.details) ? error.details : {};
+  process.stderr.write(`${JSON.stringify({ ...details, ok: false, command, reasonCode: errorReason(error), error: error.message })}\n`);
   process.exitCode = 1;
 }

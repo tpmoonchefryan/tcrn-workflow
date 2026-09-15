@@ -9,16 +9,19 @@
 //
 // A governed session that spawns a background load (a CPU-stress loop, a dev
 // server, a headless browser) calls `register` at spawn time with the load's
-// process GROUP id; at teardown a `detect` run reports any owned group that still
-// has live members, or any orphan matching a registered command pattern. The
+// process GROUP id; at teardown `detect --purpose <task-owner>` reports only the
+// exact registered groups owned by that task, while unfiltered `detect` retains
+// the workspace-wide orphan-pattern backstop. Purpose-scoped `deregister` checks
+// that the exact group is terminal before removing its registration. The
 // registry is a transient JSONL file OUTSIDE the engine control tree — replay and
 // the snapshot witness never see it, so it can never be mistaken for canonical
 // control bytes (docs/architecture/root-model.md: transient is disposable and
 // non-authoritative).
 //
 // Exit codes: 0 = clean (detect) or done (register/deregister/list); 3 = residue
-// present (detect); 1 = usage or I/O error. The distinct code 3 lets a host hook
-// tell "a leak was found" apart from "the detector itself failed".
+// present (detect); 4 = purpose owner has no registration (not-verifiable); 1 =
+// usage or I/O error. The distinct codes keep a leak/unknown owner apart from a
+// detector failure.
 //
 // The file exports its command functions and guards its CLI dispatch behind
 // import.meta.main so the registration protocol can be unit-tested against a temp
@@ -147,9 +150,13 @@ export async function appendRegistration(path, registration) {
 
 // Remove every line for a pgid by writing a fresh file and renaming it into place
 // (atomic replace, no partial-write window), self-healing any unparseable lines.
-export async function removeRegistration(path, pgid) {
-  const kept = parseRegistryLenient(await readRegistryText(path))
-    .filter((registration) => registration.pgid !== pgid)
+export async function removeRegistration(path, pgid, purpose = undefined) {
+  const registrations = parseRegistryLenient(await readRegistryText(path));
+  if (purpose !== undefined && !registrations.some((registration) => registration.pgid === pgid && registration.purpose === purpose)) {
+    throw new SpawnGuardError("SPAWN_GUARD_OWNER_MISMATCH");
+  }
+  const kept = registrations
+    .filter((registration) => registration.pgid !== pgid || purpose !== undefined && registration.purpose !== purpose)
     .map((registration) => buildRegistrationLine(registration));
   const temporary = `${path}.tmp-${process.pid}`;
   await mkdir(dirname(path), { recursive: true });
@@ -171,6 +178,34 @@ export function detectFromTable(registryText, tableText, at) {
   return detectResidue(registrations, rows, at);
 }
 
+/**
+ * Detect only the groups registered under one exact task owner key. Unrelated
+ * process groups and the generic command-pattern orphan backstop are excluded
+ * from this task-scoped result; an unregistered owner is unknown, not clean.
+ */
+export function detectOwnedFromTable(registryText, tableText, at, purpose) {
+  if (typeof purpose !== "string" || purpose.trim().length === 0 || purpose.length > 1_024 || purpose.includes("\u0000")) {
+    return { status: "not-verifiable", reasonCode: "SPAWN_GUARD_PURPOSE_REQUIRED", purpose: purpose ?? null };
+  }
+  const registrations = parseRegistry(registryText);
+  const owned = registrations.filter((registration) => registration.purpose === purpose);
+  if (owned.length === 0) return { status: "not-verifiable", reasonCode: "SPAWN_GUARD_OWNER_NOT_REGISTERED", purpose };
+  const ownedGroups = new Set(owned.map((registration) => registration.pgid));
+  const rows = parseProcessTable(tableText).filter((row) => ownedGroups.has(row.pgid));
+  return detectResidue(owned, rows, at);
+}
+
+/** Confirm the exact task-owned registered process group has no live children. */
+export function verifyOwnedGroupTerminal(registryText, tableText, pgid, purpose) {
+  const registrations = parseRegistry(registryText);
+  if (typeof purpose !== "string" || purpose.trim().length === 0 || !registrations.some((registration) => registration.pgid === pgid && registration.purpose === purpose)) {
+    return { ok: false, status: "not-verifiable", reasonCode: "SPAWN_GUARD_OWNER_MISMATCH", pgid, purpose: purpose ?? null };
+  }
+  const rows = parseProcessTable(tableText).filter((row) => row.pgid === pgid);
+  if (rows.length > 0) return { ok: false, status: "blocked", reasonCode: "SPAWN_GUARD_OWNED_GROUP_STILL_ACTIVE", pgid, purpose, remaining: rows };
+  return { ok: true, status: "verified", reasonCode: "SPAWN_GUARD_OWNED_GROUP_TERMINAL", pgid, purpose, remaining: [] };
+}
+
 async function commandRegister(flags) {
   if (!flags.pgid || !flags.pattern) usage("register needs --pgid and --pattern");
   const line = await appendRegistration(registryPath(flags), {
@@ -184,7 +219,14 @@ async function commandRegister(flags) {
 
 async function commandDeregister(flags) {
   const pgid = assertPgid(flags.pgid);
-  await removeRegistration(registryPath(flags), pgid);
+  const path = registryPath(flags);
+  if (flags.purpose !== undefined) {
+    const terminal = verifyOwnedGroupTerminal(await readRegistryText(path), readProcessTable(), pgid, flags.purpose);
+    if (!terminal.ok) throw new SpawnGuardError(terminal.reasonCode);
+    await removeRegistration(path, pgid, flags.purpose);
+  } else {
+    await removeRegistration(path, pgid);
+  }
   process.stdout.write(`SPAWN_GUARD_DEREGISTERED ${pgid}\n`);
 }
 
@@ -195,7 +237,16 @@ async function commandList(flags) {
 }
 
 async function commandDetect(flags) {
-  const report = detectFromTable(await readRegistryText(registryPath(flags)), readProcessTable(), nowFlag(flags));
+  const registryText = await readRegistryText(registryPath(flags));
+  const tableText = readProcessTable();
+  const report = flags.purpose === undefined
+    ? detectFromTable(registryText, tableText, nowFlag(flags))
+    : detectOwnedFromTable(registryText, tableText, nowFlag(flags), flags.purpose);
+  if (report.status === "not-verifiable") {
+    process.stdout.write(`${JSON.stringify(report)}\n`);
+    process.exitCode = 4;
+    return;
+  }
   process.stdout.write(buildResidueReport(report));
   // Set exitCode rather than process.exit so the (possibly multi-KB) report is
   // fully flushed to a pipe before the process ends.

@@ -34,26 +34,36 @@ signature.
 
 ## Using it directly (works today, every host)
 
-At spawn time, register the load's process group:
+At spawn time, register the load's process group under an exact task owner key.
+Use the host's explicit child/process-group handle; do not use an ambient group
+or a command-name match as permission to signal other work:
 
 ```bash
+OWNER_KEY="task:<work-id>:<Pack>"
 node scripts/spawn-guard.mjs register \
   --workspace "<partition>/workspace" \
-  --pgid "$(ps -o pgid= -p $LOAD_PID | tr -d ' ')" \
-  --pattern "yes" --purpose "cpu-stress:framerate-proof"
+  --pgid "$PGID" \
+  --pattern "yes" --purpose "$OWNER_KEY"
 ```
 
-At teardown, reap the load and deregister; then detect any residue:
+At teardown, the owning host/session control reclaims only that registered
+process group and waits for every child to exit. The detector does not kill
+processes. Verify the exact owner group, then deregister it; `deregister` with a
+purpose refuses an owner mismatch or any live group member:
 
 ```bash
-kill "$LOAD_PID"                       # the convention: reclaim in the same flow
-node scripts/spawn-guard.mjs deregister --workspace "<partition>/workspace" --pgid "$PGID"
-node scripts/spawn-guard.mjs detect    --workspace "<partition>/workspace"
+node scripts/spawn-guard.mjs detect --workspace "<partition>/workspace" --purpose "$OWNER_KEY"
+node scripts/spawn-guard.mjs deregister --workspace "<partition>/workspace" --pgid "$PGID" --purpose "$OWNER_KEY"
 ```
 
-`detect` prints a canonical JSON residue report and exits `0` when clean, `3` when
-residue is present (a distinct code so a caller can tell "a leak was found" from
-"the detector itself failed", which is exit `1`).
+Task-scoped `detect --purpose` examines only the registered process groups with
+that exact owner key; it does not attribute another task's group or command
+pattern to this task. It prints a canonical JSON residue report and exits `0`
+when clean, `3` when residue is present, `4` when the owner has no registration
+(`not-verifiable`), and `1` when the detector itself fails. The unfiltered
+`detect` remains a workspace-wide report for legacy host use. Keep an active
+registration and its raw diagnostics if cleanup is incomplete; never kill or
+deregister another task's process group.
 
 ## Wiring it to a host session-end moment
 
