@@ -20,7 +20,7 @@
     },
     "scopedDisposition": {
       "schemaVersion": "tcrn.proof-budget-scoped-disposition.v1",
-      "bindingSha256": "97f50959e960e34adc431964f8cf46b1b5700ae47c4b38c274fc27165ab75e49",
+      "bindingSha256": "567525d44a5da948c1308f8cd215d52c3b7e5f3689fe4bd9ab57a4f770870fdf",
       "reasonCode": "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING",
       "disposition": "nonblocking-ratio-only",
       "binding": {
@@ -129,7 +129,7 @@
           }
         ],
         "currentExecution": {
-          "bindingSha256": "1d75c909f9153d385b5e6d1b9a18349f05b8632be843061b611635132a243aec",
+          "bindingSha256": "187c777631ee264e0e93b0b84c009233cbd0e6124fe1aa340c30ff261392bb4d",
           "primaryWork": {
             "externalKey": "TCRN-CROSS-STORY-434",
             "id": "work:1891880eb2925c9c777d1d22",
@@ -142,10 +142,10 @@
           "phase": "rework",
           "taskClass": "implement",
           "pack": "INC320/RECEIPT-JSON-FREEZE-R3",
-          "activePackBriefSha256": "69390a60be0e3ffbb32b9d0fb121e112ec405480a590c8c8ff3a0fcb0d301372",
-          "technicalPackSha256": "d5e3a0081af1cf45274a14f17bc7b115794145e78451d5980c75488065431eaf",
-          "roleBindingAmendmentSha256": "5f7ddf91e4b8c4fd22f239032abc4069fa537007314aa9d5ddc8f98e27a171af",
-          "serialPackRecordSha256": "2b96e705d522cbf7ed3500e84011943e828c87b772392c095c4cf356adc4fcec",
+          "activePackBriefSha256": "4d183946ab61e16f64edd0418674fed959ab2d313159d96d536062415ffde2d4",
+          "technicalPackSha256": "4aa25930ccf7f0b6cafa9d60e12733161bedd4d3bd46cf099552811a16b449c8",
+          "roleBindingAmendmentSha256": "af940b191643f5a598687b2c46cfece3ffdbca3e692dd09ab8489a9c4ffbce50",
+          "serialPackRecordSha256": "cb55c8c616715ed4a0f3087e7669f0a256d97c4d4a790ae64cbfe38175e3bc8b",
           "workIds": [
             "work:7adbe918fcd753cfd695dfdb",
             "work:35924e9a902cd39feb6356cc",
