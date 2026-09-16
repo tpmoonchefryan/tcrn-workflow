@@ -648,12 +648,12 @@
     {
       "id": "DISPATCH-COMPLETION-001",
       "source": "chain:cross-project:TCRN-CROSS-MIN-CHAIN-NATIVE-20260916",
-      "semantics": "native work status and recorded result evidence are the completion authority; external mirrored completion stores are not prerequisites",
+      "semantics": "native work status plus a genuine successful, evidence-bound native implementation result are the completion authority; an advisory verify command alone is not a result, and external mirrored completion stores are not prerequisites",
       "landing": "scripts/final-gate-plan.mjs native status qualification and scripts/operational-batch-entry.mjs",
       "enforcementHost": "tcrn-workflow",
-      "positiveLeg": "tests/codex-stop-pact.test.mjs native status qualification",
-      "redLeg": "tests/codex-stop-pact.test.mjs a caller completion store cannot make a non-terminal work item complete",
-      "disposition": "superseded-by-stricter",
+      "positiveLeg": "tests/codex-stop-pact.test.mjs native status qualification plus native result annotation acceptance",
+      "redLeg": "tests/codex-stop-pact.test.mjs a caller completion store, bare advisory verify command, missing dependency schema, or failed/stale native result cannot make a non-terminal work item complete",
+      "disposition": "retained",
       "strictnessProof": "The retired stage-completion authority accepted a second receipt/store state beside the chain. Qualification now derives completion only from the fresh native work status and retains runner result evidence for the gate itself; a caller-supplied completion receipt cannot alter task status or enter the formal batch."
     }
   ]

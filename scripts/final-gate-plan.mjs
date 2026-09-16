@@ -22,6 +22,7 @@ export const IMPACT_SCHEMA_VERSION = "tcrn.phase-aware-impact.v1";
 export const BATCH_OBSERVER_VERSION = "tcrn.batch-runtime-observer.v1";
 export const OPERATIONAL_BATCH_VERSION = "tcrn.operational-batch.v1";
 export const GATE_PLAN_INTEGRITY_VERSION = "tcrn.gate-plan-integrity.v1";
+export const NATIVE_IMPLEMENTATION_RESULT_VERSION = "tcrn.native-implementation-result.v1";
 export const BATCH_PHASES = Object.freeze(["development", "candidate-final", "publication", "merge-sensitive"]);
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const defaultRosterPath = resolve(repositoryRoot, "../../platform-docs/acceptance-gate-groups.json");
@@ -1041,34 +1042,6 @@ const BATCH_COMPLETE_STATES = new Set(["done", "completed", "satisfied", "succes
 const BATCH_BLOCKED_STATES = new Set(["blocked", "not-verifiable", "not_verifiable"]);
 const BATCH_HOST_PROCESS_STATES = new Set(["R", "S", "S+", "Ss"]);
 
-// The live engine's Story records deliberately do not grow ad-hoc dependency
-// fields.  The formal batch adapter therefore owns the small, approved
-// EPIC135 stage graph below and binds it to each native record's id, revision,
-// and scope digest.  This is an explicit closure, not an absent field treated
-// as an empty list.  Unknown packs or ids remain not-verifiable.
-export const EPIC135_STAGE_DEPENDENCIES = Object.freeze({
-  "work:f3d3166ff702e7c32c7c6e50": Object.freeze([]),
-  "work:8b9f35d8e42cf84e8a01181c": Object.freeze(["work:f3d3166ff702e7c32c7c6e50"]),
-  "work:17929c5b42ac1736bcecb1f2": Object.freeze(["work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c"]),
-  "work:b621023cb60591c0716e69eb": Object.freeze(["work:17929c5b42ac1736bcecb1f2"]),
-  "work:98f1f575b1d3612fdc302d80": Object.freeze(["work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c", "work:17929c5b42ac1736bcecb1f2", "work:b621023cb60591c0716e69eb"]),
-});
-export const EPIC135_STAGE_BINDINGS = Object.freeze({
-  "work:f3d3166ff702e7c32c7c6e50": Object.freeze({ revision: 3, scopeDigest: "722cb6c1505bce6c5cd19627beacb972320d8f8345c8a9baaeec4d227c22d774" }),
-  "work:8b9f35d8e42cf84e8a01181c": Object.freeze({ revision: 3, scopeDigest: "b07b4eeb761bb1d517a0313421557f8fba2ae4299401d9dbfa91c3ccc01ca1b6" }),
-  "work:17929c5b42ac1736bcecb1f2": Object.freeze({ revision: 3, scopeDigest: "6c30ef956b2868d53f4a7d613a67862e6847bcc0f34bbb9424eb031e36bf9610" }),
-  "work:b621023cb60591c0716e69eb": Object.freeze({ revision: 3, scopeDigest: "4574eaed1b0b997db50cae66106cf72d3e5b2187149abf66795e648037436041" }),
-  "work:98f1f575b1d3612fdc302d80": Object.freeze({ revision: 4, scopeDigest: "5b13703ff2e2d1339931c0277214feae67c2d674cb6226c154b1d8d96822d4e2" }),
-});
-const EPIC135_STAGE_PACKS = new Set(["HC1-HC3-final-machine-closeout", "HC1-HC3-unified-rework"]);
-
-function approvedStageDependencies({ series, pack, workIds } = {}) {
-  if (series !== "EPIC135" || !EPIC135_STAGE_PACKS.has(pack) || !Array.isArray(workIds) || workIds.length === 0) return null;
-  const ids = [...new Set(workIds)];
-  if (ids.length !== workIds.length || ids.some((id) => !Object.hasOwn(EPIC135_STAGE_DEPENDENCIES, id))) return null;
-  return ids.map((id) => ({ id, ...EPIC135_STAGE_BINDINGS[id], dependencies: [...EPIC135_STAGE_DEPENDENCIES[id]], source: "approved-EPIC135-pack-stage-map" }));
-}
-
 function observedProcessActive(value) {
   if (value === true || typeof value === "string") return true;
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -1110,6 +1083,143 @@ function batchString(value) {
 
 function batchArray(value) {
   return Array.isArray(value) ? value : value === undefined || value === null ? [] : [value];
+}
+
+const NATIVE_RESULT_SUCCESS_STATES = new Set(["completed", "complete", "passed", "pass", "success", "succeeded", "verified", "green"]);
+const NATIVE_RESULT_BLOCKED_STATES = new Set(["blocked", "pending", "not-verifiable", "not_verifiable", "unknown", "failed", "failure", "red"]);
+
+function nativeObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+/**
+ * Read a deliberately explicit result annotation from the native work surface.
+ * The summary is already a native, append-only work field; the marker keeps
+ * free-form prose from accidentally becoming completion evidence.  Direct
+ * structured fields are also accepted for host adapters that expose them.
+ */
+function nativeSummaryMarker(summary, name) {
+  if (typeof summary !== "string") return null;
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  for (const line of summary.split(/\r?\n/u)) {
+    const match = line.match(new RegExp(`^\\s*${escaped}\\s*:\\s*(\\{.*\\}|\\[.*\\])\\s*$`, "u"));
+    if (!match) continue;
+    try {
+      const value = JSON.parse(match[1]);
+      if (value && typeof value === "object") return value;
+    } catch {
+      // A malformed marker is an observed invalid annotation, not a reason to
+      // fall back to the command string or to the surrounding prose.
+      return { __nativeMarkerInvalid: true };
+    }
+  }
+  return null;
+}
+
+function nativeResultCandidate(record, advisory) {
+  const sources = [
+    record?.implementationResult,
+    record?.nativeResult,
+    record?.resultAnnotation,
+    record?.verificationResult,
+    record?.result,
+    advisory?.implementationResult,
+    advisory?.nativeResult,
+    advisory?.result,
+    nativeSummaryMarker(record?.summary, "NATIVE_RESULT"),
+    nativeSummaryMarker(record?.summary, "native-result"),
+  ];
+  return sources.find((value) => value !== undefined && value !== null) ?? null;
+}
+
+function unwrapNativeResult(value) {
+  const source = nativeObject(value);
+  if (source === null) return null;
+  // Adapters may retain a result envelope around the terminal observation.
+  if (nativeObject(source.result) !== null
+    && source.status === undefined && source.state === undefined
+    && source.ok === undefined && source.exitCode === undefined
+    && source.command === undefined) return nativeObject(source.result);
+  return source;
+}
+
+/** Normalize and bind one native implementation outcome to its work record. */
+export function normalizeNativeImplementationResult(value, { workId = null, revision = null, scopeDigest = null } = {}) {
+  const source = unwrapNativeResult(value);
+  if (source === null) return { present: false, valid: false, status: "missing", reason: "native implementation result annotation is missing", result: null };
+  if (source.__nativeMarkerInvalid === true) return { present: true, valid: false, status: "invalid", reason: "native implementation result marker is not valid JSON", result: source };
+  const status = batchString(source.status ?? source.state ?? source.outcome ?? source.resultStatus)?.toLowerCase() ?? null;
+  const exitCode = source.exitCode ?? source.exit ?? source.code;
+  const command = batchString(source.command ?? source.invocation ?? source.verifyCommand);
+  const evidence = source.evidence ?? source.evidenceId ?? source.evidencePath ?? source.rawOutput ?? source.artifact;
+  const candidateWorkId = source.workId ?? source.taskId ?? (typeof source.id === "string" && source.id.startsWith("work:") ? source.id : undefined);
+  const boundWorkId = batchString(candidateWorkId);
+  const boundRevision = source.revision ?? source.workRevision;
+  const boundScopeDigest = batchString(source.scopeDigest ?? source.workScopeDigest);
+  const problems = [];
+  if (status === null || !NATIVE_RESULT_SUCCESS_STATES.has(status)) problems.push(status === null ? "result status is missing" : `result status is not successful: ${status}`);
+  if (exitCode !== 0) problems.push("result exitCode is not 0");
+  if (source.ok !== true) problems.push("result ok must be true");
+  if (command === null) problems.push("result command is missing");
+  const evidencePresent = typeof evidence === "string" && evidence.trim().length > 0
+    || Array.isArray(evidence) && evidence.length > 0 && evidence.every((entry) => typeof entry === "string" && entry.trim().length > 0);
+  if (!evidencePresent) problems.push("successful result evidence is missing");
+  if (workId !== null && boundWorkId !== null && boundWorkId !== workId) problems.push("result work binding differs from the native record");
+  if (revision !== null && boundRevision !== undefined && boundRevision !== revision) problems.push("result revision differs from the native record");
+  if (scopeDigest !== null && boundScopeDigest !== null && boundScopeDigest !== scopeDigest) problems.push("result scope digest differs from the native record");
+  if (source.stale === true || source.invalidated === true) problems.push("result is explicitly stale or invalidated");
+  return {
+    present: true,
+    valid: problems.length === 0,
+    status: problems.length === 0 ? "success" : status ?? "invalid",
+    reason: problems.length === 0 ? "native result is successful and evidence-bound" : problems.join("; "),
+    result: source,
+    candidateId: batchString(source.candidateId ?? source.candidate ?? source.tree ?? source.commit),
+    candidateDigest: batchString(source.candidateDigest ?? source.inputDigest),
+    queueDigest: batchString(source.queueDigest),
+    workId: boundWorkId,
+    revision: Number.isSafeInteger(boundRevision) ? boundRevision : null,
+    scopeDigest: boundScopeDigest,
+    command,
+    evidence,
+  };
+}
+
+function nativeDependencyCandidate(record, advisory, resultObservation) {
+  const result = resultObservation?.result;
+  const sources = [
+    record?.dependencies,
+    record?.dependsOn,
+    record?.prerequisites,
+    advisory?.dependencies,
+    advisory?.dependsOn,
+    advisory?.prerequisites,
+    result?.dependencies,
+    result?.dependsOn,
+    result?.prerequisites,
+    nativeSummaryMarker(record?.summary, "NATIVE_DEPENDENCIES"),
+    nativeSummaryMarker(record?.summary, "native-dependencies"),
+  ];
+  const index = sources.findIndex((value) => value !== undefined && value !== null);
+  return index < 0 ? { present: false, valid: false, dependencies: null, source: null, reason: "native dependency observation is missing" } : {
+    present: true,
+    valid: Array.isArray(sources[index]) && sources[index].every((entry) => typeof entry === "string" && entry.trim().length > 0) && new Set(sources[index]).size === sources[index].length,
+    dependencies: Array.isArray(sources[index]) ? [...sources[index]] : null,
+    source: index < 6 ? "native-work-show" : "native-implementation-result",
+    reason: Array.isArray(sources[index]) ? "native dependency observation present" : "native dependency observation is malformed",
+  };
+}
+
+function nativeWorkObservation(record, advisory) {
+  const result = normalizeNativeImplementationResult(nativeResultCandidate(record, advisory), {
+    workId: record?.id ?? null,
+    revision: Number.isSafeInteger(record?.revision) ? record.revision : null,
+    scopeDigest: record?.scopeDigest ?? null,
+  });
+  const dependencies = nativeDependencyCandidate(record, advisory, result);
+  const blockedReason = batchString(record?.blockedReason ?? record?.blockReason ?? record?.reason ?? result.result?.blockedReason ?? result.result?.reason)
+    ?? (result.present && NATIVE_RESULT_BLOCKED_STATES.has(result.status ?? "") ? result.reason : null);
+  return { result, dependencies, blockedReason };
 }
 
 function batchBinding(value) {
@@ -1168,14 +1278,25 @@ function normalizedBatchTask(value, index) {
   if (typeof value === "string") return { id: value, status: "unknown", dependencies: [], postAction: false, raw: value };
   if (!value || typeof value !== "object") return { id: `task-${index + 1}`, status: "unknown", dependencies: [], postAction: false, raw: value };
   const status = batchString(value.status ?? value.state) ?? "unknown";
-  const dependencies = batchArray(value.dependencies ?? value.dependsOn ?? value.prerequisites).map((entry) => {
+  const nativeObservation = nativeWorkObservation(value, value.advisory);
+  const dependencyInput = Object.hasOwn(value, "dependencies") ? value.dependencies
+    : Object.hasOwn(value, "dependsOn") ? value.dependsOn
+      : Object.hasOwn(value, "prerequisites") ? value.prerequisites
+        : nativeObservation.dependencies.valid ? nativeObservation.dependencies.dependencies : undefined;
+  const dependencies = batchArray(dependencyInput).map((entry) => {
     if (typeof entry === "string") return entry;
     return entry && typeof entry === "object" ? batchString(entry.id ?? entry.workId ?? entry.taskId) : null;
   }).filter(Boolean);
   const stage = String(value.stage ?? value.phase ?? "").toLowerCase();
   const kind = String(value.kind ?? value.type ?? value.category ?? "").toLowerCase();
   const postAction = value.postAction === true || value.postApproved === true || value.approvedPostAction === true || (value.approved === true && /publish|release|install|measure|metric|publication/u.test(`${stage} ${kind}`));
-  const blockedReason = batchString(value.blockedReason ?? value.blockReason ?? value.reason ?? value.reasonCode);
+  const suppliedResult = value.implementationResultObservation ?? value.nativeImplementationResult ?? value.implementationResult ?? value.nativeResult ?? value.resultAnnotation ?? null;
+  const implementationResult = suppliedResult === null
+    ? nativeObservation.result
+    : suppliedResult?.valid === undefined
+      ? normalizeNativeImplementationResult(suppliedResult, { workId: value.id ?? value.workId ?? value.taskId ?? null, revision: value.revision ?? null, scopeDigest: value.scopeDigest ?? null })
+      : suppliedResult;
+  const blockedReason = batchString(value.blockedReason ?? value.blockReason ?? value.reason ?? value.reasonCode ?? implementationResult?.blockedReason ?? implementationResult?.reason);
   const realBlocked = BATCH_BLOCKED_STATES.has(status.toLowerCase()) && blockedReason !== null;
   return {
     id: batchString(value.id ?? value.workId ?? value.taskId ?? value.key) ?? `task-${index + 1}`,
@@ -1183,13 +1304,15 @@ function normalizedBatchTask(value, index) {
     revision: Number.isSafeInteger(value.revision) ? value.revision : null,
     scopeDigest: batchString(value.scopeDigest ?? value.digest),
     dependencies,
+    dependencySchemaPresent: dependencyInput !== undefined && Array.isArray(dependencyInput),
     postAction,
     executable: value.executable === true || value.runnable === true,
     running: value.running === true,
-    // An implementation result is a native work note (normally an advisory
-    // verify command recorded by work-annotate), not a second completion
-    // receipt. It is considered complete only by an acceptance-stage read.
-    implementationRecorded: value.implementationRecorded === true,
+    // An implementation result is a native work note, not a second completion
+    // receipt.  A bare advisory:verify command or caller boolean is deliberately
+    // insufficient; only a normalized, evidence-bound native result qualifies.
+    implementationResult,
+    implementationRecorded: implementationResult?.valid === true,
     realBlocked,
     blockedReason,
     raw: value,
@@ -1461,41 +1584,32 @@ export async function readNativeBatchState({ workspace, engineCli, workIds = [],
     const listed = selectedRecords.find((candidate) => candidate.id === id);
     if (listed?.revision !== record.revision) return { ok: false, reasonCode: "BATCH_NATIVE_REVISION_DRIFT", workId: id, listed: listed?.revision ?? null, shown: record.revision };
     const advisory = shown.result?.advisory ?? shown.result?.result?.advisory;
+    const observation = nativeWorkObservation(record, advisory);
     shows.push({
       ...record,
-      // The command is a native readback; carrying its verify pointer lets
-      // acceptance qualification distinguish implemented active work from
-      // untouched active work without creating a completion-store authority.
-      ...(typeof advisory?.verify === "string" && advisory.verify.trim().length > 0 ? {
-        implementationRecorded: true,
-        implementationVerify: advisory.verify,
+      ...(observation.dependencies.valid ? {
+        dependencies: observation.dependencies.dependencies,
+        dependencySource: observation.dependencies.source,
       } : {}),
+      // `advisory.verify` is only a command/locator.  It deliberately never
+      // becomes a completion result until a native result annotation records a
+      // successful, evidence-bound outcome.  This also handles records such as
+      // 428 whose genuine implementation note has no verify command.
+      implementationRecorded: observation.result.valid,
+      implementationResultObservation: observation.result,
+      implementationResultStatus: observation.result.status,
+      implementationResultReason: observation.result.reason,
+      ...(observation.blockedReason === null ? {} : { blockedReason: observation.blockedReason }),
     });
-  }
-  const approvedDependencies = approvedStageDependencies({ series, pack, workIds });
-  if (approvedDependencies !== null) {
-    const mismatches = selectedRecords.flatMap((record) => {
-      const binding = approvedDependencies.find((entry) => entry.id === record.id);
-      if (!binding) return [{ id: record.id, reason: "record is outside the approved EPIC135 pack" }];
-      const dependencyKey = ["dependencies", "dependsOn", "prerequisites"].find((key) => Object.hasOwn(record, key));
-      const nativeDependencies = dependencyKey === undefined ? null : normalizedDependencyIds(record[dependencyKey]);
-      const result = [];
-      if (record.revision !== binding.revision) result.push({ id: record.id, field: "revision", expected: binding.revision, actual: record.revision });
-      if (record.scopeDigest !== binding.scopeDigest) result.push({ id: record.id, field: "scopeDigest", expected: binding.scopeDigest, actual: record.scopeDigest ?? null });
-      if (nativeDependencies !== null && JSON.stringify(nativeDependencies) !== JSON.stringify(binding.dependencies)) result.push({ id: record.id, field: "dependencies", expected: binding.dependencies, actual: nativeDependencies });
-      return result;
-    });
-    if (mismatches.length > 0) return { ok: false, reasonCode: "BATCH_NATIVE_STAGE_BINDING_MISMATCH", mismatches };
   }
   const tasks = shows.map((record) => {
     const dependencyKey = ["dependencies", "dependsOn", "prerequisites"].find((key) => Object.hasOwn(record, key));
-    const approved = approvedDependencies?.find((entry) => entry.id === record.id);
     return {
       ...record,
       id: record.id,
       status: record.status,
       ...(dependencyKey === undefined
-        ? approved === undefined ? {} : { dependencies: [...approved.dependencies], dependencySource: approved.source }
+        ? {}
         : { dependencies: record[dependencyKey] }),
       stage: record.stage ?? stage,
       pack: record.pack ?? record.packId ?? pack,
@@ -1507,7 +1621,7 @@ export async function readNativeBatchState({ workspace, engineCli, workIds = [],
     ok: true,
     source: "native-status/full-work-list/work-show",
     queue: { observed: true, digest: queueDigest, tasks, records: tasks },
-    dependencies: { observed: true, schemaPresent: dependencySchemaPresent, source: approvedDependencies === null ? "native-work-show" : "approved-EPIC135-pack-stage-map", records: dependencySchemaPresent ? tasks.map(({ id, dependencies }) => ({ id, dependencies })) : null },
+    dependencies: { observed: true, schemaPresent: dependencySchemaPresent, source: "native-work-show", records: dependencySchemaPresent ? tasks.map(({ id, dependencies }) => ({ id, dependencies })) : null },
     queueDigest,
     tasks,
     workShows: shows,
@@ -1515,7 +1629,6 @@ export async function readNativeBatchState({ workspace, engineCli, workIds = [],
     workListComplete: true,
     workListRecords: listedRecords,
     dependencySchemaPresent,
-    approvedStageDependencies: approvedDependencies,
     nativeStatus: status.result,
   };
 }
@@ -1698,6 +1811,19 @@ export function qualifyBatch(input = {}) {
   const acceptanceStage = ["candidate-final", "publication", "merge-sensitive"].includes(actualBinding.stage);
   const activeTasks = tasks.filter((task) => !task.postAction);
   const postActions = tasks.filter((task) => task.postAction || batchPostAction(task.raw));
+  const invalidResults = activeTasks.filter((task) => !task.realBlocked && task.implementationResult?.present === true && task.implementationResult.valid !== true);
+  if (invalidResults.length > 0) {
+    return {
+      ...base,
+      status: "not-verifiable",
+      reasonCode: "BATCH_IMPLEMENTATION_RESULT_NOT_VERIFIABLE",
+      tasks,
+      postActions,
+      remainingPrerequisites: invalidResults.map((task) => task.id),
+      observation: observerResult,
+      reasons: invalidResults.map((task) => `${task.id}: ${task.implementationResult.reason}`),
+    };
+  }
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
   const missingDependencies = [];
   const unfinishedDependencies = [];
@@ -1743,6 +1869,23 @@ export function qualifyBatch(input = {}) {
   if (!candidate.stable) return { ...base, status: "not-verifiable", reasonCode: "BATCH_CANDIDATE_NOT_STABLE", tasks, postActions, remainingPrerequisites, candidate, reasons: ["a stable candidate identity and digest are required"] };
   const observedCandidateDigest = observerResult.observer?.candidate?.digest;
   if (observedCandidateDigest !== null && observedCandidateDigest !== undefined && candidate.digest !== observedCandidateDigest) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: ["the candidate digest differs from the runtime observer snapshot"] };
+  const staleResults = activeTasks.filter((task) => {
+    const result = task.implementationResult;
+    if (task.realBlocked || result?.valid !== true) return false;
+    return result.candidateId !== null && result.candidateId !== candidate.id
+      || result.candidateDigest !== null && result.candidateDigest !== candidate.digest
+      || result.queueDigest !== null && result.queueDigest !== actualQueueDigest;
+  });
+  if (staleResults.length > 0) return {
+    ...base,
+    status: "not-verifiable",
+    reasonCode: "BATCH_IMPLEMENTATION_RESULT_STALE",
+    tasks,
+    postActions,
+    remainingPrerequisites,
+    candidate,
+    reasons: staleResults.map((task) => `${task.id}: native implementation result does not match the current candidate or queue`),
+  };
   const idempotencyKey = batchIdempotencyKey(actualBinding, candidate, actualQueueDigest);
   const running = batchRunningRun(source, idempotencyKey);
   if (running !== null) return { ...base, status: "rejected", reasonCode: "BATCH_ALREADY_RUNNING", tasks, postActions, candidate, idempotencyKey, queueDigest: actualQueueDigest, priorRun: running, reasons: ["the same stable batch is already in flight"] };

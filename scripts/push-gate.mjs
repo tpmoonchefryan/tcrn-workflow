@@ -95,7 +95,19 @@ function read(relativePath) {
 function run(command, argv) {
   const result = spawnSync(command, argv, { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (result.error) return { ok: false, output: String(result.error.message) };
-  return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  const stdout = String(result.stdout ?? "");
+  const stderr = String(result.stderr ?? "");
+  return { ok: result.status === 0, stdout, stderr, output: `${stdout}${stderr}` };
+}
+
+// `git rev-parse` writes the commit followed by a line feed.  The child
+// expectation schema is intentionally strict (exactly one lower-case SHA-1),
+// so normalize the command's successful stdout at this boundary while keeping
+// malformed, multiline, failed, or stderr-bearing output fail-closed.
+function normalizedCommitOutput(result) {
+  if (!result?.ok || result.stderr !== "") return undefined;
+  const value = String(result.stdout ?? "").trim();
+  return /^[a-f0-9]{40}$/u.test(value) ? value : undefined;
 }
 
 function runChild(command, argv) {
@@ -380,7 +392,7 @@ try {
   const validated = validateStructuredChildExpectations({
     sourceFiles: sourcePolicy?.allowedFiles,
     guardIds: Array.isArray(guardRegistry?.guards) ? guardRegistry.guards.map((guard) => guard?.id) : undefined,
-    p8BasisCommit: currentHead.ok ? currentHead.output : undefined,
+    p8BasisCommit: normalizedCommitOutput(currentHead),
   });
   if (!validated.ok) {
     childExpectationsFailure = { reasonCode: validated.reasonCode, findings: validated.findings };
