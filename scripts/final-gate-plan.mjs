@@ -3,8 +3,8 @@
 // TCRN-CROSS-STORY-413 — phase-aware gate selection with containment-aware execution.
 // This module plans work; it never turns a missing or failed result into a cache hit.
 
-import { createHash, randomBytes } from "node:crypto";
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
@@ -29,14 +29,8 @@ const containmentPath = resolve(repositoryRoot, "scripts/policy/gate-containment
 
 export const GATE_RECEIPT_AUTHORITY_VERSION = "tcrn.gate-receipt-authority.v1";
 export const GATE_RECEIPT_DOCUMENT_VERSION = "tcrn.gate-runner-receipt.v1";
-export const STAGE_COMPLETION_AUTHORITY_VERSION = "tcrn.stage-completion-authority.v1";
-export const STAGE_COMPLETION_RECEIPT_VERSION = "tcrn.stage-completion-receipt.v1";
-export const STAGE_COMPLETION_STORE_VERSION = "tcrn.stage-completion-store.v1";
-export const STAGE_COMPLETION_ADMISSION_VERSION = "tcrn.stage-completion-admission.v1";
 const RECEIPT_RUNNER_VERSION = "tcrn-code-owned-runner.v1";
 const RECEIPT_AUTHORITIES = new WeakMap();
-const STAGE_COMPLETION_AUTHORITIES = new WeakMap();
-const STAGE_COMPLETION_STORES = new WeakMap();
 // A plan is executable only while this process still owns the opaque context
 // that created it.  The public JSON shape is an audit projection, not an
 // authority: in particular, `dynamic`, `integrity`, and `executable` may never
@@ -124,10 +118,6 @@ function bindReceiptAuthority(authority, requiredGateIds) {
   if (state === null || !Array.isArray(requiredGateIds)) return;
   const ids = [...new Set(requiredGateIds.filter((id) => typeof id === "string"))];
   if (state.requiredGateIds === null) state.requiredGateIds = ids;
-}
-
-function stageCompletionAuthorityState(authority) {
-  return STAGE_COMPLETION_AUTHORITIES.get(authority) ?? null;
 }
 
 /**
@@ -260,471 +250,6 @@ export const issueRunnerReceipt = issueGateReceipt;
 export function queryGateReceipt(authority, candidate, { expectedInputs = null, gateId = null, expectedCommand = null, expectedInvocation = null, expectedPhase = null } = {}) {
   return trustedArtifactIdentity(candidate, { expectedInputs, gateId, expectedCommand, expectedInvocation, expectedPhase, authority });
 }
-
-/** Make an opaque issuer/query context for implementation-unit completion receipts. */
-export function createStageCompletionAuthority() {
-  const authority = Object.freeze({ schemaVersion: STAGE_COMPLETION_AUTHORITY_VERSION });
-  STAGE_COMPLETION_AUTHORITIES.set(authority, { records: new Map() });
-  return authority;
-}
-
-export const createImplementationUnitAuthority = createStageCompletionAuthority;
-
-function candidateIdentity(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const id = batchString(value.id ?? value.commit ?? value.commitId ?? value.ref);
-  const digest = batchString(value.digest ?? value.treeDigest ?? value.commitDigest ?? value.sha256 ?? value.hash);
-  return id !== null && digest !== null ? { id, digest } : null;
-}
-
-/** Issue one source/queue-bound implementation-unit completion receipt. */
-export function issueStageCompletionReceipt(authority, input = {}) {
-  const state = stageCompletionAuthorityState(authority);
-  if (state === null) throw planError("STAGE_COMPLETION_AUTHORITY_REQUIRED", "a code-owned stage-completion authority is required");
-  const workId = batchString(input.workId ?? input.id);
-  const series = batchString(input.series);
-  const pack = batchString(input.pack);
-  const stage = batchString(input.stage ?? input.phase);
-  const agent = batchString(input.agent ?? input.agentId ?? input.actor);
-  const queueDigest = batchString(input.queueDigest ?? input.queue);
-  const scopeDigest = batchString(input.scopeDigest);
-  const workspace = stageCompletionWorkspace(input.workspace);
-  const candidate = candidateIdentity(input.candidate);
-  if (workId === null || series === null || pack === null || stage === null || agent === null || queueDigest === null || scopeDigest === null || candidate === null) throw planError("STAGE_COMPLETION_RECEIPT_INVALID", "work, revision/scope, Pack, candidate, agent, and queue are required");
-  if (!Number.isSafeInteger(input.revision) || input.revision < 1 || input.status !== undefined && input.status !== "completed") throw planError("STAGE_COMPLETION_RECEIPT_INVALID", "completed implementation receipt fields");
-  const receipt = {
-    schemaVersion: STAGE_COMPLETION_RECEIPT_VERSION,
-    status: "completed",
-    workId,
-    revision: input.revision,
-    scopeDigest,
-    series,
-    pack,
-    stage,
-    candidate,
-    agent,
-    queueDigest,
-    issuedBy: "code-owned-stage-completion-authority",
-    ...(workspace === null ? {} : { workspace }),
-  };
-  const receiptDigest = sha256(Buffer.from(JSON.stringify(canonicalValue(receipt)), "utf8"));
-  const result = deepFreeze({ ...receipt, receiptDigest });
-  state.records.set(receiptDigest, result);
-  return result;
-}
-
-export const issueImplementationUnitCompletionReceipt = issueStageCompletionReceipt;
-
-export function queryStageCompletionReceipt(authority, candidate) {
-  const state = stageCompletionAuthorityState(authority);
-  if (state === null || !candidate || typeof candidate !== "object") return null;
-  const digest = batchString(candidate.receiptDigest);
-  if (digest === null) return null;
-  const registered = state.records.get(digest);
-  if (registered === undefined || JSON.stringify(canonicalValue(candidate)) !== JSON.stringify(canonicalValue(registered))) return null;
-  return registered;
-}
-
-export const verifyStageCompletionReceipt = queryStageCompletionReceipt;
-
-const STAGE_COMPLETION_STORE_SOURCE = "code-owned-stage-completion-store";
-const STAGE_COMPLETION_ADMISSION_SOURCE = "code-owned-stage-completion-admission";
-const STAGE_COMPLETION_ADMISSION_ISSUER = "code-owned-stage-completion-issuer";
-// Admission records are deliberately outside the source directory.  The
-// manifest identifies the source bytes; this code derives the registry entry
-// from that digest and never accepts an admission path from a source/request.
-const STAGE_COMPLETION_ADMISSION_ROOT = resolve(tmpdir(), "tcrn-stage-completion-admissions");
-
-function regularOwnedFile(path, { writable = false } = {}) {
-  try {
-    const info = lstatSync(path);
-    if (!info.isFile() || info.isSymbolicLink()) return false;
-    if (typeof process.getuid === "function" && info.uid !== process.getuid()) return false;
-    if (writable && (info.mode & 0o077) !== 0) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function safeRelativeStorePath(value) {
-  if (typeof value !== "string" || value.trim().length === 0) return null;
-  const normalized = value.trim().replaceAll("\\", "/");
-  if (normalized.startsWith("/") || normalized.split("/").some((part) => part === ".." || part.length === 0)) return null;
-  return normalized;
-}
-
-function optionalBindingText(value) {
-  return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
-}
-
-function stageCompletionWorkspace(value) {
-  return optionalBindingText(value);
-}
-
-function stageCompletionLifecycleBinding(value, { workspace = null } = {}) {
-  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
-  const candidate = candidateIdentity(source.candidate);
-  return {
-    workspace: stageCompletionWorkspace(source.workspace ?? workspace),
-    series: optionalBindingText(source.series),
-    pack: optionalBindingText(source.pack),
-    stage: optionalBindingText(source.stage ?? source.phase),
-    candidate: candidate === null ? null : { id: candidate.id, digest: candidate.digest },
-    queueDigest: optionalBindingText(source.queueDigest ?? source.queue),
-  };
-}
-
-function stageCompletionBindingFromReceipts(receipts, { workspace = null, binding = null } = {}) {
-  const rows = (Array.isArray(receipts) ? receipts : []).map((receipt) => ({
-    workId: optionalBindingText(receipt?.workId),
-    revision: receipt?.revision,
-    scopeDigest: optionalBindingText(receipt?.scopeDigest),
-    workspace: stageCompletionWorkspace(receipt?.workspace ?? workspace),
-    series: optionalBindingText(receipt?.series),
-    pack: optionalBindingText(receipt?.pack),
-    stage: optionalBindingText(receipt?.stage),
-    candidate: candidateIdentity(receipt?.candidate),
-    queueDigest: optionalBindingText(receipt?.queueDigest),
-  }));
-  const supplied = stageCompletionLifecycleBinding(binding, { workspace });
-  const problems = [];
-  for (const row of rows) {
-    if (row.workId === null || !Number.isSafeInteger(row.revision) || row.revision < 1 || row.scopeDigest === null || row.candidate === null) {
-      problems.push("receipt work, revision, scope, and candidate bindings are required");
-    }
-  }
-  const commonKeys = ["workspace", "series", "pack", "stage", "queueDigest"];
-  const resolved = {};
-  for (const key of commonKeys) {
-    const values = rows.map((row) => row[key]).filter((value) => value !== null);
-    const firstValue = values[0] ?? supplied[key];
-    if (values.some((value) => value !== firstValue)) problems.push(`${key} binding differs across receipts`);
-    if (supplied[key] !== null && firstValue !== null && supplied[key] !== firstValue) problems.push(`${key} binding differs from the store admission binding`);
-    resolved[key] = firstValue;
-  }
-  const candidates = rows.map((row) => row.candidate).filter((value) => value !== null);
-  const firstCandidate = candidates[0] ?? supplied.candidate;
-  if (candidates.some((value) => value.id !== firstCandidate?.id || value.digest !== firstCandidate?.digest)) problems.push("candidate binding differs across receipts");
-  if (supplied.candidate !== null && firstCandidate !== null && (supplied.candidate.id !== firstCandidate.id || supplied.candidate.digest !== firstCandidate.digest)) problems.push("candidate binding differs from the store admission binding");
-  resolved.candidate = firstCandidate;
-  if (problems.length > 0) throw planError("STAGE_COMPLETION_ADMISSION_INVALID", [...new Set(problems)].join("; "));
-  return {
-    workspace: resolved.workspace,
-    series: resolved.series,
-    pack: resolved.pack,
-    stage: resolved.stage,
-    candidate: resolved.candidate === null ? null : { id: resolved.candidate.id, digest: resolved.candidate.digest },
-    queueDigest: resolved.queueDigest,
-    works: rows.map(({ workId, revision, scopeDigest }) => ({ workId, revision, scopeDigest })).sort((one, two) => one.workId.localeCompare(two.workId)),
-  };
-}
-
-function stageCompletionReceiptSetDigest(entries) {
-  return digestValue((Array.isArray(entries) ? entries : []).map((entry) => ({
-    path: entry?.path ?? null,
-    bytes: entry?.bytes ?? null,
-    sha256: entry?.sha256 ?? null,
-    receiptDigest: entry?.receiptDigest ?? null,
-  })).sort((one, two) => String(one.path).localeCompare(String(two.path))));
-}
-
-function ownerOnlyDirectory(path, detail) {
-  try {
-    const info = lstatSync(path);
-    if (!info.isDirectory() || info.isSymbolicLink() || typeof process.getuid === "function" && info.uid !== process.getuid() || (info.mode & 0o077) !== 0) throw new Error(detail);
-    return info;
-  } catch (error) {
-    throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", String(error?.message ?? error));
-  }
-}
-
-function stageCompletionAdmissionPath(manifestDigest) {
-  if (typeof manifestDigest !== "string" || !/^[a-f0-9]{64}$/u.test(manifestDigest)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "manifest digest cannot identify an admission record");
-  if (!existsSync(STAGE_COMPLETION_ADMISSION_ROOT)) mkdirSync(STAGE_COMPLETION_ADMISSION_ROOT, { recursive: true, mode: 0o700 });
-  ownerOnlyDirectory(STAGE_COMPLETION_ADMISSION_ROOT, "stage completion admission registry is not owner-only");
-  return join(STAGE_COMPLETION_ADMISSION_ROOT, `${manifestDigest}.json`);
-}
-
-function stageCompletionAdmissionBody({ manifestDigest, entries, receipts, workspace, binding }) {
-  const admissionBinding = stageCompletionBindingFromReceipts(receipts, { workspace, binding });
-  return {
-    schemaVersion: STAGE_COMPLETION_ADMISSION_VERSION,
-    status: "admitted",
-    source: STAGE_COMPLETION_ADMISSION_SOURCE,
-    issuedBy: STAGE_COMPLETION_ADMISSION_ISSUER,
-    admissionId: randomBytes(24).toString("hex"),
-    manifestDigest,
-    receiptSetDigest: stageCompletionReceiptSetDigest(entries),
-    receiptCount: entries.length,
-    binding: admissionBinding,
-    bindingDigest: digestValue(admissionBinding),
-  };
-}
-
-function admissionDigest(admission) {
-  if (!admission || typeof admission !== "object" || Array.isArray(admission)) return null;
-  const { admissionDigest: _admissionDigest, ...body } = admission;
-  return sha256(Buffer.from(JSON.stringify(canonicalValue(body)), "utf8"));
-}
-
-function writeStageCompletionAdmission(admission) {
-  const withDigest = { ...admission, admissionDigest: admissionDigest(admission) };
-  const path = stageCompletionAdmissionPath(withDigest.manifestDigest);
-  const bytes = Buffer.from(`${JSON.stringify(canonicalValue(withDigest), null, 2)}\n`, "utf8");
-  try {
-    writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
-  } catch (error) {
-    if (error?.code !== "EEXIST") throw planError("STAGE_COMPLETION_ADMISSION_INVALID", `cannot write admission record: ${String(error?.message ?? error)}`);
-    if (!regularOwnedFile(path, { writable: true })) throw planError("STAGE_COMPLETION_ADMISSION_INVALID", "existing admission record is not owner-only");
-    let existing;
-    try { existing = JSON.parse(readFileSync(path, "utf8")); } catch { throw planError("STAGE_COMPLETION_ADMISSION_INVALID", "existing admission record is unreadable"); }
-    if (admissionDigest(existing) !== existing?.admissionDigest || existing.manifestDigest !== withDigest.manifestDigest || existing.receiptSetDigest !== withDigest.receiptSetDigest || existing.bindingDigest !== withDigest.bindingDigest) throw planError("STAGE_COMPLETION_ADMISSION_INVALID", "existing admission record conflicts with the source");
-    return { ...existing, admissionPath: path };
-  }
-  return { ...withDigest, admissionPath: path };
-}
-
-function validateStageCompletionAdmission(admission, { manifestDigest, entries }) {
-  if (!admission || admission.schemaVersion !== STAGE_COMPLETION_ADMISSION_VERSION || admission.status !== "admitted" || admission.source !== STAGE_COMPLETION_ADMISSION_SOURCE || admission.issuedBy !== STAGE_COMPLETION_ADMISSION_ISSUER) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "stage completion source has no code-owned admission record");
-  if (typeof admission.admissionId !== "string" || !/^[a-f0-9]{48}$/u.test(admission.admissionId) || admissionDigest(admission) !== admission.admissionDigest) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "stage completion admission digest is invalid");
-  if (admission.manifestDigest !== manifestDigest || !Number.isSafeInteger(admission.receiptCount) || admission.receiptCount !== entries.length || admission.receiptSetDigest !== stageCompletionReceiptSetDigest(entries)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "stage completion admission does not match the manifest receipt set");
-  if (!admission.binding || admission.bindingDigest !== digestValue(admission.binding) || !Array.isArray(admission.binding.works)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "stage completion admission binding is invalid");
-  return admission;
-}
-
-function expectedStageCompletionBinding(options) {
-  const value = options && typeof options === "object" && !Array.isArray(options) ? options : {};
-  const bindingSource = value.expectedBinding ?? value.binding ?? {
-    workspace: value.workspace,
-    series: value.series,
-    pack: value.pack,
-    stage: value.stage ?? value.phase,
-    queueDigest: value.queueDigest,
-    candidate: value.candidate,
-  };
-  const expectedBinding = stageCompletionLifecycleBinding(bindingSource, { workspace: value.expectedWorkspace ?? value.workspace ?? null });
-  const expectedCandidate = value.expectedCandidate ?? value.candidate ?? bindingSource.candidate ?? (value.expectedCandidateId !== undefined || value.expectedCandidateDigest !== undefined ? { id: value.expectedCandidateId, digest: value.expectedCandidateDigest } : null);
-  const candidate = expectedCandidate && typeof expectedCandidate === "object" && !Array.isArray(expectedCandidate) ? candidateIdentity(expectedCandidate) : null;
-  const workIds = value.expectedWorkIds ?? value.workIds ?? (value.workId === undefined ? undefined : [value.workId]);
-  const normalizedWorkIds = Array.isArray(workIds) ? [...new Set(workIds.map(optionalBindingText).filter(Boolean))].sort() : null;
-  const workBindings = value.expectedWorkBindings ?? value.workBindings ?? (value.workId === undefined ? undefined : [{ workId: value.workId, revision: value.revision, scopeDigest: value.scopeDigest }]);
-  const normalizedWorkBindings = Array.isArray(workBindings) ? workBindings.map((row) => ({
-    workId: optionalBindingText(row?.workId ?? row?.id),
-    revision: row?.revision,
-    scopeDigest: optionalBindingText(row?.scopeDigest),
-  })).filter((row) => row.workId !== null).sort((one, two) => one.workId.localeCompare(two.workId)) : null;
-  return { ...expectedBinding, candidate, workIds: normalizedWorkIds, workBindings: normalizedWorkBindings };
-}
-
-function admissionBindingProblems(binding, options) {
-  const expected = expectedStageCompletionBinding(options);
-  const optionValues = options && typeof options === "object" && !Array.isArray(options) ? options : {};
-  if (!binding || typeof binding !== "object") return ["registered admission binding is missing"];
-  const problems = [];
-  if (expected.workspace !== null && binding.workspace !== expected.workspace) problems.push("workspace binding differs");
-  for (const key of ["series", "pack", "stage", "queueDigest"]) {
-    if (expected[key] !== null && binding[key] !== expected[key]) problems.push(`${key} binding differs`);
-  }
-  if (expected.candidate !== null && (binding.candidate?.id !== expected.candidate.id || binding.candidate?.digest !== expected.candidate.digest)) problems.push("candidate binding differs");
-  if (expected.workIds !== null) {
-    const actual = Array.isArray(binding.works) ? binding.works.map((row) => row?.workId).filter(Boolean).sort() : [];
-    if (JSON.stringify(actual) !== JSON.stringify(expected.workIds)) problems.push("work binding differs");
-  }
-  if (expected.workBindings !== null) {
-    if (JSON.stringify(canonicalValue(binding.works ?? [])) !== JSON.stringify(canonicalValue(expected.workBindings))) problems.push("work revision or scope binding differs");
-  }
-  const expectedScopeDigest = optionalBindingText(optionValues.expectedScopeDigest ?? optionValues.scopeDigest);
-  if (expectedScopeDigest !== null) {
-    const scopedRows = Array.isArray(binding.works) ? binding.works.filter((row) => optionValues.workId === undefined || row?.workId === optionValues.workId) : [];
-    if (scopedRows.length === 0 || scopedRows.some((row) => row.scopeDigest !== expectedScopeDigest)) problems.push("scope binding differs");
-  }
-  return problems;
-}
-
-function stageCompletionReceiptDigest(receipt) {
-  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return null;
-  const { receiptDigest: _receiptDigest, ...body } = receipt;
-  return sha256(Buffer.from(JSON.stringify(canonicalValue(body)), "utf8"));
-}
-
-function validateStageCompletionReceiptDocument(receipt) {
-  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return "receipt is not an object";
-  if (receipt.schemaVersion !== STAGE_COMPLETION_RECEIPT_VERSION || receipt.status !== "completed" || receipt.issuedBy !== "code-owned-stage-completion-authority") return "receipt schema or issuer is invalid";
-  if (typeof receipt.receiptDigest !== "string" || !/^[a-f0-9]{64}$/u.test(receipt.receiptDigest) || stageCompletionReceiptDigest(receipt) !== receipt.receiptDigest) return "receipt digest is invalid";
-  if (typeof receipt.workId !== "string" || receipt.workId.trim().length === 0 || !Number.isSafeInteger(receipt.revision) || receipt.revision < 1) return "receipt work binding is invalid";
-  if ([receipt.scopeDigest, receipt.series, receipt.pack, receipt.stage, receipt.agent, receipt.queueDigest].some((value) => typeof value !== "string" || value.trim().length === 0)) return "receipt scope or lifecycle binding is invalid";
-  if (receipt.workspace !== undefined && stageCompletionWorkspace(receipt.workspace) === null) return "receipt workspace binding is invalid";
-  if (!receipt.candidate || typeof receipt.candidate !== "object" || Array.isArray(receipt.candidate) || typeof receipt.candidate.id !== "string" || receipt.candidate.id.trim().length === 0 || typeof receipt.candidate.digest !== "string" || receipt.candidate.digest.trim().length === 0) return "receipt candidate identity is invalid";
-  return null;
-}
-
-/**
- * Create a code-owned durable completion source for an operator session.
- *
- * The returned token is intentionally opaque and only the code that created
- * it may append receipts.  The sealed manifest is the cross-process payload;
- * a separate code-owned admission record must also authorize its exact
- * manifest/receipt set and lifecycle binding before a later process registers
- * a fresh in-memory authority, so JSON cannot manufacture a WeakMap capability.
- */
-export function createStageCompletionStore({ root = null, workspace = null, binding = null } = {}) {
-  const storeRoot = root === null ? mkdtempSync(join(tmpdir(), "tcrn-stage-completion-")) : resolve(root);
-  if (root !== null) {
-    if (!storeRoot.startsWith("/") || existsSync(storeRoot) && !lstatSync(storeRoot).isDirectory()) throw planError("STAGE_COMPLETION_STORE_INVALID", "an absolute directory is required");
-    if (!existsSync(storeRoot)) mkdirSync(storeRoot, { recursive: true, mode: 0o700 });
-    if ((lstatSync(storeRoot).mode & 0o077) !== 0) throw planError("STAGE_COMPLETION_STORE_INVALID", "store directory must not be group or world accessible");
-  }
-  const receiptsRoot = join(storeRoot, "receipts");
-  if (!existsSync(receiptsRoot)) mkdirSync(receiptsRoot, { recursive: true, mode: 0o700 });
-  const authority = createStageCompletionAuthority();
-  const token = Object.freeze({ schemaVersion: STAGE_COMPLETION_STORE_VERSION, storeRoot });
-  const normalizedWorkspace = stageCompletionWorkspace(workspace);
-  if (workspace !== null && normalizedWorkspace === null) throw planError("STAGE_COMPLETION_STORE_INVALID", "workspace binding must be non-empty");
-  const storeBinding = stageCompletionLifecycleBinding(binding, { workspace: normalizedWorkspace });
-  STAGE_COMPLETION_STORES.set(token, { storeRoot, receiptsRoot, authority, receipts: [], receiptDocuments: [], workspace: normalizedWorkspace, binding: storeBinding, sealed: false, admission: null });
-  return Object.freeze({ token, storeRoot, receiptsRoot, manifestPath: join(storeRoot, "manifest.json"), lifecycle: "open", workspace: normalizedWorkspace, binding: storeBinding });
-}
-
-function stageCompletionStoreState(store) {
-  return STAGE_COMPLETION_STORES.get(store?.token ?? store) ?? null;
-}
-
-/** Append one receipt through the code-owned issuer and durable store. */
-export function writeStageCompletionStoreReceipt(store, input = {}) {
-  const state = stageCompletionStoreState(store);
-  if (state === null) throw planError("STAGE_COMPLETION_STORE_REQUIRED", "a code-owned stage completion store is required");
-  if (state.sealed) throw planError("STAGE_COMPLETION_STORE_SEALED", "stage completion store is already sealed");
-  const incomingBinding = stageCompletionLifecycleBinding(input, { workspace: state.workspace });
-  const expectedBinding = state.binding;
-  for (const key of ["workspace", "series", "pack", "stage", "queueDigest"]) {
-    if (expectedBinding[key] !== null && incomingBinding[key] !== null && expectedBinding[key] !== incomingBinding[key]) throw planError("STAGE_COMPLETION_ADMISSION_INVALID", `${key} binding differs from the store binding`);
-  }
-  if (expectedBinding.candidate !== null && incomingBinding.candidate !== null && (expectedBinding.candidate.id !== incomingBinding.candidate.id || expectedBinding.candidate.digest !== incomingBinding.candidate.digest)) throw planError("STAGE_COMPLETION_ADMISSION_INVALID", "candidate binding differs from the store binding");
-  const effectiveInput = {
-    ...input,
-    ...(state.workspace !== null && input.workspace === undefined ? { workspace: state.workspace } : {}),
-    ...(expectedBinding.series !== null && input.series === undefined ? { series: expectedBinding.series } : {}),
-    ...(expectedBinding.pack !== null && input.pack === undefined ? { pack: expectedBinding.pack } : {}),
-    ...(expectedBinding.stage !== null && input.stage === undefined && input.phase === undefined ? { stage: expectedBinding.stage } : {}),
-    ...(expectedBinding.queueDigest !== null && input.queueDigest === undefined && input.queue === undefined ? { queueDigest: expectedBinding.queueDigest } : {}),
-    ...(expectedBinding.candidate !== null && input.candidate === undefined ? { candidate: expectedBinding.candidate } : {}),
-  };
-  const receipt = issueStageCompletionReceipt(state.authority, effectiveInput);
-  const path = join(state.receiptsRoot, `${receipt.receiptDigest}.json`);
-  const bytes = Buffer.from(`${JSON.stringify(canonicalValue(receipt), null, 2)}\n`, "utf8");
-  writeFileSync(path, bytes, { flag: "wx", mode: 0o600 });
-  const entry = { path: `receipts/${receipt.receiptDigest}.json`, bytes: bytes.length, sha256: sha256(bytes), receiptDigest: receipt.receiptDigest };
-  state.receipts.push(entry);
-  state.receiptDocuments.push(receipt);
-  if (state.workspace === null && receipt.workspace !== undefined) state.workspace = receipt.workspace;
-  if (state.binding.series === null) state.binding.series = receipt.series;
-  if (state.binding.pack === null) state.binding.pack = receipt.pack;
-  if (state.binding.stage === null) state.binding.stage = receipt.stage;
-  if (state.binding.queueDigest === null) state.binding.queueDigest = receipt.queueDigest;
-  if (state.binding.candidate === null) state.binding.candidate = { ...receipt.candidate };
-  return Object.freeze({ receipt, entry, storeRoot: state.storeRoot, lifecycle: "open" });
-}
-
-/** Seal the source so a separate operator/CLI process can load it exactly once per invocation. */
-export function sealStageCompletionStore(store) {
-  const state = stageCompletionStoreState(store);
-  if (state === null) throw planError("STAGE_COMPLETION_STORE_REQUIRED", "a code-owned stage completion store is required");
-  if (state.sealed) throw planError("STAGE_COMPLETION_STORE_SEALED", "stage completion store is already sealed");
-  const base = {
-    schemaVersion: STAGE_COMPLETION_STORE_VERSION,
-    status: "sealed",
-    source: STAGE_COMPLETION_STORE_SOURCE,
-    receipts: [...state.receipts].sort((one, two) => one.path.localeCompare(two.path)),
-    receiptCount: state.receipts.length,
-    lifecycle: "sealed-source-loaded-per-operator-invocation",
-  };
-  const manifestDigest = sha256(Buffer.from(JSON.stringify(canonicalValue(base)), "utf8"));
-  const manifest = { ...base, manifestDigest };
-  const bytes = Buffer.from(`${JSON.stringify(canonicalValue(manifest), null, 2)}\n`, "utf8");
-  writeFileSync(join(state.storeRoot, "manifest.json"), bytes, { flag: "wx", mode: 0o600 });
-  const admission = writeStageCompletionAdmission(stageCompletionAdmissionBody({ manifestDigest, entries: base.receipts, receipts: state.receiptDocuments, workspace: state.workspace, binding: state.binding }));
-  state.sealed = true;
-  state.admission = admission;
-  return Object.freeze({ ...manifest, manifestPath: join(state.storeRoot, "manifest.json"), storeRoot: state.storeRoot, admissionPath: admission.admissionPath, admissionDigest: admission.admissionDigest, receiptSetDigest: admission.receiptSetDigest, binding: admission.binding, admission: Object.freeze({ ...admission }) });
-}
-
-/**
- * Load and validate a sealed completion source at a process boundary.  The
- * loader first resolves the independent code-owned admission anchor and only
- * then registers bytes whose manifest, receipt set, and bindings match it;
- * raw receipt arrays and structured-cloned authorities are deliberately
- * ignored by the production operator entry.
- */
-export function loadStageCompletionSource(source, options = null) {
-  const manifestPath = typeof source === "string" ? source : source && typeof source === "object" ? source.manifestPath ?? source.path : null;
-  if (typeof manifestPath !== "string" || !manifestPath.startsWith("/") || manifestPath.includes("\u0000")) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "an absolute manifest path is required");
-  const absoluteManifest = resolve(manifestPath);
-  if (!regularOwnedFile(absoluteManifest, { writable: true })) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest must be an owner-only regular file");
-  let manifest;
-  try { manifest = JSON.parse(readFileSync(absoluteManifest, "utf8")); } catch (error) { throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion manifest is unreadable: ${String(error?.message ?? error)}`); }
-  if (!manifest || manifest.schemaVersion !== STAGE_COMPLETION_STORE_VERSION || manifest.status !== "sealed" || manifest.source !== STAGE_COMPLETION_STORE_SOURCE || !Array.isArray(manifest.receipts) || !Number.isSafeInteger(manifest.receiptCount) || manifest.receiptCount !== manifest.receipts.length) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest is not a sealed code-owned source");
-  const { manifestDigest, ...base } = manifest;
-  if (typeof manifestDigest !== "string" || manifestDigest !== sha256(Buffer.from(JSON.stringify(canonicalValue(base)), "utf8"))) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest digest is invalid");
-  const admissionPath = stageCompletionAdmissionPath(manifestDigest);
-  if (!regularOwnedFile(admissionPath, { writable: true })) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion source was not admitted by the code-owned issuer");
-  let admission;
-  try { admission = JSON.parse(readFileSync(admissionPath, "utf8")); } catch (error) { throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion admission is unreadable: ${String(error?.message ?? error)}`); }
-  validateStageCompletionAdmission(admission, { manifestDigest, entries: manifest.receipts });
-  const admissionProblems = admissionBindingProblems(admission.binding, options);
-  if (admissionProblems.length > 0) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", admissionProblems.join("; "));
-  const manifestRoot = resolve(absoluteManifest, "..");
-  ownerOnlyDirectory(manifestRoot, "completion source directory is not owner-only");
-  const seenPaths = new Set();
-  const receipts = [];
-  for (const entry of manifest.receipts) {
-    const relative = safeRelativeStorePath(entry?.path);
-    if (relative === null || seenPaths.has(relative) || typeof entry?.sha256 !== "string" || !/^[a-f0-9]{64}$/u.test(entry.sha256) || !Number.isSafeInteger(entry?.bytes)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion manifest entry is invalid");
-    seenPaths.add(relative);
-    const path = resolve(manifestRoot, relative);
-    if (!(path === manifestRoot || path.startsWith(`${manifestRoot}/`)) || !regularOwnedFile(path, { writable: true })) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion receipt path is outside the sealed source");
-    const bytes = readFileSync(path);
-    if (bytes.length !== entry.bytes || sha256(bytes) !== entry.sha256) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion receipt bytes drifted for ${relative}`);
-    let receipt;
-    try { receipt = JSON.parse(bytes.toString("utf8")); } catch { throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", `completion receipt is not JSON for ${relative}`); }
-    const problem = validateStageCompletionReceiptDocument(receipt);
-    if (problem !== null || receipt.receiptDigest !== entry.receiptDigest || receipts.some((candidate) => candidate.receiptDigest === receipt.receiptDigest)) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", problem ?? `duplicate completion receipt ${relative}`);
-    const frozen = deepFreeze(receipt);
-    receipts.push(frozen);
-  }
-  const loadedReceiptEntries = manifest.receipts.map((entry) => ({ ...entry }));
-  if (stageCompletionReceiptSetDigest(loadedReceiptEntries) !== admission.receiptSetDigest) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion receipt set is not the admitted set");
-  const loadedBinding = stageCompletionBindingFromReceipts(receipts, { workspace: admission.binding.workspace, binding: admission.binding });
-  if (digestValue(loadedBinding) !== admission.bindingDigest || JSON.stringify(canonicalValue(loadedBinding)) !== JSON.stringify(canonicalValue(admission.binding))) throw planError("STAGE_COMPLETION_SOURCE_NOT_VERIFIABLE", "completion receipt bindings are not the admitted bindings");
-  // Only after the admission, manifest and every receipt agree do we create a
-  // fresh process-local authority and register the validated receipt bytes.
-  const authority = createStageCompletionAuthority();
-  const state = stageCompletionAuthorityState(authority);
-  for (const receipt of receipts) state.records.set(receipt.receiptDigest, receipt);
-  return Object.freeze({
-    schemaVersion: STAGE_COMPLETION_STORE_VERSION,
-    status: "loaded",
-    authority,
-    receipts,
-    admission: deepFreeze({ ...admission, admissionPath }),
-    source: {
-      manifestPath: absoluteManifest,
-      admissionPath,
-      manifestDigest,
-      admissionDigest: admission.admissionDigest,
-      receiptSetDigest: admission.receiptSetDigest,
-      binding: admission.binding,
-      bindingDigest: admission.bindingDigest,
-      receiptCount: receipts.length,
-      lifecycle: "admitted-sealed-source-loaded-per-operator-invocation; authority-query-valid-for-process-lifetime",
-    },
-  });
-}
-
-export const createImplementationCompletionStore = createStageCompletionStore;
-export const writeImplementationCompletionReceipt = writeStageCompletionStoreReceipt;
-export const sealImplementationCompletionStore = sealStageCompletionStore;
-export const loadImplementationCompletionSource = loadStageCompletionSource;
 
 function validateRoster(roster, containment) {
   if (!roster || !Array.isArray(roster.groups)) throw planError("GATE_PLAN_ROSTER_INVALID", "acceptance roster groups");
@@ -1622,7 +1147,13 @@ export function isGovernedBatchSeries(value) {
   // A Stop pact may be bound to one of the current EPIC135 Stories without
   // carrying a batch object.  The work id is the reliable series boundary in
   // that legacy-shaped envelope, so it also suppresses the old advisory path.
-  const workIds = new Set(["work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c", "work:17929c5b42ac1736bcecb1f2", "work:b621023cb60591c0716e69eb", "work:98f1f575b1d3612fdc302d80"]);
+  const workIds = new Set([
+    "work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c",
+    "work:17929c5b42ac1736bcecb1f2", "work:b621023cb60591c0716e69eb",
+    "work:98f1f575b1d3612fdc302d80", "work:8331d5d13a8df2124b1bba44",
+    "work:a9e16b025a21b9cf7238a5ce", "work:1891880eb2925c9c777d1d22",
+    "work:08e1f20a81121b28fa5a4d32", "work:2eb462340584547dd258e4f5",
+  ]);
   return candidates.some((candidate) => workIds.has(candidate?.workId ?? candidate?.workID ?? candidate?.work_id));
 }
 
@@ -1655,36 +1186,7 @@ function normalizedBatchTask(value, index) {
 }
 
 function taskIsComplete(task) {
-  return BATCH_COMPLETE_STATES.has(String(task?.status ?? "").toLowerCase()) || task?.implementationComplete === true;
-}
-
-function stageCompletionRows(input) {
-  const value = input.stageCompletionReceipts ?? input.implementationReceipts ?? input.implementationUnitReceipts ?? input.implementationUnitCompletionReceipts ?? input.completionReceipts ?? input.completionReceipt;
-  if (Array.isArray(value)) return value;
-  if (value && typeof value === "object") return Object.values(value);
-  return value === undefined || value === null ? [] : [value];
-}
-
-function implementationCompletionForTask(task, input, queueDigest) {
-  const rows = [...stageCompletionRows(input), ...(task.raw?.completionReceipt === undefined ? [] : [task.raw.completionReceipt])];
-  const provided = rows.some((row) => row && typeof row === "object" && (row.workId ?? row.id) === task.id);
-  if (!provided) return { complete: false, provided: false, receipt: null, reason: "implementation completion receipt is missing" };
-  const authority = input.stageCompletionAuthority ?? input.implementationUnitAuthority ?? input.completionAuthority ?? input.receiptAuthority;
-  const receipt = rows.map((row) => queryStageCompletionReceipt(authority, row)).find((row) => row?.workId === task.id) ?? null;
-  if (receipt === null) return { complete: false, provided: true, receipt: null, reason: "implementation completion receipt is absent, forged, or unreadable" };
-  const binding = batchBinding(input.expectedBinding ?? input.binding ?? input);
-  const stage = batchString(input.stage ?? input.phase) ?? binding.stage;
-  const workspace = batchString(input.workspace);
-  const workspaceBindingRequired = input.operational === true || input.observationFresh === true || input.requireRuntimeObservation === true;
-  const problems = [];
-  if (receipt.series !== binding.series || receipt.pack !== binding.pack || receipt.stage !== stage) problems.push("series, Pack, or stage drifted");
-  if (receipt.revision !== task.revision || receipt.scopeDigest !== task.scopeDigest) problems.push("work revision or scope drifted");
-  if (workspaceBindingRequired && (workspace === null || receipt.workspace !== workspace)) problems.push("workspace binding drifted");
-  if (queueDigest !== null && receipt.queueDigest !== queueDigest) problems.push("queue digest drifted");
-  if (receipt.agent === null || receipt.agent.length === 0) problems.push("real agent identity is missing");
-  return problems.length === 0
-    ? { complete: true, provided: true, receipt, reason: "code-owned implementation completion receipt matches work, revision, scope, Pack, stage, agent, and queue" }
-    : { complete: false, provided: true, receipt, reason: problems.join("; ") };
+  return BATCH_COMPLETE_STATES.has(String(task?.status ?? "").toLowerCase());
 }
 
 function batchCandidate(value) {
@@ -2165,27 +1667,11 @@ export function qualifyBatch(input = {}) {
   const actualCandidateRevision = source.currentCandidateRevision ?? source.state?.candidateRevision ?? expectedCandidateRevision;
   if (expectedCandidateRevision !== undefined && expectedCandidateRevision !== actualCandidateRevision) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", candidateRevision: { expected: expectedCandidateRevision, actual: actualCandidateRevision }, reasons: ["candidate revision changed during qualification"] };
 
-  // An empty caller-shaped array is not an observed queue.  Keep a very narrow
-  // compatibility allowance for the historical unit fixture; production callers
-  // use acquireOperationalBatchInput and must provide all observer parts.
-  const tasks = taskSource.map(normalizedBatchTask).map((task) => {
-    if (task.postAction || BATCH_COMPLETE_STATES.has(task.status.toLowerCase())) return { ...task, implementationComplete: false, completionReceipt: null, completionReason: "native terminal status" };
-    const completion = implementationCompletionForTask(task, source, actualQueueDigest);
-    return { ...task, implementationComplete: completion.complete, completionReceipt: completion.receipt, completionReason: completion.reason, completionReceiptProvided: completion.provided };
-  });
-  const invalidCompletion = tasks.filter((task) => task.completionReceiptProvided === true && task.implementationComplete !== true);
-  if (invalidCompletion.length > 0) {
-    return {
-      ...base,
-      status: "not-verifiable",
-      reasonCode: "BATCH_IMPLEMENTATION_RECEIPT_NOT_VERIFIABLE",
-      tasks,
-      postActions: tasks.filter((task) => task.postAction || batchPostAction(task.raw)),
-      remainingPrerequisites: invalidCompletion.map((task) => task.id),
-      observation: observerResult,
-      reasons: invalidCompletion.map((task) => `${task.id}: ${task.completionReason}`),
-    };
-  }
+  // Native work status is the completion authority.  A caller-provided receipt,
+  // completion store, or mirrored implementation flag is deliberately ignored.
+  // This keeps batch qualification on the same chain read used by every other
+  // work operation and avoids a second completion state machine.
+  const tasks = taskSource.map(normalizedBatchTask);
   const activeTasks = tasks.filter((task) => !task.postAction);
   const postActions = tasks.filter((task) => task.postAction || batchPostAction(task.raw));
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
@@ -2233,10 +1719,6 @@ export function qualifyBatch(input = {}) {
   if (!candidate.stable) return { ...base, status: "not-verifiable", reasonCode: "BATCH_CANDIDATE_NOT_STABLE", tasks, postActions, remainingPrerequisites, candidate, reasons: ["a stable candidate identity and digest are required"] };
   const observedCandidateDigest = observerResult.observer?.candidate?.digest;
   if (observedCandidateDigest !== null && observedCandidateDigest !== undefined && candidate.digest !== observedCandidateDigest) return { ...base, status: "rejected", reasonCode: "BATCH_CANDIDATE_INPUT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: ["the candidate digest differs from the runtime observer snapshot"] };
-  const completionDrift = tasks.filter((task) => task.implementationComplete === true && (
-    task.completionReceipt?.candidate?.digest !== candidate.digest || task.completionReceipt?.candidate?.id !== candidate.id
-  ));
-  if (completionDrift.length > 0) return { ...base, status: "rejected", reasonCode: "BATCH_IMPLEMENTATION_RECEIPT_DRIFT", tasks, postActions, remainingPrerequisites, candidate, reasons: completionDrift.map((task) => `${task.id}: implementation receipt candidate differs from the observed candidate`) };
   const idempotencyKey = batchIdempotencyKey(actualBinding, candidate, actualQueueDigest);
   const running = batchRunningRun(source, idempotencyKey);
   if (running !== null) return { ...base, status: "rejected", reasonCode: "BATCH_ALREADY_RUNNING", tasks, postActions, candidate, idempotencyKey, queueDigest: actualQueueDigest, priorRun: running, reasons: ["the same stable batch is already in flight"] };
@@ -2257,8 +1739,6 @@ export function qualifyBatch(input = {}) {
     candidate,
     idempotencyKey,
     queueDigest: actualQueueDigest,
-    stageCompletionAuthority: source.stageCompletionAuthority ?? source.implementationUnitAuthority ?? source.completionAuthority ?? source.receiptAuthority ?? null,
-    stageCompletionReceipts: stageCompletionRows(source),
     remainingPrerequisites,
     observation: observerResult.ok ? observerResult : legacyFixtureObservation ? { schemaVersion: BATCH_OBSERVER_VERSION, status: "legacy-fixture", missing: ["queue", "agents", "writes"] } : observerResult,
     reasons: BATCH_FORMAL_TRIGGERS.has(base.trigger) ? ["all current-stage prerequisites are complete or real-blocked and the candidate is stable"] : ["hooks perform notification/qualification only; the sole formal trigger is required"],
@@ -2280,8 +1760,6 @@ function qualificationRequest(input) {
     currentBinding: actual,
     tasks: qualification.tasks,
     candidate: qualification.candidate,
-    stageCompletionAuthority: qualification.stageCompletionAuthority ?? input.stageCompletionAuthority,
-    stageCompletionReceipts: qualification.stageCompletionReceipts ?? input.stageCompletionReceipts,
     runtimeObserver: qualification.observation?.observer ?? qualification.observation ?? input.runtimeObserver,
     requireRuntimeObservation: true,
     queueDigest: qualification.queueDigest,
@@ -2295,22 +1773,16 @@ function scopedBudgetBatchBinding(input) {
   const validation = validateProofBudgetScopeBinding(input?.proofBudgetScopeBinding);
   if (!validation.ok) return { ok: false, reasonCode: "BATCH_PROOF_BUDGET_SCOPE_BINDING_INVALID" };
   const binding = input.proofBudgetScopeBinding;
-  const execution = binding.currentExecution;
   const ids = input.workIds;
   const exactWorkIds = Array.isArray(ids)
-    && JSON.stringify([...ids].sort()) === JSON.stringify([...execution.workIds].sort());
-  if (input.series !== "INIT-051"
-    || input.pack !== execution.pack
-    || input.primaryWorkId !== execution.primaryWork.id
-    || input.scopeDigest !== execution.primaryWork.scopeDigest
-    || input.role !== execution.role
-    || input.phase !== execution.phase
-    || input.taskClass !== execution.taskClass
-    || input.personaProfileId !== execution.personaProfileId
-    || !exactWorkIds) {
+    && JSON.stringify([...ids].sort()) === JSON.stringify(binding.allowedWork.map((work) => work.id).sort());
+  const allowedIds = new Set(binding.allowedWork.map((work) => work.id));
+  if (input.series !== "INIT-051" || !exactWorkIds
+    || input.primaryWorkId !== undefined && !allowedIds.has(input.primaryWorkId)
+    || input.scopeDigest !== undefined && (typeof input.scopeDigest !== "string" || input.scopeDigest.trim().length === 0)) {
     return { ok: false, reasonCode: "BATCH_PROOF_BUDGET_SCOPE_CONTEXT_MISMATCH" };
   }
-  return { ...validation, ok: true };
+  return { ...validation, ok: true, binding };
 }
 
 function proofBudgetNoticeAllowed(notice, input) {
@@ -2319,7 +1791,7 @@ function proofBudgetNoticeAllowed(notice, input) {
   }
   const binding = scopedBudgetBatchBinding(input);
   return binding.ok === true
-    && isNonBlockingProofBudgetWarning(notice, { scopeBindingSha256: binding.executionSha256 });
+    && isNonBlockingProofBudgetWarning(notice, { scopeBindingSha256: binding.bindingSha256 });
 }
 
 function scopedBudgetNativeProblems(input, acquired) {
@@ -2341,9 +1813,10 @@ function scopedBudgetNativeProblems(input, acquired) {
     return !record || record.externalKey !== work.externalKey;
   });
   if (missing.length > 0) return [`authorized work set differs from the live queue: ${missing.map((work) => work.externalKey).join(", ")}`];
-  const primary = binding.currentExecution.primaryWork;
-  const shown = native.workShows.find((record) => record?.id === primary.id);
-  if (!shown || shown.externalKey !== primary.externalKey || shown.revision !== primary.revision || shown.scopeDigest !== primary.scopeDigest) {
+  const primary = binding.allowedWork.find((work) => work.id === input.primaryWorkId);
+  const shown = primary === undefined ? null : native.workShows.find((record) => record?.id === primary.id);
+  if (!primary || !shown || shown.externalKey !== primary.externalKey
+    || input.scopeDigest !== undefined && shown.scopeDigest !== input.scopeDigest) {
     return ["primary live work-show differs from the authorized ratio scope"];
   }
   if (binding.excludedWork.some((work) => input.workIds?.includes(work.id))) return ["excluded future work is present in the active ratio execution set"];

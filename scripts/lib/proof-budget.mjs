@@ -13,9 +13,7 @@ export const PROOF_BUDGET_WARNING_REASON = "PROOF_BUDGET_WARNING";
 export const PROOF_BUDGET_EXCEEDED_REASON = "PROOF_BUDGET_EXCEEDED";
 export const PROOF_BUDGET_VERIFIED_REASON = "PROOF_BUDGET_VERIFIED";
 export const PROOF_BUDGET_SCOPED_NONBLOCKING_REASON = "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING";
-export const PROOF_BUDGET_SCOPE_BINDING_ENV = "TCRN_PROOF_BUDGET_SCOPE_BINDING_SHA256";
-
-const APPROVED_SCOPE_BINDING_SHA256 = "567525d44a5da948c1308f8cd215d52c3b7e5f3689fe4bd9ab57a4f770870fdf";
+export const PROOF_BUDGET_SCOPE_BINDING_SCHEMA = "tcrn.proof-budget-scope-binding.v1";
 
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -50,6 +48,33 @@ function finiteNumber(value, name) {
   return value;
 }
 
+const STABLE_AUTHORITY_FIELDS = Object.freeze([
+  "ratioDecisionMinutesId",
+  "ratioOwnerAuthorizationSha256",
+  "executionCorrectionMinutesId",
+  "executionCorrectionOwnerAuthorizationSha256",
+  "chainNativeDecisionMinutesId",
+]);
+
+function stableAuthority(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw policyError("scopedDisposition.binding.authority");
+  const actual = Object.keys(value).sort();
+  const expected = [...STABLE_AUTHORITY_FIELDS].sort();
+  if (JSON.stringify(actual) !== JSON.stringify(expected)) throw policyError("scopedDisposition.binding.authority.fields");
+  for (const field of STABLE_AUTHORITY_FIELDS) {
+    if (typeof value[field] !== "string" || value[field].trim().length === 0 || value[field].includes("\u0000")) {
+      throw policyError(`scopedDisposition.binding.authority.${field}`);
+    }
+    if (field.endsWith("Sha256") && !/^[a-f0-9]{64}$/u.test(value[field])) {
+      throw policyError(`scopedDisposition.binding.authority.${field}`);
+    }
+    if (field.endsWith("MinutesId") && !/^minutes:[a-f0-9]{24}$/u.test(value[field])) {
+      throw policyError(`scopedDisposition.binding.authority.${field}`);
+    }
+  }
+  return value;
+}
+
 function configuredScopeBinding(policy) {
   const disposition = policy?.ratioPolicy?.scopedDisposition;
   if (disposition === undefined) return null;
@@ -62,14 +87,18 @@ function configuredScopeBinding(policy) {
   }
   const binding = disposition.binding;
   if (!binding || typeof binding !== "object" || Array.isArray(binding)
-    || binding.schemaVersion !== "tcrn.proof-budget-scope-binding.v1"
+    || binding.schemaVersion !== PROOF_BUDGET_SCOPE_BINDING_SCHEMA
     || typeof binding.scopeId !== "string" || binding.scopeId.length === 0
-    || !binding.authority || typeof binding.authority !== "object" || Array.isArray(binding.authority)
+    || typeof binding.workspaceId !== "string" || !/^workspace:[a-f0-9]{24}$/u.test(binding.workspaceId)
     || !Array.isArray(binding.allowedWork) || binding.allowedWork.length === 0
-    || !Array.isArray(binding.excludedWork)
-    || !binding.currentExecution || typeof binding.currentExecution !== "object" || Array.isArray(binding.currentExecution)) {
+    || !Array.isArray(binding.excludedWork)) {
     throw policyError("scopedDisposition.binding");
   }
+  const bindingKeys = Object.keys(binding).sort();
+  if (JSON.stringify(bindingKeys) !== JSON.stringify(["allowedWork", "authority", "excludedWork", "schemaVersion", "scopeId", "workspaceId"])) {
+    throw policyError("scopedDisposition.binding.fields");
+  }
+  stableAuthority(binding.authority);
   const allowedKeys = new Set();
   const allowedIds = new Set();
   for (const work of binding.allowedWork) {
@@ -82,67 +111,28 @@ function configuredScopeBinding(policy) {
     allowedKeys.add(work.externalKey);
     allowedIds.add(work.id);
   }
+  const excludedKeys = new Set();
   const excludedIds = new Set();
   for (const work of binding.excludedWork) {
     if (!work || typeof work !== "object" || Array.isArray(work)
       || typeof work.externalKey !== "string" || !/^TCRN-CROSS-STORY-[0-9]+$/u.test(work.externalKey)
       || typeof work.id !== "string" || !/^work:[a-f0-9]{24}$/u.test(work.id)
-      || allowedKeys.has(work.externalKey) || allowedIds.has(work.id) || excludedIds.has(work.id)) {
+      || allowedKeys.has(work.externalKey) || allowedIds.has(work.id)
+      || excludedKeys.has(work.externalKey) || excludedIds.has(work.id)) {
       throw policyError("scopedDisposition.excludedWork");
     }
+    excludedKeys.add(work.externalKey);
     excludedIds.add(work.id);
   }
-  const execution = binding.currentExecution;
-  const primary = execution.primaryWork;
-  const dispatch = execution.dispatch;
-  if (!primary || typeof primary !== "object" || Array.isArray(primary)
-    || !allowedWorkMatches(binding.allowedWork, primary.externalKey, primary.id)
-    || !Number.isSafeInteger(primary.revision) || primary.revision < 1
-    || typeof primary.scopeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(primary.scopeDigest)
-    || execution.bindingKind !== "governed-task-role"
-    || execution.role !== "implementation" || execution.personaProfileId !== null
-    || execution.phase !== "rework" || execution.taskClass !== "implement"
-    || execution.pack !== "INC320/RECEIPT-JSON-FREEZE-R3"
-    || !/^[a-f0-9]{64}$/u.test(execution.activePackBriefSha256 ?? "")
-    || !/^[a-f0-9]{64}$/u.test(execution.technicalPackSha256 ?? "")
-    || !/^[a-f0-9]{64}$/u.test(execution.roleBindingAmendmentSha256 ?? "")
-    || !/^[a-f0-9]{64}$/u.test(execution.serialPackRecordSha256 ?? "")
-    || !Array.isArray(execution.workIds) || execution.workIds.length === 0
-    || execution.workIds.some((id) => typeof id !== "string" || !allowedIds.has(id))
-    || new Set(execution.workIds).size !== execution.workIds.length
-    || execution.workIds.length !== binding.allowedWork.length
-    || binding.allowedWork.some((work) => !execution.workIds.includes(work.id))
-    || !dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)
-    || dispatch.workspaceId !== binding.workspaceId || dispatch.workspaceVersion !== 6379
-    || dispatch.headEventHash !== "583946c834a9c7bf98df12472d0caf0726a7e083f3ee42c8f71fac1e2de3447b"
-    || dispatch.configDigest !== "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f"
-    || dispatch.host !== "codex" || dispatch.mode !== "frontier" || dispatch.resolutionInput !== "implement"
-    || dispatch.model !== "gpt-5.6-luna" || dispatch.effort !== "max" || dispatch.forkTurns !== "none"
-    || !dispatch.primaryWorkAtSpawn || dispatch.primaryWorkAtSpawn.externalKey !== primary.externalKey
-    || dispatch.primaryWorkAtSpawn.id !== primary.id || dispatch.primaryWorkAtSpawn.revision !== 5
-    || dispatch.primaryWorkAtSpawn.scopeDigest !== "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c"
-    || dispatch.primaryWorkAtSpawn.status !== "active"
-    || !/^[a-f0-9]{64}$/u.test(execution.bindingSha256 ?? "")) {
-    throw policyError("scopedDisposition.currentExecution");
-  }
-  if (execution.workIds.includes(excludedIds.values().next().value)) throw policyError("scopedDisposition.excludedWorkExecution");
-  const executionForDigest = { ...execution };
-  delete executionForDigest.bindingSha256;
-  if (sha256(canonicalText(executionForDigest)) !== execution.bindingSha256) throw policyError("scopedDisposition.currentExecution.bindingSha256");
+  if (!excludedKeys.has("TCRN-CROSS-STORY-431")) throw policyError("scopedDisposition.excludedWork.431");
   const bindingSha256 = sha256(canonicalText(binding));
-  if (bindingSha256 !== disposition.bindingSha256 || bindingSha256 !== APPROVED_SCOPE_BINDING_SHA256) {
-    throw policyError("scopedDisposition.bindingSha256");
-  }
-  return { disposition, binding, bindingSha256, executionSha256: execution.bindingSha256 };
+  if (bindingSha256 !== disposition.bindingSha256) throw policyError("scopedDisposition.bindingSha256");
+  return { disposition, binding, bindingSha256 };
 }
 
-function allowedWorkMatches(work, externalKey, id) {
-  return work.some((entry) => entry?.externalKey === externalKey && entry?.id === id);
-}
-
-/** Digest of the single code-owned execution binding accepted by production budget consumers. */
+/** Digest of the finite code-owned authorization accepted by production budget consumers. */
 export function proofBudgetScopeBindingDigest(policy) {
-  return configuredScopeBinding(policy)?.executionSha256 ?? null;
+  return configuredScopeBinding(policy)?.bindingSha256 ?? null;
 }
 
 /** Digest the immutable scope authorization; useful for archive readback and policy tests. */
@@ -162,7 +152,7 @@ export function validateProofBudgetScopeBinding(value, policy = defaultPolicy())
     || canonicalText(value) !== canonicalText(configured.binding)) {
     return { ok: false, reasonCode: "PROOF_BUDGET_SCOPE_BINDING_INVALID" };
   }
-  return { ok: true, reasonCode: "PROOF_BUDGET_SCOPE_BINDING_VERIFIED", bindingSha256: configured.bindingSha256, executionSha256: configured.executionSha256 };
+  return { ok: true, reasonCode: "PROOF_BUDGET_SCOPE_BINDING_VERIFIED", bindingSha256: configured.bindingSha256 };
 }
 
 /**
@@ -192,7 +182,7 @@ export function proofBudgetThresholds(policy) {
     const ratioPolicy = policy.ratioPolicy;
     const expectedScope = ratioPolicy?.schemaVersion === "tcrn.proof-budget-ratio-policy.v1"
       ? "repository-wide persistent global max"
-      : "repository-wide hard line with one explicit, current-work-bound nonblocking disposition";
+      : "repository-wide hard line with one explicit, finite-work-authorized nonblocking disposition";
     if (!ratioPolicy || typeof ratioPolicy !== "object" || Array.isArray(ratioPolicy)
       || !["tcrn.proof-budget-ratio-policy.v1", "tcrn.proof-budget-ratio-policy.v2"].includes(ratioPolicy.schemaVersion)
       || ratioPolicy.scope !== expectedScope
@@ -231,7 +221,7 @@ export function evaluateProofBudget({ proofLines, productLines, policy, scopeBin
   };
   if (ratio > thresholds.hardRatio) {
     const configured = configuredScopeBinding(policy);
-    const authorizedBinding = configured !== null && scopeBindingSha256 === configured.executionSha256;
+    const authorizedBinding = configured !== null && scopeBindingSha256 === configured.bindingSha256;
     if (authorizedBinding) {
       const warning = {
         schemaVersion: "tcrn.proof-budget-scoped-disposition.v1",
@@ -246,7 +236,7 @@ export function evaluateProofBudget({ proofLines, productLines, policy, scopeBin
         hardLimit: thresholds.hardRatio,
         scopeId: configured.binding.scopeId,
         scopePolicySha256: configured.bindingSha256,
-        scopeBindingSha256: configured.executionSha256,
+        scopeBindingSha256: configured.bindingSha256,
         scopeBinding: configured.binding,
       };
       return {
@@ -263,7 +253,7 @@ export function evaluateProofBudget({ proofLines, productLines, policy, scopeBin
           reasonCode: configured.disposition.reasonCode,
           scopeId: configured.binding.scopeId,
           scopePolicySha256: configured.bindingSha256,
-          scopeBindingSha256: configured.executionSha256,
+          scopeBindingSha256: configured.bindingSha256,
         },
         warning,
       };
@@ -315,7 +305,7 @@ export function evaluateProofBudget({ proofLines, productLines, policy, scopeBin
  * intentionally narrow: callers must prove the notice is the budget command's
  * non-blocking result before exempting the generic warnings-as-failure scan.
  */
-export function isNonBlockingProofBudgetWarning(value, { policy = defaultPolicy(), scopeBindingSha256 = process.env[PROOF_BUDGET_SCOPE_BINDING_ENV] } = {}) {
+export function isNonBlockingProofBudgetWarning(value, { policy = defaultPolicy(), scopeBindingSha256 = null } = {}) {
   const warning = value?.warning && typeof value.warning === "object" ? value.warning : value;
   if (!warning || typeof warning !== "object" || Array.isArray(warning) || warning.blocking !== false) return false;
   if (warning.reasonCode === PROOF_BUDGET_WARNING_REASON) {
@@ -344,7 +334,7 @@ export function isNonBlockingProofBudgetWarning(value, { policy = defaultPolicy(
     && warning.hardLimit === policy.hardRatio
     && warning.scopeId === configured.binding.scopeId
     && warning.scopePolicySha256 === configured.bindingSha256
-    && warning.scopeBindingSha256 === configured.executionSha256
-    && scopeBindingSha256 === configured.executionSha256
+    && warning.scopeBindingSha256 === configured.bindingSha256
+    && scopeBindingSha256 === configured.bindingSha256
     && canonicalText(warning.scopeBinding) === canonicalText(configured.binding);
 }

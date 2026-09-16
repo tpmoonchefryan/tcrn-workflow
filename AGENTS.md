@@ -156,6 +156,25 @@ roster, its size, or whether any such change has landed from anything frozen in 
 section — check `verifyScriptCap` in `scripts/policy/proof-budget.json` and the
 `verify:*` roster in `package.json` directly.
 
+## Native dispatch boundary
+
+Native task dispatch uses `scripts/dispatch-adapter.mjs` or the CLI's current
+`dispatch-mode-list` read. Resolve the host, task class, mode, model, and effort
+from the live workspace immediately before the host call, then pass the returned
+model and effort to the native tool. Read the bound Story with `work-show` when
+the call carries a work id; a missing or changed work, scope, configuration,
+model, or effort is a refusal. An unrelated chain append is not a dispatch
+failure, because the dispatch decision depends on the relevant record and
+configuration rather than the entire chain head.
+
+The old brief validator, pre-call receipt/task-name wrapper, structured handoff,
+and mirrored stage-completion store are retired. They are not required inputs,
+exports, hooks, or helper steps. Native role/provider fields that a host does not
+expose remain `unknown`; they never become authority by prompt self-claim. Fresh
+task-pack, rework, decision, and acceptance rounds still require an explicit new
+instance and `forkTurns: "none"`, while native call/turn telemetry records facts
+without authenticating the host or provider.
+
 ## Platform conventions
 
 This repository sits inside the TCRN Platform working tree. Cross-repo conventions —

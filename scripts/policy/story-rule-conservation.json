@@ -98,37 +98,11 @@
       ]
     },
     {
-      "source": "scripts/dispatch-readiness-compliance.mjs",
-      "rules": [
-        "DISPATCH-BRIEF-001",
-        "DISPATCH-BRIEF-002",
-        "DISPATCH-BRIEF-003",
-        "DISPATCH-BRIEF-004",
-        "DISPATCH-BRIEF-005",
-        "DISPATCH-LIFECYCLE-001",
-        "DISPATCH-LIFECYCLE-002",
-        "DISPATCH-LIFECYCLE-003"
-      ]
-    },
-    {
       "source": "tests/closeout-verify-dispositions.test.mjs",
       "rules": [
         "TEST-CLOSEOUT-001",
         "TEST-CLOSEOUT-002",
         "TEST-CLOSEOUT-003"
-      ]
-    },
-    {
-      "source": "tests/dispatch-readiness-compliance.test.mjs",
-      "rules": [
-        "DISPATCH-BRIEF-001",
-        "DISPATCH-BRIEF-002",
-        "DISPATCH-BRIEF-003",
-        "DISPATCH-BRIEF-004",
-        "DISPATCH-BRIEF-005",
-        "DISPATCH-LIFECYCLE-001",
-        "DISPATCH-LIFECYCLE-002",
-        "DISPATCH-LIFECYCLE-003"
       ]
     },
     {
@@ -157,6 +131,44 @@
       "source": "chain:cross-project:TCRN-CROSS-MIN-172",
       "rules": [
         "STORY-COMPLETION-LINKS"
+      ]
+    },
+    {
+      "source": "scripts/dispatch-adapter.mjs",
+      "rules": [
+        "DISPATCH-BRIEF-001",
+        "DISPATCH-BRIEF-002",
+        "DISPATCH-BRIEF-003",
+        "DISPATCH-BRIEF-004",
+        "DISPATCH-BRIEF-005",
+        "DISPATCH-LIFECYCLE-001",
+        "DISPATCH-LIFECYCLE-002",
+        "DISPATCH-LIFECYCLE-003"
+      ]
+    },
+    {
+      "source": "tests/dispatch-native.test.mjs",
+      "rules": [
+        "DISPATCH-BRIEF-001",
+        "DISPATCH-BRIEF-002",
+        "DISPATCH-BRIEF-003",
+        "DISPATCH-BRIEF-004",
+        "DISPATCH-BRIEF-005",
+        "DISPATCH-LIFECYCLE-001",
+        "DISPATCH-LIFECYCLE-002",
+        "DISPATCH-LIFECYCLE-003"
+      ]
+    },
+    {
+      "source": "scripts/final-gate-plan.mjs",
+      "rules": [
+        "DISPATCH-COMPLETION-001"
+      ]
+    },
+    {
+      "source": "chain:cross-project:TCRN-CROSS-MIN-CHAIN-NATIVE-20260916",
+      "rules": [
+        "DISPATCH-COMPLETION-001"
       ]
     }
   ],
@@ -206,59 +218,64 @@
       "id": "DISPATCH-BRIEF-001",
       "source": "docs/dispatch-readiness-convention.md#第二层-红线边界",
       "semantics": "dispatch identifies applicable hard boundaries",
-      "landing": "scripts/dispatch-readiness-compliance.mjs redLineBoundaries",
+      "landing": "scripts/dispatch-adapter.mjs live work/config read",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
-      "redLeg": "omit redLineBoundaries and reject",
-      "disposition": "retained"
+      "positiveLeg": "tests/dispatch-native.test.mjs native resolution and direct lifecycle",
+      "redLeg": "tests/dispatch-native.test.mjs wrong work, scope, model, or effort",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The prior brief-field check accepted a caller-authored JSON transport object as a dispatch prerequisite. The native adapter now reads the current work item and dispatch configuration directly from the engine at the call boundary, so stale or missing transport fields cannot authorize a call; the retained work/scope/model/effort refusals cover the effective safety boundary without preserving a second qualification interface."
     },
     {
       "id": "DISPATCH-BRIEF-002",
       "source": "docs/dispatch-readiness-convention.md#第二层-文件指针",
       "semantics": "dispatch names concrete files and hosts",
-      "landing": "scripts/dispatch-readiness-compliance.mjs filePointers",
+      "landing": "scripts/dispatch-adapter.mjs live work/config read",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
-      "redLeg": "omit filePointers and reject",
-      "disposition": "retained"
+      "positiveLeg": "tests/dispatch-native.test.mjs native resolution and direct lifecycle",
+      "redLeg": "tests/dispatch-native.test.mjs wrong work, scope, model, or effort",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The prior brief-field check accepted a caller-authored JSON transport object as a dispatch prerequisite. The native adapter now reads the current work item and dispatch configuration directly from the engine at the call boundary, so stale or missing transport fields cannot authorize a call; the retained work/scope/model/effort refusals cover the effective safety boundary without preserving a second qualification interface."
     },
     {
       "id": "DISPATCH-BRIEF-003",
       "source": "docs/dispatch-readiness-convention.md#第二层-验证命令",
       "semantics": "dispatch carries baseline and completion commands",
-      "landing": "scripts/dispatch-readiness-compliance.mjs verificationCommands",
+      "landing": "scripts/dispatch-adapter.mjs live work/config read",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
-      "redLeg": "omit verificationCommands and reject",
-      "disposition": "retained"
+      "positiveLeg": "tests/dispatch-native.test.mjs native resolution and direct lifecycle",
+      "redLeg": "tests/dispatch-native.test.mjs wrong work, scope, model, or effort",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The prior brief-field check accepted a caller-authored JSON transport object as a dispatch prerequisite. The native adapter now reads the current work item and dispatch configuration directly from the engine at the call boundary, so stale or missing transport fields cannot authorize a call; the retained work/scope/model/effort refusals cover the effective safety boundary without preserving a second qualification interface."
     },
     {
       "id": "DISPATCH-BRIEF-004",
       "source": "docs/dispatch-readiness-convention.md#第二层-链上收口动作",
       "semantics": "dispatch carries governed closeout and readback action",
-      "landing": "scripts/dispatch-readiness-compliance.mjs chainCloseoutActions",
+      "landing": "scripts/dispatch-adapter.mjs live work/config read",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
-      "redLeg": "omit chainCloseoutActions and reject",
-      "disposition": "retained"
+      "positiveLeg": "tests/dispatch-native.test.mjs native resolution and direct lifecycle",
+      "redLeg": "tests/dispatch-native.test.mjs wrong work, scope, model, or effort",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The prior brief-field check accepted a caller-authored JSON transport object as a dispatch prerequisite. The native adapter now reads the current work item and dispatch configuration directly from the engine at the call boundary, so stale or missing transport fields cannot authorize a call; the retained work/scope/model/effort refusals cover the effective safety boundary without preserving a second qualification interface."
     },
     {
       "id": "DISPATCH-BRIEF-005",
       "source": "docs/dispatch-readiness-convention.md#第二层-生效证据命令",
       "semantics": "dispatch carries deployment-position evidence",
-      "landing": "scripts/dispatch-readiness-compliance.mjs effectiveEvidenceCommands",
+      "landing": "scripts/dispatch-adapter.mjs live work/config read",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs complete brief",
-      "redLeg": "omit effectiveEvidenceCommands and reject",
-      "disposition": "retained"
+      "positiveLeg": "tests/dispatch-native.test.mjs native resolution and direct lifecycle",
+      "redLeg": "tests/dispatch-native.test.mjs wrong work, scope, model, or effort",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The prior brief-field check accepted a caller-authored JSON transport object as a dispatch prerequisite. The native adapter now reads the current work item and dispatch configuration directly from the engine at the call boundary, so stale or missing transport fields cannot authorize a call; the retained work/scope/model/effort refusals cover the effective safety boundary without preserving a second qualification interface."
     },
     {
       "id": "DISPATCH-LIFECYCLE-001",
       "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
       "semantics": "fresh task-pack, rework, decision, and acceptance rounds require a new bound instance with forkTurns none",
-      "landing": "scripts/dispatch-readiness-compliance.mjs validateAgentLifecycle",
+      "landing": "scripts/dispatch-adapter.mjs lifecycle declaration and scripts/dispatch-telemetry-hook.mjs factual telemetry",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs fresh round",
+      "positiveLeg": "tests/dispatch-native.test.mjs lifecycle and missing native role/provider observation",
       "redLeg": "newInstance=false or forkTurns=all returns a lifecycle refusal",
       "disposition": "retained"
     },
@@ -266,9 +283,9 @@
       "id": "DISPATCH-LIFECYCLE-002",
       "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
       "semantics": "same-task clarification is the only same-instance exception and requires an explicitly running bounded task",
-      "landing": "scripts/dispatch-readiness-compliance.mjs validateAgentLifecycle",
+      "landing": "scripts/dispatch-adapter.mjs lifecycle declaration and scripts/dispatch-telemetry-hook.mjs factual telemetry",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs clarification round",
+      "positiveLeg": "tests/dispatch-native.test.mjs lifecycle and missing native role/provider observation",
       "redLeg": "missing sameTaskRunning or a restart in clarification returns a lifecycle refusal",
       "disposition": "retained"
     },
@@ -276,9 +293,9 @@
       "id": "DISPATCH-LIFECYCLE-003",
       "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
       "semantics": "role/Pack/evidence bindings are explicit; terminal agent reuse and prompt self-claims are rejected while evidence digests may be reused",
-      "landing": "scripts/dispatch-readiness-compliance.mjs validateAgentLifecycle and dispatch-telemetry-hook.mjs",
+      "landing": "scripts/dispatch-adapter.mjs lifecycle declaration and scripts/dispatch-telemetry-hook.mjs factual telemetry",
       "enforcementHost": "dispatch caller and helper",
-      "positiveLeg": "dispatch-readiness-compliance.test.mjs source evidence and handoff binding",
+      "positiveLeg": "tests/dispatch-native.test.mjs lifecycle and missing native role/provider observation",
       "redLeg": "prompt claim, same predecessor id, or running predecessor returns a lifecycle refusal",
       "disposition": "retained"
     },
@@ -627,6 +644,17 @@
         "TCRN-CROSS-MIN-172"
       ],
       "strictnessProof": "done 的判据是名册门组全绿加 acceptance-verdicts.json 记录、对每张 Story 一律机器判定，而被退役的检查从未执行且 8 条 claim 不可能覆盖 29 张 Story"
+    },
+    {
+      "id": "DISPATCH-COMPLETION-001",
+      "source": "chain:cross-project:TCRN-CROSS-MIN-CHAIN-NATIVE-20260916",
+      "semantics": "native work status and recorded result evidence are the completion authority; external mirrored completion stores are not prerequisites",
+      "landing": "scripts/final-gate-plan.mjs native status qualification and scripts/operational-batch-entry.mjs",
+      "enforcementHost": "tcrn-workflow",
+      "positiveLeg": "tests/codex-stop-pact.test.mjs native status qualification",
+      "redLeg": "tests/codex-stop-pact.test.mjs a caller completion store cannot make a non-terminal work item complete",
+      "disposition": "superseded-by-stricter",
+      "strictnessProof": "The retired stage-completion authority accepted a second receipt/store state beside the chain. Qualification now derives completion only from the fresh native work status and retains runner result evidence for the gate itself; a caller-supplied completion receipt cannot alter task status or enter the formal batch."
     }
   ]
 }

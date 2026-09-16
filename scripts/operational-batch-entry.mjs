@@ -20,13 +20,11 @@ import {
   issueGateReceipt,
   executeOperationalBatch,
   executeSelectedRoots,
-  loadStageCompletionSource,
   readNativeBatchState,
 } from "./final-gate-plan.mjs";
 
 export const OPERATIONAL_BATCH_ENTRY_VERSION = "tcrn.operational-batch-entry.v2";
 export const CODE_OWNED_RUNNER_VERSION = "tcrn-code-owned-runner.v1";
-export const OPERATOR_STAGE_BRIDGE_VERSION = "tcrn.operator-stage-bridge.v1";
 const repositoryRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const platformRoot = resolve(repositoryRoot, "../..");
 const chainContainer = [".tcrn", "workspace"].join("-");
@@ -41,18 +39,6 @@ let productionReceiptAuthority = null;
 function getProductionReceiptAuthority() {
   if (productionReceiptAuthority === null) productionReceiptAuthority = createGateReceiptAuthority();
   return productionReceiptAuthority;
-}
-
-// The operator bridge is deliberately a code-owned load/create boundary.  A
-// CLI request supplies only the sealed source path plus optional expectations;
-// the loader derives the admission record from the manifest digest and creates
-// the fresh opaque authority only after the independent binding is verified.
-function createStageCompletionAuthorityFromSource(source, expectations = {}) {
-  return loadStageCompletionSource(source, expectations);
-}
-
-function loadGateReceiptStore(source, expectations = {}) {
-  return createStageCompletionAuthorityFromSource(source, expectations);
 }
 
 const text = (value) => typeof value === "string" ? value : "";
@@ -425,40 +411,10 @@ async function executeDynamicRoots(qualification) {
   };
 }
 
-/** Execute the production entry; all caller observations are discarded. */
+/** Execute the production entry from fresh native chain/runtime observations. */
 export async function executeProductionBatch(request = {}) {
-  const { nativeState: _native, runtimeObserver: _runtime, observer: _observer, stageCompletionAuthority: _callerAuthority, stageCompletionReceipts: _callerReceipts, ...boundRequest } = request && typeof request === "object" ? request : {};
-  const completionSource = boundRequest.stageCompletionSource ?? boundRequest.implementationCompletionSource ?? boundRequest.completionSource;
+  const { nativeState: _native, runtimeObserver: _runtime, observer: _observer, candidateReady: _callerReady, ...boundRequest } = request && typeof request === "object" ? request : {};
   const effectiveWorkspace = boundRequest.workspace ?? workspaceDefault;
-  const admissionExpectations = {
-    workspace: effectiveWorkspace,
-    expectedBinding: { series: boundRequest.series, pack: boundRequest.pack, stage: boundRequest.stage },
-    ...(boundRequest.candidate && typeof boundRequest.candidate === "object" ? { candidate: boundRequest.candidate } : {}),
-    ...(Array.isArray(boundRequest.workIds) && boundRequest.workIds.length > 0 ? { workIds: boundRequest.workIds } : {}),
-    ...(Array.isArray(boundRequest.workBindings) ? { workBindings: boundRequest.workBindings } : {}),
-  };
-  let stageBridge;
-  try {
-    stageBridge = loadGateReceiptStore(completionSource, admissionExpectations);
-  } catch (error) {
-    return {
-      schemaVersion: OPERATIONAL_BATCH_ENTRY_VERSION,
-      status: "not-verifiable",
-      reasonCode: error?.reasonCode ?? "BATCH_IMPLEMENTATION_SOURCE_NOT_VERIFIABLE",
-      eligible: false,
-      formalGateAllowed: false,
-      formalGateExecutions: 0,
-      executed: [],
-      operatorBridge: {
-        schemaVersion: OPERATOR_STAGE_BRIDGE_VERSION,
-        status: "not-verifiable",
-        source: typeof completionSource === "string" ? completionSource : null,
-        lifecycle: "source-required; no caller JSON authority or receipt array is accepted",
-        reason: String(error?.message ?? error),
-      },
-      reasons: ["a sealed code-owned implementation completion source is required; caller-supplied WeakMap-shaped authority/receipts are ignored"],
-    };
-  }
   const input = {
     workspace: effectiveWorkspace,
     engineCli: boundRequest.engineCli ?? resolve(repositoryRoot, "scripts/tcrn-workflow.mjs"),
@@ -467,32 +423,17 @@ export async function executeProductionBatch(request = {}) {
     pack: boundRequest.pack,
     stage: boundRequest.stage,
     candidate: boundRequest.candidate,
-    candidateReady: boundRequest.candidateReady,
     trigger: boundRequest.trigger ?? "formal-batch-gate",
+    primaryWorkId: boundRequest.primaryWorkId,
+    scopeDigest: boundRequest.scopeDigest,
+    proofBudgetScopeBinding: boundRequest.proofBudgetScopeBinding,
     expectedBinding: boundRequest.expectedBinding,
     currentBinding: boundRequest.currentBinding,
     previousRuns: boundRequest.previousRuns,
-    stageCompletionAuthority: stageBridge.authority,
-    stageCompletionReceipts: stageBridge.receipts,
     securityVeto: boundRequest.securityVeto,
     permissionDenied: boundRequest.permissionDenied,
   };
-  const result = await executeOperationalBatch(input, executeDynamicRoots, { readNative: readNativeBatchState, observeRuntime: observeHostRuntime });
-  return {
-    ...result,
-    operatorBridge: {
-      schemaVersion: OPERATOR_STAGE_BRIDGE_VERSION,
-      status: "loaded",
-      manifestPath: stageBridge.source.manifestPath,
-      admissionPath: stageBridge.source.admissionPath,
-      manifestDigest: stageBridge.source.manifestDigest,
-      admissionDigest: stageBridge.source.admissionDigest,
-      receiptSetDigest: stageBridge.source.receiptSetDigest,
-      bindingDigest: stageBridge.source.bindingDigest,
-      receiptCount: stageBridge.source.receiptCount,
-      lifecycle: stageBridge.source.lifecycle,
-    },
-  };
+  return executeOperationalBatch(input, executeDynamicRoots, { readNative: readNativeBatchState, observeRuntime: observeHostRuntime });
 }
 
 function readStdin() {

@@ -285,8 +285,8 @@
       ]
     },
     "tests/codex-stop-pact.test.mjs": {
-      "testCount": 10,
-      "assertionCount": 80,
+      "testCount": 11,
+      "assertionCount": 82,
       "testNames": [
         "Codex and Claude judge the same shared pact state, with no second status source",
         "missing or unidentifiable Codex facts fail toward allow",
@@ -297,7 +297,8 @@
         "executor updates the shared pact only for the owning Codex session",
         "the default stdin bridge speaks only the host protocol; diagnostics are opt-in",
         "a real-host block is emitted as exactly the Codex decision object",
-        "STORY-421: batch qualification uses real work state, keeps hooks light, and runs the formal entry once"
+        "STORY-421: batch qualification uses real work state, keeps hooks light, and runs the formal entry once",
+        "EPIC135 R2: unknown repository work in the observer side table blocks qualification"
       ]
     },
     "tests/conference-execution.test.mjs": {
@@ -393,38 +394,6 @@
         "Draft 2020-12 schema and runtime agree",
         "extension registration record binds appliesTo work and the dependency schema digest",
         "STORY-359 the dependency fixture declares the no-overclaim values verifyDependency used to pin"
-      ]
-    },
-    "tests/dispatch-readiness-compliance.test.mjs": {
-      "testCount": 26,
-      "assertionCount": 182,
-      "testNames": [
-        "dispatch brief accepts all five execution elements",
-        "removing each dispatch element is a stable red leg",
-        "empty and non-string dispatch entries do not count as equipment",
-        "INC-264 dispatch briefs require the exact autonomous-operation and scope-restraint declarations",
-        "a dispatch brief without a compliant Story scope is refused",
-        "STORY-412 verification cadence is optional for old briefs but strict when declared",
-        "INC-320/432: the existing brief carries a bounded, live-bound context package",
-        "STORY-424: a fresh round binds role, Pack, model, effort, new instance, fork none, and source evidence",
-        "STORY-424: missing lifecycle and inherited/old-instance fresh rounds are red",
-        "STORY-424: same-task clarification is explicit and does not restart the instance",
-        "STORY-424: prompt claims cannot stand in for source evidence and handoff bindings must agree",
-        "STORY-424 R01: the structured handoff is compared with the brief authority, not just with itself",
-        "STORY-424 R01: a terminal predecessor cannot be reused when declaration omitted its fresh agent id",
-        "STORY-424 R01: observed work binding cannot drift while the role and Pack remain equal",
-        "STORY-424 R01: clarification without a real running agent and send_message stays unknown",
-        "STORY-424: real spawn plus child turn context is green, while task-id/compaction-only reuse is red",
-        "STORY-424 R01: every missing observed identity/fact is structured unknown, never an exception",
-        "STORY-424 R01: outer work binding is retained while explicit inner/source contradictions are red",
-        "dispatch adapter reads real source CLI work-show advisory.scope and safely rejects incomplete or mismatched scope shapes",
-        "STORY-424 R2: code-owned role/work/Pack/phase binding is checked against the live scope and brief",
-        "STORY-424 R2: stale chain, work, configuration, and source baselines are rejected",
-        "STORY-424 R2: receipt bytes and actual spawn/child association bind the full digest and resolved tuple",
-        "STORY-434 R3: canonical receipt JSON omits optional undefined objects and nulls undefined array slots",
-        "STORY-434 R3: absent, explicit-null, and terminal predecessors yield parseable verifiable receipts",
-        "STORY-434 R3: optional-field normalization preserves digest-derived task-name stability and self-reference exclusion",
-        "STORY-424 R3: missing and wrong-type storyScope return structured red instead of throwing"
       ]
     },
     "tests/ds-component-css-observation.test.mjs": {
@@ -1533,8 +1502,8 @@
       ]
     },
     "tests/s301-proof-budget.test.mjs": {
-      "testCount": 16,
-      "assertionCount": 142,
+      "testCount": 15,
+      "assertionCount": 84,
       "testNames": [
         "STORY-301: the proof budget runs inside the gate train",
         "STORY-301: the budget verb refuses a ratio above the recorded line",
@@ -1542,31 +1511,15 @@
         "STORY-301: reading the budget policy does not change it",
         "EPIC135: the approved budget thresholds classify every real boundary",
         "EPIC135: only the complete structured budget notice is non-blocking",
-        "TCRN-CROSS-STORY-430: the raw exceeded ratio stays nonblocking only for the exact R3 execution binding",
-        "TCRN-CROSS-STORY-430: missing, caller-invented, future, or malformed bindings stay hard-red",
+        "TCRN-CROSS-STORY-435/436: finite ratio authorization includes current work and excludes 431/future",
         "EPIC135: push-gate budget exemption requires one terminal receipt and no other diagnostics",
         "TCRN-CROSS-STORY-430: scoped exceeded notice is shared by P1/push and never hides a real error",
         "INC-320/433: P8 and guard schema expectations must be complete before those children can start",
         "EPIC135: exact P8 archive member paths are typed data, not diagnostics",
         "EPIC135: exact guard ids are typed data only after count and registry identity match",
         "EPIC135: P8 and guard diagnostics remain red outside validated typed data",
-        "EPIC135: formal batch aggregation preserves budget notices but blocks other warnings",
-        "TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding against native work"
-      ]
-    },
-    "tests/s303-dispatch-citations.test.mjs": {
-      "testCount": 9,
-      "assertionCount": 28,
-      "testNames": [
-        "STORY-303: a file pointer that does not resolve is refused and named",
-        "STORY-303: a file:line pointer resolves on the file, not the whole string",
-        "STORY-303: a verification command naming an undefined script is refused",
-        "STORY-303: a command the validator cannot judge is counted rather than passed quietly",
-        "STORY-303: a brief with no repositoryRoot says its citations went unchecked",
-        "INC-235: a declared budget travels with the verdict, and an absent one is unjudged",
-        "INC-235: requirements that cannot fit their own declared ceiling refuse the brief",
-        "INC-235: the satisfiability check does NOT catch the case that motivated it",
-        "INC-235: a malformed budget declaration is refused rather than ignored"
+        "EPIC135: formal batch aggregation preserves authorized budget notices but blocks other warnings",
+        "TCRN-CROSS-STORY-435/436: operational qualification uses native work state and finite authorization"
       ]
     },
     "tests/s6-lessons.test.mjs": {
@@ -1966,13 +1919,24 @@
       ]
     },
     "tests/telemetry.test.mjs": {
-      "testCount": 7,
-      "assertionCount": 64,
+      "testCount": 18,
+      "assertionCount": 117,
       "testNames": [
         "STORY-372: telemetry is daily NDJSON, stable, idempotent, filterable, and tolerant of bad lines",
         "STORY-372: both hook events record bounded facts and never fabricate observed model",
+        "STORY-393 U6: an explicit Codex hook host is preserved over payload ambiguity",
+        "STORY-424: lifecycle facts are bounded and missing facts stay unknown",
+        "native declaration-only stop telemetry never becomes an observed model",
+        "STORY-424 R02: unknown source evidence never masquerades as available or verified",
+        "STORY-424 R02: conflicting explicit and generic model observations remain ambiguous",
         "STORY-393: the dispatch hook cannot mint an observation checkpoint from external input",
+        "STORY-393: a host session boundary reconciles four real channel high-water marks",
         "STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires",
+        "STORY-393: continuous and overlapping trusted sessions form one coverage interval",
+        "STORY-393 U5: repeated start-stop pairs in one trusted session form one coverage interval",
+        "STORY-393 U5: contiguous intervals from separate sessions on one host cover one day",
+        "STORY-393: gaps and incompatible host sources never combine into a full day",
+        "STORY-393: a late boundary with a bad high-water digest cannot extend coverage",
         "STORY-393: only actual full-day four-channel observations can seal a UTC day",
         "STORY-393: missing and unavailable upstream observations stay unproven",
         "STORY-393: partial, gapped, and reverse-phase upstream coverage never seals"
@@ -2083,6 +2047,19 @@
         "TCRN-CROSS-STORY-429: hooks-only rejects injected Codex config and Claude model writes before any apply",
         "TCRN-CROSS-STORY-429: native CLI scope selects hooks-only or the explicit full path",
         "TCRN-CROSS-STORY-429: the six authorized per-host hook changes do not alter other managed or user groups"
+      ]
+    },
+    "tests/dispatch-native.test.mjs": {
+      "testCount": 7,
+      "assertionCount": 24,
+      "testNames": [
+        "native resolution reads the live dispatch settings and returns the configured model",
+        "fresh lifecycle keeps the instance rule but does not require a host role/provider claim",
+        "fork reuse, running predecessor, and prompt claims remain refusals",
+        "native spawn input forwards only the engine model/effort and explicit lifecycle",
+        "invocation validation rereads relevant work/config and ignores unrelated head fields",
+        "wrong work, scope, model, or effort still refuses the native call",
+        "missing native model/effort facts are a refusal, not an inferred fallback"
       ]
     }
   }

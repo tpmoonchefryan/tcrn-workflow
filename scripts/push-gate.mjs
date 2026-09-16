@@ -41,14 +41,12 @@ import { fileURLToPath } from "node:url";
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
 import { pushGateExecutionPlan, ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
-import { PROOF_BUDGET_SCOPE_BINDING_ENV } from "./lib/proof-budget.mjs";
 import { budgetWarningNotices, hasWarningOrError, inspectStructuredChildOutput, onlyBudgetWarning, validateStructuredChildExpectations } from "./lib/push-gate-output.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
 const governanceNotices = [];
 const childResults = [];
-const budgetScopeOptions = { scopeBindingSha256: process.env[PROOF_BUDGET_SCOPE_BINDING_ENV] };
 const timingProbe = process.env.TCRN_PUSH_GATE_TIMING_PROBE === "1";
 const timingEvidencePath = resolve(
   repositoryRoot,
@@ -373,7 +371,7 @@ await timedStage("tag-ancestry", async () => {
 //      would push the wall clock at the 180s escalation trigger which exists to protect
 //      the "run it on every change" discipline. Before a push is the right frequency for
 //      a check that asks whether the proofs still bite.
-let childExpectations = { sourceFiles: undefined, guardIds: undefined, ...budgetScopeOptions };
+let childExpectations = { sourceFiles: undefined, guardIds: undefined };
 let childExpectationsFailure = null;
 try {
   const sourcePolicy = JSON.parse(await read("scripts/policy/source-allowlist.json"));
@@ -392,7 +390,7 @@ try {
       findings: validated.findings,
     });
   } else {
-    childExpectations = { sourceFiles: validated.sourceFiles, guardIds: validated.guardIds, p8BasisCommit: validated.p8BasisCommit, ...budgetScopeOptions };
+    childExpectations = { sourceFiles: validated.sourceFiles, guardIds: validated.guardIds, p8BasisCommit: validated.p8BasisCommit };
   }
 } catch (error) {
   childExpectationsFailure = {
@@ -423,11 +421,11 @@ for (const { reasonCode, script } of ENGINE_PUSH_GATE_CHILDREN) {
       ? { ok: true, command: ["pnpm", "run", "--silent", script], cwd: repositoryRoot, exitCode: 0, signal: null, error: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), output: "" }
       : runChild("pnpm", ["run", "--silent", script])),
   );
-  const budgetNotices = budgetWarningNotices(result.output, script, budgetScopeOptions);
+  const budgetNotices = budgetWarningNotices(result.output, script);
   if (budgetNotices.length > 0) governanceNotices.push(...budgetNotices);
   const p1Diagnostic = script === "verify:p1"
-    && hasWarningOrError(result.output, script, budgetScopeOptions)
-    && !onlyBudgetWarning(result.output, script, budgetScopeOptions);
+    && hasWarningOrError(result.output, script)
+    && !onlyBudgetWarning(result.output, script);
   const assessment = timingProbe
     ? { ok: true, reasonCode: "TIMING_PROBE_SYNTHETIC_OUTPUT", findings: [] }
     : script === "verify:p1"

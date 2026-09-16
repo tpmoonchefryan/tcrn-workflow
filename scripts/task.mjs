@@ -60,7 +60,7 @@ import {
 import { delay, PROGRESS_WAIT_MAX_MS, readProgressDelta, summarizeProgress, waitForProgress } from "./lib/incremental-output.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
-import { evaluateProofBudget, PROOF_BUDGET_SCOPE_BINDING_ENV } from "./lib/proof-budget.mjs";
+import { evaluateProofBudget } from "./lib/proof-budget.mjs";
 
 installNoNetworkGuard();
 
@@ -1489,7 +1489,6 @@ async function reportBudget() {
       proofLines,
       productLines,
       policy,
-      scopeBindingSha256: process.env[PROOF_BUDGET_SCOPE_BINDING_ENV],
     });
   } catch (error) {
     const ratio = productLines === 0 ? 0 : Number((proofLines / productLines).toFixed(4));

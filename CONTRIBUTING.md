@@ -86,20 +86,17 @@ earlier exact-`2.3728` zero-headroom proposal; the raw LF/four-decimal count,
 historical `frozenRatio`, surface caps, and other warning/error and security
 semantics remain unchanged.
 
-**Finite scoped disposition — TCRN-CROSS-STORY-430 and execution correction,
-2026-09-15.** The exact current-work binding in
-`scripts/policy/proof-budget.json` preserves the `2.40` warning and `2.50`
-hard line, and applies only to the ratio item for its named work/Pack/source
-closure. It reports the raw result as exceeded and may mark that item
-non-blocking; it never reports an under-cap value or suppresses another
-warning, error, security, trust, resource, or surface-cap result. Production
-consumers use the same pinned
-`TCRN_PROOF_BUDGET_SCOPE_BINDING_SHA256` execution binding: budget, P1/push,
-and the formal batch aggregator do not accept an `INIT-051` prefix or a
-caller-selected work list as authority. Work 431 and unlisted future work do
-not inherit the binding. The correction authorization names 432–434 in the
-finite overall work set, but each later execution still needs its own exact
-live role/work/Pack binding; the R3+430 binding is not transferable to it.
+**Finite scoped disposition — TCRN-CROSS-STORY-430, 435, and 436.** The finite
+authorization in `scripts/policy/proof-budget.json` preserves the `2.40`
+warning and `2.50` hard line. Only the named ratio item may become a
+non-blocking warning, and only after the code-owned `allowedWork` set matches
+fresh native work records. The policy keeps the raw result and never suppresses
+another warning, error, security, trust, resource, or surface-cap result.
+Transient Pack, agent, brief, and chain-head digests are not part of the
+authorization, and no caller boolean or environment hash can grant it. Work 431
+and unlisted future work do not inherit the binding; changes to relevant work
+or dispatch configuration are re-read immediately, while unrelated chain
+appends do not invalidate the finite policy.
 
 **Recorded exception — OD-22, 2026-08-19, the ratchet's own installation.** The
 first thing the ratchet did was refuse the change that installed it: the verb's

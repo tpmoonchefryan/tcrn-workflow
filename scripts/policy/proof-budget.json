@@ -8,7 +8,7 @@
   "hardRatio": 2.5,
   "ratioPolicy": {
     "schemaVersion": "tcrn.proof-budget-ratio-policy.v2",
-    "scope": "repository-wide hard line with one explicit, current-work-bound nonblocking disposition",
+    "scope": "repository-wide hard line with one explicit, finite-work-authorized nonblocking disposition",
     "evaluationBoundary": "bounded-batch-stage",
     "warning": {
       "reasonCode": "PROOF_BUDGET_WARNING",
@@ -20,19 +20,18 @@
     },
     "scopedDisposition": {
       "schemaVersion": "tcrn.proof-budget-scoped-disposition.v1",
-      "bindingSha256": "567525d44a5da948c1308f8cd215d52c3b7e5f3689fe4bd9ab57a4f770870fdf",
+      "bindingSha256": "48c4853cadcc89a8d8a8064e536726600aeaabb77f6d77a624247fc9800662de",
       "reasonCode": "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING",
       "disposition": "nonblocking-ratio-only",
       "binding": {
         "schemaVersion": "tcrn.proof-budget-scope-binding.v1",
-        "scopeId": "INIT-051/INC320/RECEIPT-JSON-FREEZE-R3",
+        "scopeId": "INIT-051/INC320/CHAIN-NATIVE-20260916",
         "authority": {
           "ratioDecisionMinutesId": "minutes:23e3f5babf9fcc934bbd8326",
           "ratioOwnerAuthorizationSha256": "4a935bcbe8eb20fddf138db69a5ba365566dda9d3132c24e7e99eaf3129ee30d",
-          "currentSeriesSha256": "b52bd1bfa8555b864d3c626b98de19e9438cb769b3b4abe3132fbbbea8910a7e",
-          "story430BriefSha256": "5c750636a9b36fd06d856da4d85ac15e13195e92bff27f404b992f495d558a51",
           "executionCorrectionMinutesId": "minutes:e63d5e7a1a0f507f537607dd",
-          "executionCorrectionOwnerAuthorizationSha256": "8dffb7c54b04f8c554287c85b7de35987cfd21bd76cc2749b9f9a19247e86247"
+          "executionCorrectionOwnerAuthorizationSha256": "8dffb7c54b04f8c554287c85b7de35987cfd21bd76cc2749b9f9a19247e86247",
+          "chainNativeDecisionMinutesId": "minutes:a7e52b3967a7e07df8f51c1b"
         },
         "workspaceId": "workspace:7732a51de4c38afb83bb77cf",
         "allowedWork": [
@@ -119,6 +118,14 @@
           {
             "externalKey": "TCRN-CROSS-STORY-434",
             "id": "work:1891880eb2925c9c777d1d22"
+          },
+          {
+            "externalKey": "TCRN-CROSS-STORY-435",
+            "id": "work:08e1f20a81121b28fa5a4d32"
+          },
+          {
+            "externalKey": "TCRN-CROSS-STORY-436",
+            "id": "work:2eb462340584547dd258e4f5"
           }
         ],
         "excludedWork": [
@@ -127,120 +134,10 @@
             "id": "work:f6dfafa9884552bf95938066",
             "reason": "planned post-delivery work"
           }
-        ],
-        "currentExecution": {
-          "bindingSha256": "187c777631ee264e0e93b0b84c009233cbd0e6124fe1aa340c30ff261392bb4d",
-          "primaryWork": {
-            "externalKey": "TCRN-CROSS-STORY-434",
-            "id": "work:1891880eb2925c9c777d1d22",
-            "revision": 5,
-            "scopeDigest": "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c"
-          },
-          "bindingKind": "governed-task-role",
-          "role": "implementation",
-          "personaProfileId": null,
-          "phase": "rework",
-          "taskClass": "implement",
-          "pack": "INC320/RECEIPT-JSON-FREEZE-R3",
-          "activePackBriefSha256": "4d183946ab61e16f64edd0418674fed959ab2d313159d96d536062415ffde2d4",
-          "technicalPackSha256": "4aa25930ccf7f0b6cafa9d60e12733161bedd4d3bd46cf099552811a16b449c8",
-          "roleBindingAmendmentSha256": "af940b191643f5a598687b2c46cfece3ffdbca3e692dd09ab8489a9c4ffbce50",
-          "serialPackRecordSha256": "cb55c8c616715ed4a0f3087e7669f0a256d97c4d4a790ae64cbfe38175e3bc8b",
-          "workIds": [
-            "work:7adbe918fcd753cfd695dfdb",
-            "work:35924e9a902cd39feb6356cc",
-            "work:09d99af89b027f335a2e0bde",
-            "work:ec5a800eaa9c24fe9442505c",
-            "work:32efa49143fa4e2dcf3148c0",
-            "work:f3d3166ff702e7c32c7c6e50",
-            "work:8b9f35d8e42cf84e8a01181c",
-            "work:17929c5b42ac1736bcecb1f2",
-            "work:b621023cb60591c0716e69eb",
-            "work:98f1f575b1d3612fdc302d80",
-            "work:80a3d77ab631e5f9762437c1",
-            "work:62d23a27246cad5bfc78bc17",
-            "work:8ee553b42a5574f4ba33185f",
-            "work:4e0e1938be1c82f6267006c3",
-            "work:ff139825bcdfdb1828b05ae2",
-            "work:31ebdb5e66c984aea5d82e82",
-            "work:5889debe71fa5c214fa3eb87",
-            "work:8c1de912dd6721a7e1375139",
-            "work:8331d5d13a8df2124b1bba44",
-            "work:a9e16b025a21b9cf7238a5ce",
-            "work:1891880eb2925c9c777d1d22"
-          ],
-          "dispatch": {
-            "workspaceId": "workspace:7732a51de4c38afb83bb77cf",
-            "workspaceVersion": 6379,
-            "headEventHash": "583946c834a9c7bf98df12472d0caf0726a7e083f3ee42c8f71fac1e2de3447b",
-            "configDigest": "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f",
-            "host": "codex",
-            "mode": "frontier",
-            "resolutionInput": "implement",
-            "model": "gpt-5.6-luna",
-            "effort": "max",
-            "forkTurns": "none",
-            "primaryWorkAtSpawn": {
-              "externalKey": "TCRN-CROSS-STORY-434",
-              "id": "work:1891880eb2925c9c777d1d22",
-              "revision": 5,
-              "scopeDigest": "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c",
-              "status": "active"
-            },
-            "nativeToolCallId": null,
-            "nativeToolCallIdDisposition": "parent-owned; not exposed in the bounded child handoff",
-            "sourceEvidenceDigest": null,
-            "sourceEvidenceDigestDisposition": "host tool-input and child turn_context digests are not exposed; no digest is inferred from prompt text"
-          },
-          "sourceAtDispatch": {
-            "engine": {
-              "commit": "aa3706028b6bd5803ec6bf9fdef048586b56788f",
-              "tree": "89395f9a8b7a1a1e52c566232921530f61067b60"
-            },
-            "helper": {
-              "commit": "9cf5807d14f12ebbb0a113dade2c8973492a37b2",
-              "tree": "e4c758bdc64d41882159a7c81d746dbfddb7e86a"
-            }
-          },
-          "sourceBoundary": {
-            "engineBaseCommit": "aa3706028b6bd5803ec6bf9fdef048586b56788f",
-            "initialDirtyFiles": [],
-            "authorizedEnginePaths": [
-              "scripts/dispatch-adapter.mjs",
-              "scripts/lib/proof-budget.mjs",
-              "scripts/policy/proof-budget.json",
-              "tests/dispatch-readiness-compliance.test.mjs",
-              "tests/s301-proof-budget.test.mjs",
-              "scripts/policy/coverage-baseline.json",
-              "verification-map.yaml",
-              "fixtures/rc1/rc1-candidate-proof-manifest.json"
-            ],
-            "archiveRoot": "execution-efficiency-correction-2026-09-15/LUNA-FREEZE-R3"
-          }
-        }
+        ]
       },
-      "dispositionBoundary": "only the raw proof-to-product ratio item may be nonblocking; no INIT-prefix or caller-selected-work inheritance",
-      "futurePackRule": "Only the previously authorized finite current-series 386/399/415-430 plus 432-434 remain eligible; this fresh execution binds the R3 rework. 431 and all future/missing/wrong work remain hard-refused. LUNA-SERIAL and R2 execution bindings are historical only.",
-      "historicalBindings": [
-        {
-          "scopeId": "INIT-051/INC320-SERIAL-430+432-434+FINAL-RED",
-          "scopePolicySha256": "3f2a7521e6e78c7ab84f2e85c5c7967e45dab36c4d206dfb3179cd098d386ece",
-          "executionSha256": "6f9d7142ac6c940db0c452f564d8e24bd2be29b39b191d18216d9405ae497f76",
-          "pack": "INC320/430+432-434+FINAL-RED",
-          "primaryWorkId": "work:1891880eb2925c9c777d1d22",
-          "dispatchVersion": 6361,
-          "disposition": "retained for historical audit only; not reusable as the current execution"
-        },
-        {
-          "scopeId": "INIT-051/INC320/RECEIPT-FREEZE-REPAIR",
-          "scopePolicySha256": "d3fdf10954cf84e213d6a6349af92195989762615b452042492bd070e347aaaf",
-          "executionSha256": "3665620350a71e8f4258699d988cfbb50f3fd25a9564e7019a994e986a5be5e7",
-          "pack": "INC320/RECEIPT-FREEZE-REPAIR",
-          "primaryWorkId": "work:1891880eb2925c9c777d1d22",
-          "dispatchVersion": 6369,
-          "disposition": "retained for historical audit only; not reusable as the current execution"
-        }
-      ]
+      "dispositionBoundary": "only the raw proof-to-product ratio item may be nonblocking; the finite allowedWork set is checked against fresh native work records",
+      "futureWorkRule": "The finite allowedWork set is the only ratio exception scope. TCRN-CROSS-STORY-431 and all future, missing, or wrong work remain hard-refused; unrelated chain appends do not invalidate the policy."
     },
     "review": "series-end"
   },

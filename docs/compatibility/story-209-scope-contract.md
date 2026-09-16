@@ -29,9 +29,9 @@ the explicit pre-template exemption, not a migration failure.
   Story, replace its complete scope with `work-annotate` under numeric CAS, read
   back and validate, then permit a status transition.
 - No compatibility bypass, manifest self-approval, or terminal-history rewrite is
-  introduced. The dispatch brief remains transport-only, carries a readback
-  `storyScope` for the gate, and is checked by `dispatch:validate` immediately
-  before dispatch.
+  introduced. Native dispatch reads the current Story through the engine and
+  resolves model/effort from the current dispatch settings immediately before
+  the host call; no external brief, handoff, or pre-call receipt is required.
 
 ## Verification record
 

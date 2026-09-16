@@ -179,27 +179,22 @@ test("STORY-424: lifecycle facts are bounded and missing facts stay unknown", as
   assert.equal(unknownRecord.payload.sourceEvidenceStatus, "unknown");
 });
 
-test("STORY-424 R02: declaration-only nested stop telemetry never becomes an observed model", async (t) => {
+test("native declaration-only stop telemetry never becomes an observed model", async (t) => {
   const root = await scratch("tcrn-telemetry-declaration-observation-");
   t.after(() => rm(root, { recursive: true, force: true }));
   const declaration = {
-    schemaVersion: "tcrn.structured-handoff.v1",
     workId: "work:telemetry-424",
+    phase: "rework",
     role: "implementation",
     pack: "EPIC135/STORY-424",
-    lifecycle: {
-      phase: "rework",
-      role: "implementation",
-      pack: "EPIC135/STORY-424",
-      model: "declared-only-model",
-      effort: "max",
-      newInstance: true,
-      forkTurns: "none",
-      sourceEvidence: [{ kind: "turn_context", locator: "unavailable-turn", digest: "unknown", status: "unknown" }],
-    },
+    model: "declared-only-model",
+    effort: "max",
+    newInstance: true,
+    forkTurns: "none",
+    sourceEvidence: [{ kind: "turn_context", locator: "unavailable-turn", digest: "unknown", status: "unknown" }],
   };
-  await runTelemetryHook({ hook_event_name: "SubagentStop", session_id: "declared-only", structuredHandoff: declaration }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_HOST: "codex", TCRN_TELEMETRY_AT: INSTANT(14) } });
-  await runTelemetryHook({ hook_event_name: "SubagentStop", session_id: "actual-observation", structuredHandoff: declaration, observation: { model: "observed-model" } }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_HOST: "codex", TCRN_TELEMETRY_AT: INSTANT(15) } });
+  await runTelemetryHook({ hook_event_name: "SubagentStop", session_id: "declared-only", lifecycle: declaration }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_HOST: "codex", TCRN_TELEMETRY_AT: INSTANT(14) } });
+  await runTelemetryHook({ hook_event_name: "SubagentStop", session_id: "actual-observation", lifecycle: declaration, observation: { model: "observed-model" } }, { env: { TCRN_TELEMETRY_ROOT: root, TCRN_TELEMETRY_HOST: "codex", TCRN_TELEMETRY_AT: INSTANT(15) } });
 
   const records = (await readTelemetryRecords(root, { limit: 10 })).records;
   const declared = records.find((record) => record.session === "declared-only");

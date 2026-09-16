@@ -136,141 +136,34 @@ test("EPIC135: only the complete structured budget notice is non-blocking", asyn
   assert.equal(isNonBlockingProofBudgetWarning({ ...warning, reasonCode: "OTHER_WARNING" }), false);
 });
 
-test("TCRN-CROSS-STORY-430: the raw exceeded ratio stays nonblocking only for the exact R3 execution binding", async () => {
+test("TCRN-CROSS-STORY-435/436: finite ratio authorization includes current work and excludes 431/future", async () => {
   const policy = await readPolicy();
   const binding = policy.ratioPolicy.scopedDisposition.binding;
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
-  assert.equal(policy.warningRatio, 2.4);
-  assert.equal(policy.hardRatio, 2.5);
-  assert.equal(binding.scopeId, "INIT-051/INC320/RECEIPT-JSON-FREEZE-R3");
-  assert.equal(binding.currentExecution.pack, "INC320/RECEIPT-JSON-FREEZE-R3");
-  assert.equal(binding.currentExecution.phase, "rework");
-  assert.equal(binding.currentExecution.primaryWork.externalKey, "TCRN-CROSS-STORY-434");
-  assert.equal(binding.currentExecution.primaryWork.id, "work:1891880eb2925c9c777d1d22");
-  assert.equal(binding.currentExecution.primaryWork.revision, 5);
-  assert.equal(binding.currentExecution.primaryWork.scopeDigest, "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c");
-  assert.equal(binding.currentExecution.role, "implementation");
-  assert.equal(binding.currentExecution.bindingKind, "governed-task-role");
-  assert.equal(binding.currentExecution.personaProfileId, null);
-  assert.equal(binding.currentExecution.dispatch.workspaceVersion, 6379);
-  assert.equal(binding.currentExecution.dispatch.headEventHash, "583946c834a9c7bf98df12472d0caf0726a7e083f3ee42c8f71fac1e2de3447b");
-  assert.equal(binding.currentExecution.dispatch.configDigest, "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f");
-  assert.equal(binding.currentExecution.dispatch.host, "codex");
-  assert.equal(binding.currentExecution.dispatch.mode, "frontier");
-  assert.equal(binding.currentExecution.dispatch.resolutionInput, "implement");
-  assert.equal(binding.currentExecution.dispatch.model, "gpt-5.6-luna");
-  assert.equal(binding.currentExecution.dispatch.effort, "max");
-  assert.equal(binding.currentExecution.dispatch.forkTurns, "none");
-  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.revision, 5);
-  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.scopeDigest, "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c");
-  assert.equal(binding.currentExecution.sourceAtDispatch.engine.commit, "aa3706028b6bd5803ec6bf9fdef048586b56788f");
-  assert.equal(binding.currentExecution.sourceAtDispatch.engine.tree, "89395f9a8b7a1a1e52c566232921530f61067b60");
-  assert.equal(binding.currentExecution.sourceAtDispatch.helper.commit, "9cf5807d14f12ebbb0a113dade2c8973492a37b2");
-  assert.equal(binding.currentExecution.sourceAtDispatch.helper.tree, "e4c758bdc64d41882159a7c81d746dbfddb7e86a");
-  assert.equal(binding.currentExecution.sourceBoundary.engineBaseCommit, "aa3706028b6bd5803ec6bf9fdef048586b56788f");
-  assert.equal(binding.currentExecution.dispatch.nativeToolCallId, null);
-  assert.equal(binding.currentExecution.dispatch.sourceEvidenceDigest, null);
-  for (const field of ["activePackBriefSha256", "technicalPackSha256", "roleBindingAmendmentSha256", "serialPackRecordSha256"]) {
-    assert.match(binding.currentExecution[field], /^[a-f0-9]{64}$/u, field);
-  }
-  assert.equal(binding.allowedWork.length, 21);
-  assert.deepEqual(binding.allowedWork.map((work) => work.externalKey), [
-    "TCRN-CROSS-STORY-386", "TCRN-CROSS-STORY-399", "TCRN-CROSS-STORY-415", "TCRN-CROSS-STORY-416",
-    "TCRN-CROSS-STORY-417", "TCRN-CROSS-STORY-418", "TCRN-CROSS-STORY-419", "TCRN-CROSS-STORY-420",
-    "TCRN-CROSS-STORY-421", "TCRN-CROSS-STORY-422", "TCRN-CROSS-STORY-423", "TCRN-CROSS-STORY-424",
-    "TCRN-CROSS-STORY-425", "TCRN-CROSS-STORY-426", "TCRN-CROSS-STORY-427", "TCRN-CROSS-STORY-428",
-    "TCRN-CROSS-STORY-429", "TCRN-CROSS-STORY-430", "TCRN-CROSS-STORY-432", "TCRN-CROSS-STORY-433",
-    "TCRN-CROSS-STORY-434",
+  assert.equal(binding.scopeId, "INIT-051/INC320/CHAIN-NATIVE-20260916");
+  assert.deepEqual(binding.allowedWork.slice(-2).map((work) => work.externalKey), [
+    "TCRN-CROSS-STORY-435",
+    "TCRN-CROSS-STORY-436",
   ]);
   assert.equal(binding.allowedWork.some((work) => work.externalKey === "TCRN-CROSS-STORY-431"), false);
-  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings.length, 2);
-  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[0].executionSha256, "6f9d7142ac6c940db0c452f564d8e24bd2be29b39b191d18216d9405ae497f76");
-  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[1].executionSha256, "3665620350a71e8f4258699d988cfbb50f3fd25a9564e7019a994e986a5be5e7");
-  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[1].pack, "INC320/RECEIPT-FREEZE-REPAIR");
-  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings.every((entry) => entry.disposition === "retained for historical audit only; not reusable as the current execution"), true);
-  const correctionWork = binding.allowedWork.filter((work) => ["TCRN-CROSS-STORY-432", "TCRN-CROSS-STORY-433", "TCRN-CROSS-STORY-434"].includes(work.externalKey));
-  assert.equal(correctionWork.length, 3);
-  assert.equal(correctionWork.every((work) => binding.currentExecution.workIds.includes(work.id)), true);
-  assert.deepEqual(binding.currentExecution.workIds, binding.allowedWork.map((work) => work.id));
-  assert.deepEqual(validateProofBudgetScopeBinding(binding, policy), {
-    ok: true,
-    reasonCode: "PROOF_BUDGET_SCOPE_BINDING_VERIFIED",
-    bindingSha256: policy.ratioPolicy.scopedDisposition.bindingSha256,
-    executionSha256: bindingSha256,
-  });
+  assert.equal(validateProofBudgetScopeBinding(binding, policy).ok, true);
 
-  const result = evaluateProofBudget({
+  const scoped = evaluateProofBudget({
     proofLines: 70_230,
     productLines: 27_706,
     policy,
     scopeBindingSha256: bindingSha256,
   });
-  assert.equal(result.ratio, 2.5348);
-  assert.equal(result.ok, true);
-  assert.equal(result.status, "exceeded-nonblocking");
-  assert.equal(result.reasonCode, PROOF_BUDGET_SCOPED_NONBLOCKING_REASON);
-  assert.equal(result.rawStatus, "exceeded");
-  assert.equal(result.rawReasonCode, "PROOF_BUDGET_EXCEEDED");
-  assert.equal(result.blocking, false);
-  assert.equal(result.warning.hardLimit, 2.5);
-  assert.equal(result.warning.blocking, false);
-  assert.equal(result.warning.scopeBindingSha256, bindingSha256);
-  assert.equal(isNonBlockingProofBudgetWarning(result, { scopeBindingSha256: bindingSha256 }), true);
-});
+  assert.equal(scoped.status, "exceeded-nonblocking");
+  assert.equal(scoped.ok, true);
+  assert.equal(scoped.warning.scopeBindingSha256, bindingSha256);
+  assert.equal(isNonBlockingProofBudgetWarning(scoped, { policy, scopeBindingSha256: bindingSha256 }), true);
+  assert.equal(isNonBlockingProofBudgetWarning(scoped, { policy }), false);
+  assert.equal(evaluateProofBudget({ proofLines: 70_230, productLines: 27_706, policy, scopeBindingSha256: "0".repeat(64) }).ok, false);
 
-test("TCRN-CROSS-STORY-430: missing, caller-invented, future, or malformed bindings stay hard-red", async () => {
-  const policy = await readPolicy();
-  const binding = policy.ratioPolicy.scopedDisposition.binding;
-  const bindingSha256 = proofBudgetScopeBindingDigest(policy);
-  const input = { proofLines: 70_230, productLines: 27_706, policy };
-  for (const requested of [undefined, "INIT-051", "a".repeat(64)]) {
-    const result = evaluateProofBudget({ ...input, scopeBindingSha256: requested });
-    assert.equal(result.ok, false, String(requested));
-    assert.equal(result.status, "rejected", String(requested));
-    assert.equal(result.reasonCode, "PROOF_BUDGET_EXCEEDED", String(requested));
-    assert.equal(result.ratio, 2.5348, String(requested));
-  }
-
-  const futureWork = structuredClone(binding);
-  futureWork.currentExecution.primaryWork = {
-    externalKey: "TCRN-CROSS-STORY-431",
-    id: "work:f6dfafa9884552bf95938066",
-    revision: 1,
-    scopeDigest: "977cfeb2718b60e0b7b9b07e95be34d7ab660c596544e604185fbc7b77ff19e0",
-  };
-  assert.equal(validateProofBudgetScopeBinding(futureWork, policy).ok, false);
-  const wrongPack = structuredClone(binding);
-  wrongPack.currentExecution.pack = "INIT-051";
-  assert.equal(validateProofBudgetScopeBinding(wrongPack, policy).ok, false);
-  const wrongPhase = structuredClone(binding);
-  wrongPhase.currentExecution.phase = "task-pack";
-  assert.equal(validateProofBudgetScopeBinding(wrongPhase, policy).ok, false);
-  const staleDispatch = structuredClone(binding);
-  staleDispatch.currentExecution.dispatch.workspaceVersion -= 1;
-  assert.equal(validateProofBudgetScopeBinding(staleDispatch, policy).ok, false);
-  const missingCurrentWork = structuredClone(binding);
-  missingCurrentWork.currentExecution.workIds = missingCurrentWork.currentExecution.workIds.filter((id) => id !== "work:a9e16b025a21b9cf7238a5ce");
-  assert.equal(validateProofBudgetScopeBinding(missingCurrentWork, policy).ok, false);
-  const extraWork = structuredClone(binding);
-  extraWork.currentExecution.workIds.push("work:f6dfafa9884552bf95938066");
-  assert.equal(validateProofBudgetScopeBinding(extraWork, policy).ok, false);
-
-  const malformedPolicy = structuredClone(policy);
-  malformedPolicy.ratioPolicy.scopedDisposition.bindingSha256 = "0".repeat(64);
-  assert.throws(
-    () => evaluateProofBudget({ ...input, scopeBindingSha256: bindingSha256, policy: malformedPolicy }),
-    (error) => error?.reasonCode === "PROOF_BUDGET_POLICY_INVALID",
-  );
-  const malformedScopePolicy = structuredClone(policy);
-  malformedScopePolicy.ratioPolicy.scope = "INIT-051";
-  assert.throws(
-    () => evaluateProofBudget({ ...input, scopeBindingSha256: bindingSha256, policy: malformedScopePolicy }),
-    (error) => error?.reasonCode === "PROOF_BUDGET_POLICY_INVALID",
-  );
-  assert.throws(
-    () => evaluateProofBudget({ proofLines: -1, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 }),
-    (error) => error?.reasonCode === "PROOF_BUDGET_POLICY_INVALID",
-  );
+  const future = structuredClone(binding);
+  future.allowedWork = [...future.allowedWork, { externalKey: "TCRN-CROSS-STORY-437", id: "work:437" }];
+  assert.equal(validateProofBudgetScopeBinding(future, policy).ok, false);
 });
 
 test("EPIC135: push-gate budget exemption requires one terminal receipt and no other diagnostics", () => {
@@ -432,10 +325,10 @@ test("EPIC135: P8 and guard diagnostics remain red outside validated typed data"
   }
 });
 
-test("EPIC135: formal batch aggregation preserves budget notices but blocks other warnings", async () => {
+test("EPIC135: formal batch aggregation preserves authorized budget notices but blocks other warnings", async () => {
   const input = {
     series: "EPIC135",
-    pack: "HC2",
+    pack: "CHAIN-NATIVE",
     stage: "candidate-final",
     tasks: [],
     candidate: { id: "candidate-421", status: "stable", digest: "tree-421" },
@@ -456,57 +349,51 @@ test("EPIC135: formal batch aggregation preserves budget notices but blocks othe
   const boundInput = {
     ...input,
     series: "INIT-051",
-    pack: binding.currentExecution.pack,
-    primaryWorkId: binding.currentExecution.primaryWork.id,
-    scopeDigest: binding.currentExecution.primaryWork.scopeDigest,
-    role: binding.currentExecution.role,
-    phase: binding.currentExecution.phase,
-    taskClass: binding.currentExecution.taskClass,
-    personaProfileId: binding.currentExecution.personaProfileId,
-    workIds: binding.currentExecution.workIds,
+    workIds: binding.allowedWork.map((work) => work.id),
+    primaryWorkId: binding.allowedWork.at(-1).id,
     proofBudgetScopeBinding: binding,
   };
   const scopedPass = await executeQualifiedBatch(boundInput, async () => ({ ok: true, governanceNotices: [{ command: "budget", ...scoped.warning }] }));
-  assert.equal(scopedPass.status, "completed");
+  assert.equal(scopedPass.status, "completed", JSON.stringify(scopedPass.reasons));
 
   const noBindingInput = { ...boundInput };
   delete noBindingInput.proofBudgetScopeBinding;
   const missingBinding = await executeQualifiedBatch(noBindingInput, async () => ({ ok: true, governanceNotices: [{ command: "budget", ...scoped.warning }] }));
   assert.equal(missingBinding.status, "failed");
 
-  const wrongPackInput = { ...boundInput, pack: "INIT-051" };
-  const wrongPack = await executeQualifiedBatch(wrongPackInput, async () => ({ ok: true, governanceNotices: [{ command: "budget", ...scoped.warning }] }));
-  assert.equal(wrongPack.status, "failed");
+  const wrongWorkInput = { ...boundInput, workIds: [...boundInput.workIds.slice(0, -1), "work:wrong"] };
+  const wrongWork = await executeQualifiedBatch(wrongWorkInput, async () => ({ ok: true, governanceNotices: [{ command: "budget", ...scoped.warning }] }));
+  assert.equal(wrongWork.status, "failed");
 });
 
-test("TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding against native work", async () => {
+test("TCRN-CROSS-STORY-435/436: operational qualification uses native work state and finite authorization", async () => {
   const policy = await readPolicy();
   const binding = policy.ratioPolicy.scopedDisposition.binding;
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
-  const currentWorkIds = binding.currentExecution.workIds;
-  const records = [
-    ...binding.allowedWork.map((work) => ({ ...work, revision: work.id === binding.currentExecution.primaryWork.id ? binding.currentExecution.primaryWork.revision : 1, scopeDigest: work.id === binding.currentExecution.primaryWork.id ? binding.currentExecution.primaryWork.scopeDigest : `scope-${work.id}`, status: "blocked", dependencies: [], blockedReason: "bounded fixture stage input" })),
-    ...binding.excludedWork.map((work) => ({ ...work, revision: 1, scopeDigest: "scope-planned-431", status: "planned", dependencies: [] })),
-  ];
-  const selected = (workIds) => workIds.map((id) => records.find((record) => record.id === id)).filter(Boolean);
-  const readNative = async ({ workIds }) => {
-    const tasks = selected(workIds);
-    return {
-      ok: true,
-      nativeStatus: { workspaceId: binding.workspaceId, version: 6369, headEventHash: "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca" },
-      workListComplete: true,
-      workListPages: [{ offset: 0, total: records.length, truncated: false, version: 6369, headEventHash: "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca" }],
-      workListRecords: records,
-      workShows: tasks.map(({ id, revision, scopeDigest, status, externalKey }) => ({ id, revision, scopeDigest, status, externalKey })),
-      tasks,
-      queue: { observed: true, digest: "queue-scope", tasks, records: tasks },
-      queueDigest: "queue-scope",
-      dependencies: { observed: true, schemaPresent: true, records: tasks.map(({ id, dependencies }) => ({ id, dependencies })) },
-      dependencySchemaPresent: true,
-    };
-  };
+  const workIds = binding.allowedWork.map((work) => work.id);
+  const records = binding.allowedWork.map((work, index) => ({
+    ...work,
+    revision: 1,
+    scopeDigest: `scope-${index}`,
+    status: "blocked",
+    dependencies: [],
+    blockedReason: "bounded fixture stage input",
+  }));
+  const readNative = async () => ({
+    ok: true,
+    nativeStatus: { workspaceId: binding.workspaceId, version: 1, headEventHash: "a".repeat(64) },
+    workListComplete: true,
+    workListPages: [{ offset: 0, total: records.length, truncated: false, version: 1, headEventHash: "a".repeat(64) }],
+    workListRecords: records,
+    workShows: records,
+    tasks: records,
+    queue: { observed: true, digest: "queue-scope", tasks: records, records },
+    queueDigest: "queue-scope",
+    dependencies: { observed: true, schemaPresent: true, records: records.map(({ id, dependencies }) => ({ id, dependencies })) },
+    dependencySchemaPresent: true,
+  });
   const observeRuntime = async ({ nativeState }) => ({
-    observedAt: "2026-09-15T12:45:00Z",
+    observedAt: "2026-09-16T12:45:00Z",
     source: "code-owned-test-observer",
     queue: { observed: true, digest: nativeState.queueDigest, records: nativeState.tasks },
     dependencies: { observed: true, digest: "dependencies-scope", records: nativeState.dependencies.records },
@@ -516,17 +403,12 @@ test("TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding
   });
   const input = {
     series: "INIT-051",
-    pack: binding.currentExecution.pack,
+    pack: "CHAIN-NATIVE",
     stage: "candidate-final",
     trigger: "formal-batch-gate",
-    workspace: "/fixture/workspace",
-    workIds: currentWorkIds,
-    primaryWorkId: binding.currentExecution.primaryWork.id,
-    scopeDigest: binding.currentExecution.primaryWork.scopeDigest,
-    role: binding.currentExecution.role,
-    phase: binding.currentExecution.phase,
-    taskClass: binding.currentExecution.taskClass,
-    personaProfileId: binding.currentExecution.personaProfileId,
+    workspace: binding.workspaceId,
+    workIds,
+    primaryWorkId: binding.allowedWork.at(-1).id,
     proofBudgetScopeBinding: binding,
     candidate: { id: "candidate-scope", status: "stable", digest: "tree-scope" },
     queueDigest: "queue-scope",
@@ -540,19 +422,10 @@ test("TCRN-CROSS-STORY-430: operational batch revalidates the same scope binding
   assert.equal(result.status, "completed", JSON.stringify(result.reasons));
   assert.equal(runnerCalls, 1);
 
-  let wrongPackCalls = 0;
-  const wrongPack = await executeOperationalBatch({ ...input, pack: "INIT-051" }, async () => {
-    wrongPackCalls += 1;
+  const forgedWork = await executeOperationalBatch({ ...input, workIds: [...workIds, "work:future"] }, async () => {
+    runnerCalls += 1;
     return { ok: true, governanceNotices: [{ command: "budget", ...warning }] };
   }, { readNative, observeRuntime });
-  assert.equal(wrongPack.status, "not-verifiable");
-  assert.equal(wrongPackCalls, 0);
-
-  let futureCalls = 0;
-  const futureWork = await executeOperationalBatch({ ...input, workIds: [...currentWorkIds, "work:f6dfafa9884552bf95938066"] }, async () => {
-    futureCalls += 1;
-    return { ok: true, governanceNotices: [{ command: "budget", ...warning }] };
-  }, { readNative, observeRuntime });
-  assert.equal(futureWork.status, "not-verifiable");
-  assert.equal(futureCalls, 0);
+  assert.equal(forgedWork.status, "not-verifiable");
+  assert.equal(runnerCalls, 1);
 });

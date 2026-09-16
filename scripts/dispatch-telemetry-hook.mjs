@@ -55,19 +55,15 @@ function inputScopes(input) {
     input?.agent,
     input?.lifecycle,
     input?.agentLifecycle,
-    input?.structuredHandoff,
     input?.payload?.lifecycle,
     input?.payload?.agentLifecycle,
-    input?.payload?.structuredHandoff,
-    input?.structuredHandoff?.lifecycle,
-    input?.payload?.structuredHandoff?.lifecycle,
   ].filter(isRecord);
 }
 
 // Configuration is allowed to describe the requested lifecycle, but it is not
 // an observation of what a host actually ran.  Keep an explicit observation
-// view for fields such as observedModel so nested structured handoffs cannot
-// accidentally promote their requested model into observed telemetry.
+// view for fields such as observedModel so requested values cannot accidentally
+// promote themselves into observed telemetry.
 function observationScopes(input) {
   return [
     input,
@@ -89,12 +85,8 @@ function declarationScopes(input) {
   return [
     input?.lifecycle,
     input?.agentLifecycle,
-    input?.structuredHandoff,
     input?.payload?.lifecycle,
     input?.payload?.agentLifecycle,
-    input?.payload?.structuredHandoff,
-    input?.structuredHandoff?.lifecycle,
-    input?.payload?.structuredHandoff?.lifecycle,
   ].filter(isRecord);
 }
 

@@ -14,9 +14,10 @@ export const REQUIRED_SOURCES = Object.freeze([
   "tcrn-workflow-helper/skill/tcrn-workflow-helper/references/workflow-operations.md",
   "TCRN-AOS/deploy/aos-local-client/closeout-chain-proof.mjs",
   "scripts/closeout-verify.mjs",
-  "scripts/dispatch-readiness-compliance.mjs",
+  "scripts/dispatch-adapter.mjs",
   "tests/closeout-verify-dispositions.test.mjs",
-  "tests/dispatch-readiness-compliance.test.mjs",
+  "tests/dispatch-native.test.mjs",
+  "chain:cross-project:TCRN-CROSS-MIN-CHAIN-NATIVE-20260916",
   "tests/story-scope-compliance.test.mjs",
 ]);
 
