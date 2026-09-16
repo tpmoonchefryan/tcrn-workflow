@@ -11,6 +11,7 @@
 // able to fail. Each test below names the change that reddens it.
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,7 +27,7 @@ import {
 } from "../scripts/lib/proof-budget.mjs";
 import { budgetWarningNotices, hasWarningOrError, inspectStructuredChildOutput, onlyBudgetWarning, validateStructuredChildExpectations } from "../scripts/lib/push-gate-output.mjs";
 import { P8_RELEASE_ARTIFACTS, P8_TAG } from "../scripts/lib/p8-workflow-rc.mjs";
-import { executeOperationalBatch, executeQualifiedBatch } from "../scripts/final-gate-plan.mjs";
+import { executeOperationalBatch, executeQualifiedBatch, normalizeNativeImplementationResult } from "../scripts/final-gate-plan.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const policyPath = resolve(repositoryRoot, "scripts/policy/proof-budget.json");
@@ -344,6 +345,8 @@ test("EPIC135: P8 and guard diagnostics remain red outside validated typed data"
     ["fake success receipt remains rejecting", { stdout: '{"reasonCode":"P8_WORKFLOW_RC_VERIFIED"}\n', stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles }, "CHILD_TERMINAL_FIELDS_INVALID"],
     ["P8 terminal for another source commit remains rejecting", { stdout: `${p8Line}\n`, stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles, p8BasisCommit: "f".repeat(40) }, "P8_BASIS_COMMIT_MISMATCH"],
     ["unknown P8 fields remain rejecting", { stdout: `${JSON.stringify({ ...p8, unknown: "warning" })}\n`, stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles }, "CHILD_TERMINAL_FIELDS_INVALID"],
+    ["P8 terminal command must be the real task entry", { stdout: `${JSON.stringify({ ...p8, command: "verify:p8" })}\n`, stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles }, "P8_COMMAND_INVALID"],
+    ["P8 terminal ok must be true", { stdout: `${JSON.stringify({ ...p8, ok: false })}\n`, stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles }, "P8_OK_INVALID"],
     ["nested diagnostics remain rejecting", { stdout: `${JSON.stringify({ ...p8, sbom: { ...p8.sbom, path: "warning-and-failure.json" } })}\n`, stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles }, "CHILD_DIAGNOSTIC_TEXT"],
     ["unknown archive member is not typed data", { stdout: `${JSON.stringify(p8Receipt([...sourceFiles, "docs/new-warning.txt"].sort()))}\n`, stderr: "", exitCode: 0, signal: null }, "verify:p8", { sourceFiles }, "P8_SOURCE_ARCHIVE_COUNT_MISMATCH"],
     ["wrong successful child schema remains rejecting", { stdout: `${p8Line}\n`, stderr: "", exitCode: 0, signal: null }, "guard-check", { guardIds }, "CHILD_TERMINAL_REASON_INVALID"],
@@ -461,4 +464,35 @@ test("TCRN-CROSS-STORY-435/436: operational qualification uses native work state
   }, { readNative, observeRuntime });
   assert.equal(forgedWork.status, "not-verifiable");
   assert.equal(runnerCalls, 1);
+});
+
+test("TCRN-CROSS-STORY-435/436: native implementation results require real bindings and evidence", () => {
+  const scope = "## Goal\nA stable native scope.";
+  const scopeDigest = createHash("sha256").update(scope).digest("hex");
+  const valid = {
+    schemaVersion: "tcrn.native-implementation-result.v1",
+    status: "passed",
+    ok: true,
+    exitCode: 0,
+    command: "node --test tests/s301-proof-budget.test.mjs",
+    dependencies: [],
+    evidence: `${repositoryRoot}/tests/s301-proof-budget.test.mjs`,
+    revision: 7,
+    scopeDigest,
+    workId: "work:08e1f20a81121b28fa5a4d32",
+    candidateId: "candidate-tree",
+    candidateDigest: "a".repeat(64),
+  };
+  const bound = { workId: valid.workId, revision: valid.revision, scope, externalKey: "TCRN-CROSS-STORY-301" };
+  assert.equal(normalizeNativeImplementationResult(valid, bound).valid, true);
+  for (const [field, value] of [
+    ["workId", undefined], ["revision", undefined], ["scopeDigest", "b".repeat(64)],
+    ["candidateDigest", undefined], ["evidence", "/tmp/native-result-does-not-exist.json"],
+    ["dependencies", undefined], ["unknown", "forged"],
+  ]) {
+    const candidate = { ...valid };
+    if (value === undefined) delete candidate[field];
+    else candidate[field] = value;
+    assert.equal(normalizeNativeImplementationResult(candidate, bound).valid, false, field);
+  }
 });
