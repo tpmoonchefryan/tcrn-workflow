@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 
 import { countCoverage } from "./coverage-conservation.mjs";
+import { normalizeNativeImplementationResult } from "./final-gate-plan.mjs";
 
 export const REVIEW_EVIDENCE_VERSION = "tcrn.review-evidence.v1";
 export const REVIEW_OUTPUT_BYTES = 4 * 1024 * 1024;
@@ -361,8 +362,24 @@ function readBoundVerify({ workspace, workId, engineCli }) {
   }
   if (output?.record?.id !== workId) return { status: "unavailable", reason: "work-show returned a different record", command: null };
   const command = output?.advisory?.verify;
-  if (typeof command !== "string" || command.length === 0) return { status: "missing", reason: "work has no advisory:verify", command: null };
-  return { status: "available", reason: "advisory:verify read from the bound work", command };
+  if (typeof command === "string" && command.length > 0) return { status: "available", reason: "advisory:verify read from the bound work", command };
+  const nativeResult = output?.advisory?.result;
+  if (nativeResult !== undefined && nativeResult !== null) {
+    const normalized = normalizeNativeImplementationResult(nativeResult, {
+      workId,
+      revision: output.record.revision,
+      scopeDigest: output.record.scopeDigest,
+      scope: output.advisory?.scope,
+      externalKey: output.record.externalKey,
+    });
+    return {
+      status: "native-only",
+      reason: normalized.valid ? "native result is the bound implementation evidence" : normalized.reason,
+      command: normalized.command,
+      nativeResult: normalized,
+    };
+  }
+  return { status: "missing", reason: "work has no advisory:verify or native result", command: null };
 }
 
 export function collectReviewEvidence({
@@ -386,6 +403,12 @@ export function collectReviewEvidence({
   if (typeof base !== "string" || base.length === 0 || base.includes("\u0000")) {
     return { schemaVersion: REVIEW_EVIDENCE_VERSION, ok: false, reasonCode: "REVIEW_EVIDENCE_INPUT_INVALID", problems: ["base is required"], evidence: null };
   }
+  if (!/^[a-f0-9]{40}$/u.test(base)) {
+    return { schemaVersion: REVIEW_EVIDENCE_VERSION, ok: false, reasonCode: "REVIEW_EVIDENCE_INPUT_INVALID", problems: ["base must be a full immutable commit SHA; moving refs and HEAD are not review bases"], evidence: null };
+  }
+  if (head !== null && head !== undefined && (!/^[a-f0-9]{40}$/u.test(head) || head === base)) {
+    return { schemaVersion: REVIEW_EVIDENCE_VERSION, ok: false, reasonCode: "REVIEW_EVIDENCE_INPUT_INVALID", problems: [head === base ? "base and head must be different fixed commit SHAs" : "head must be a full commit SHA when supplied"], evidence: null };
+  }
   const allowed = normalizeAllowedFiles(root, allowedFiles);
   const declaredTests = normalizeTestFiles(root, testFiles);
   const problems = [...allowed.problems, ...declaredTests.problems];
@@ -403,13 +426,15 @@ export function collectReviewEvidence({
   const verify = {
     ...binding,
     run: verifyRun,
-    ok: binding.status === "available" && verifyRun?.exitCode === "0",
+    ok: binding.status === "available" && verifyRun?.exitCode === "0" || binding.status === "native-only" && binding.nativeResult?.valid === true,
   };
   // When no separate runner is declared, the bound verify command is the runner
   // too; reuse its real output instead of running a potentially expensive check
   // twice and presenting two observations as if they were independent.
   const actualTestCommand = testCommand ?? binding.command;
-  const testRun = testCommand === undefined ? verifyRun : runShell(testCommand, root, commandTimeoutMs);
+  const testRun = binding.status === "native-only" && testCommand === undefined
+    ? null
+    : testCommand === undefined ? verifyRun : runShell(testCommand, root, commandTimeoutMs);
   const testSummary = testRun === null
     ? { tests: null, testFiles: null, testCases: null, passed: null, failed: null, parseable: false }
     : parseTestRunOutput(testRun.stdout, testRun.stderr, declaredTests.files);
@@ -417,10 +442,10 @@ export function collectReviewEvidence({
     problems.push("test runner's actual file list differs from the pre-declared test paths");
   }
   const ast = astTestEvidence(root, base, head, declaredTests.files);
-  if (binding.status === "missing") problems.push("bound work has no advisory:verify command");
+  if (binding.status === "missing") problems.push("bound work has no advisory:verify command or native result");
   if (binding.status === "unavailable") problems.push(`bound work verify is unavailable: ${binding.reason}`);
   if (!verify.ok) problems.push("verify command did not exit 0");
-  if (testRun === null || !testSummary.parseable) problems.push("test runner output has no machine-readable test result");
+  if (binding.status !== "native-only" && (testRun === null || !testSummary.parseable)) problems.push("test runner output has no machine-readable test result");
   if (testRun !== null && testRun.exitCode !== "0") problems.push(`test runner exited ${testRun.exitCode}`);
   if (ast.after.testCount < ast.before.testCount) problems.push(`AST test count decreased from ${ast.before.testCount} to ${ast.after.testCount}`);
   if (testSummary.failed !== null && testSummary.failed > 0) problems.push(`test runner reported ${testSummary.failed} failed tests`);

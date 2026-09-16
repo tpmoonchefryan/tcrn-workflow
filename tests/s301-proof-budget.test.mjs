@@ -174,7 +174,24 @@ test("EPIC135: push-gate budget exemption requires one terminal receipt and no o
     exceptions: [{ id: "fixture", recordedAt: "2026-09-14", ratio: 2.5, rationale: "A bounded fixture threshold for parser coverage." }],
   } });
   const budget = { command: "budget", ...boundary };
-  const receipt = (notices) => JSON.stringify({ ok: true, reasonCode: "P1_VERIFIED", notices });
+  const reasonCodes = Object.fromEntries([
+    ["format-check", "FORMAT_VERIFIED"], ["lint", "LINT_VERIFIED"], ["typecheck", "TYPECHECK_VERIFIED"],
+    ["build", "BUILD_VERIFIED"], ["test", "TESTS_VERIFIED"], ["portal", "PORTAL_VERIFY_TRAIN_GREEN"],
+    ["source", "SOURCE_ALLOWLIST_VERIFIED"], ["archive", "ARCHIVE_VERIFIED"],
+    ["no-sibling-dependency", "NO_SIBLING_DEPENDENCY"], ["offline", "OFFLINE_BOUNDARY_VERIFIED"],
+    ["governance", "GOVERNANCE_TOOLCHAIN_VERIFIED"], ["privacy", "PRIVACY_SOURCE_CLEAN"],
+    ["verification-map", "VERIFICATION_MAP_VERIFIED"], ["budget", "PROOF_BUDGET_WARNING"],
+    ["links", "MARKDOWN_LINKS_RESOLVED"], ["retrieval-eval", "RETRIEVAL_EVAL_VERIFIED"],
+  ]);
+  const receipt = (notices, overrides = {}) => JSON.stringify({
+    ok: true,
+    command: "verify-p1",
+    reasonCode: "P1_VERIFIED",
+    commands: P1_SEQUENCE.map(({ task }) => task),
+    observedReasonCodes: P1_SEQUENCE.map(({ task }) => reasonCodes[task]),
+    notices,
+    ...overrides,
+  });
   const budgetOnly = receipt([budget]);
   assert.equal(budgetWarningNotices(budgetOnly, "verify:p1").length, 1);
   assert.equal(onlyBudgetWarning(budgetOnly, "verify:p1"), true);
@@ -202,7 +219,21 @@ test("TCRN-CROSS-STORY-430: scoped exceeded notice is shared by P1/push and neve
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
   const result = evaluateProofBudget({ proofLines: 70_230, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 });
   const budgetNotice = { command: "budget", ...result.warning };
-  const receipt = (notices) => JSON.stringify({ ok: true, reasonCode: "P1_VERIFIED", notices });
+  const reasonCodeByTask = {
+    "format-check": "FORMAT_VERIFIED", lint: "LINT_VERIFIED", typecheck: "TYPECHECK_VERIFIED", build: "BUILD_VERIFIED",
+    test: "TESTS_VERIFIED", portal: "PORTAL_VERIFY_TRAIN_GREEN", source: "SOURCE_ALLOWLIST_VERIFIED", archive: "ARCHIVE_VERIFIED",
+    "no-sibling-dependency": "NO_SIBLING_DEPENDENCY", offline: "OFFLINE_BOUNDARY_VERIFIED", governance: "GOVERNANCE_TOOLCHAIN_VERIFIED",
+    privacy: "PRIVACY_SOURCE_CLEAN", "verification-map": "VERIFICATION_MAP_VERIFIED", links: "MARKDOWN_LINKS_RESOLVED",
+    "retrieval-eval": "RETRIEVAL_EVAL_VERIFIED",
+  };
+  const receipt = (notices) => JSON.stringify({
+    ok: true,
+    command: "verify-p1",
+    reasonCode: "P1_VERIFIED",
+    commands: P1_SEQUENCE.map(({ task }) => task),
+    observedReasonCodes: P1_SEQUENCE.map(({ task }) => task === "budget" ? result.reasonCode : reasonCodeByTask[task]),
+    notices,
+  });
   const exact = receipt([budgetNotice]);
   const options = { scopeBindingSha256: bindingSha256 };
   assert.equal(budgetWarningNotices(exact, "verify:p1", options).length, 1);
@@ -222,6 +253,8 @@ test("TCRN-CROSS-STORY-430: scoped exceeded notice is shared by P1/push and neve
 function p8Receipt(sourceFiles) {
   const sourceDigest = "b".repeat(64);
   return {
+    command: "p8",
+    ok: true,
     reasonCode: "P8_WORKFLOW_RC_VERIFIED",
     tag: P8_TAG,
     p8BasisCommit: "a".repeat(40),

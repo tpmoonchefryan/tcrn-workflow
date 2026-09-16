@@ -30,7 +30,8 @@ function gitFixture(t) {
   assert.equal(spawnSync("git", ["init", "-q", root]).status, 0);
   assert.equal(spawnSync("git", ["-C", root, "add", "tests/fixture.test.mjs"]).status, 0);
   assert.equal(spawnSync("git", ["-C", root, "-c", "user.name=review-test", "-c", "user.email=review-at-example.invalid", "commit", "-qm", "base"]).status, 0);
-  return root;
+  const base = spawnSync("git", ["-C", root, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  return { root, base };
 }
 
 function runUnpreloadedCollect(options) {
@@ -42,12 +43,12 @@ function runUnpreloadedCollect(options) {
 }
 
 test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separates runner and AST counts", (t) => {
-  const repositoryRoot = gitFixture(t);
+  const { root: repositoryRoot, base } = gitFixture(t);
   const result = runUnpreloadedCollect({
     workspace: CHAIN_WORKSPACE,
     workId: STORY_374,
     repositoryRoot,
-    base: "HEAD",
+    base,
     allowedFiles: [],
   });
   // The current checkout has no diff, but an empty scope is deliberately refused:
@@ -60,7 +61,7 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
     workspace: CHAIN_WORKSPACE,
     workId: STORY_374,
     repositoryRoot,
-    base: "HEAD",
+    base,
     allowedFiles: ["tests/fixture.test.mjs"],
     testFiles: ["tests/fixture.test.mjs"],
     testCommand: `${JSON.stringify(process.execPath)} --test tests/fixture.test.mjs`,
@@ -86,7 +87,7 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
       workspace: CHAIN_WORKSPACE,
       workId: STORY_374,
       repositoryRoot,
-      base: "HEAD",
+      base,
       allowedFiles: ["tests/fixture.test.mjs"],
       testFiles: ["tests/fixture.test.mjs"],
       testCommand: `${JSON.stringify(process.execPath)} -e ${JSON.stringify(`require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 60_000)`)}`,

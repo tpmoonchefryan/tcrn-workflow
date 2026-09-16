@@ -33,7 +33,10 @@ const rosterPath = resolve(platformRoot, "platform-docs/acceptance-gate-groups.j
 const containmentPath = resolve(repositoryRoot, "scripts/policy/gate-containment.json");
 const sourceArchivePath = resolve(repositoryRoot, "dist/source/tcrn-workflow-source.tar");
 const node = process.execPath;
-export const PACK_SOURCE_BASELINE_COMMIT = "06b9f0a20467d9cbd5203d519eb8d4a563e5f126";
+// The implementation Pack's fixed comparison base.  This is an immutable
+// commit, never a moving ref or the current HEAD; changing it silently would
+// make a review report an empty diff or include an unrelated earlier batch.
+export const PACK_SOURCE_BASELINE_COMMIT = "6ebe6f4f196cb49cefcbcdff72fc043d7b410bf9";
 let productionReceiptAuthority = null;
 
 function getProductionReceiptAuthority() {

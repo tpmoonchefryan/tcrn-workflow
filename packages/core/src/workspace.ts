@@ -1748,6 +1748,22 @@ export interface SprintReference {
   readonly workId: string;
 }
 
+type WorkAdvisoryInput = {
+  readonly scope?: string; readonly decidedBy?: readonly string[];
+  readonly verify?: string;
+  readonly sprint?: SprintReference;
+  readonly evidence?: string; readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
+  readonly result?: JsonValue;
+};
+
+type WorkAnnotationInput = WorkAdvisoryInput & {
+  readonly id: string;
+  readonly title?: string | null;
+  readonly summary?: string | null;
+  readonly labels?: readonly string[];
+  readonly occurredAt: string;
+};
+
 function isSprintReference(value: unknown): value is SprintReference {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   // Membership check without a comparator: compareCanonicalText throws
@@ -1766,36 +1782,15 @@ function isSprintReference(value: unknown): value is SprintReference {
   return true;
 }
 
-function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisory: {
-  readonly scope?: string;
-  readonly decidedBy?: readonly string[];
-  readonly verify?: string;
-  readonly sprint?: SprintReference;
-  readonly evidence?: string;
-  readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
-  readonly result?: JsonValue;
-}): Readonly<Record<string, unknown>> {
+const ADVISORY_FIELD_KEYS = Object.freeze({ scope: ADVISORY_SCOPE_KEY, decidedBy: ADVISORY_DECIDED_BY_KEY, sprint: ADVISORY_SPRINT_KEY, verify: ADVISORY_VERIFY_KEY, evidence: ADVISORY_EVIDENCE_KEY, evidenceSnapshot: ADVISORY_EVIDENCE_SNAPSHOT_KEY, result: ADVISORY_RESULT_KEY });
+
+function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisory: WorkAdvisoryInput): Readonly<Record<string, unknown>> {
   const next: Record<string, unknown> = { ...base };
-  if (advisory.scope !== undefined) {
-    next[ADVISORY_SCOPE_KEY] = { required: false, value: advisory.scope };
-  }
-  if (advisory.decidedBy !== undefined) {
-    next[ADVISORY_DECIDED_BY_KEY] = { required: false, value: [...advisory.decidedBy] };
-  }
-  if (advisory.sprint !== undefined) {
-    next[ADVISORY_SPRINT_KEY] = { required: false, value: { workspaceId: advisory.sprint.workspaceId, workId: advisory.sprint.workId } };
-  }
-  if (advisory.verify !== undefined) {
-    next[ADVISORY_VERIFY_KEY] = { required: false, value: advisory.verify };
-  }
-  if (advisory.evidence !== undefined) {
-    next[ADVISORY_EVIDENCE_KEY] = { required: false, value: advisory.evidence };
-  }
-  if (advisory.evidenceSnapshot !== undefined) {
-    next[ADVISORY_EVIDENCE_SNAPSHOT_KEY] = { required: false, value: advisory.evidenceSnapshot };
-  }
-  if (advisory.result !== undefined) {
-    next[ADVISORY_RESULT_KEY] = { required: false, value: advisory.result };
+  for (const field of Object.keys(ADVISORY_FIELD_KEYS) as Array<keyof WorkAdvisoryInput>) {
+    const value = advisory[field];
+    if (value === undefined) continue;
+    const copied = field === "decidedBy" ? [...(value as readonly string[])] : field === "sprint" ? { workspaceId: (value as SprintReference).workspaceId, workId: (value as SprintReference).workId } : value;
+    next[ADVISORY_FIELD_KEYS[field]] = { required: false, value: copied };
   }
   return next;
 }
@@ -1941,6 +1936,21 @@ function assertStoryCompletionAdmission(record: WorkRecord, targetStatus: WorkSt
   if (storyScopeNamesOwnerDecider(scope) && !advisoryHasMinutes(record)) {
     fail("WORKSPACE_OWNER_ACCEPTANCE_REQUIRED", "Owner-decided Story requires a decided-by minutes backlink before done");
   }
+}
+
+function validateWorkAdvisoryInput(input: WorkAdvisoryInput, id: string, reasonCode: WorkspaceReasonCode): void {
+  const checks: ReadonlyArray<readonly [keyof WorkAdvisoryInput, (value: unknown) => boolean, string]> = [
+    ["scope", (value) => typeof value === "string" && value.length > 0, "advisory scope must be a non-empty string"],
+    ["decidedBy", (value) => Array.isArray(value) && value.length > 0 && value.every((item) => isMinutesId(item)), "advisory decided-by must be a non-empty list of minutes ids"],
+    ["sprint", isSprintReference, "advisory sprint must be a {workspaceId, workId} qualified reference"],
+  ];
+  for (const [field, valid, message] of checks) {
+    if (input[field] !== undefined && !valid(input[field])) fail(reasonCode, message);
+  }
+  if (input.verify !== undefined) assertAdvisoryEntryShape(ADVISORY_VERIFY_KEY, { required: false, value: input.verify }, id, reasonCode);
+  if (input.evidence !== undefined) assertAdvisoryEntryShape(ADVISORY_EVIDENCE_KEY, { required: false, value: input.evidence }, id, reasonCode);
+  if (input.evidenceSnapshot !== undefined) assertAdvisoryEntryShape(ADVISORY_EVIDENCE_SNAPSHOT_KEY, { required: false, value: input.evidenceSnapshot }, id, reasonCode);
+  if (input.result !== undefined) assertAdvisoryEntryShape(ADVISORY_RESULT_KEY, { required: false, value: input.result }, id, reasonCode);
 }
 
 // Defence in depth on the advisory value shape. The terminal validateWorkGraph over the
@@ -4419,9 +4429,7 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
     if (input.scope !== undefined && input.scope.length === 0) {
       fail("WORKSPACE_STORY_SCOPE_REQUIRED", "Story scope must be a non-empty string");
     }
-    if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
-      fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
-    }
+    validateWorkAdvisoryInput(input, id, "WORKSPACE_INPUT_INVALID");
     const title = normalizeWorkTitle(input.title);
     const labels = normalizeWorkLabels(input.labels ?? []);
     // TCRN-CROSS-STORY-363. An explicit --summary wins; otherwise the first
@@ -4443,10 +4451,7 @@ function createWorkReducerDelta(state: WorkspaceState, input: {
     if (templateRecord !== undefined && !templateRecord.template.appliesTo.includes(input.kind)) {
       throw new TemplateAdmissionError("TEMPLATE_NOT_APPLICABLE", `${templateRecord.template.id}:${input.kind}`);
     }
-    const extensions: Record<string, unknown> = workAdvisoryExtensions({}, {
-      ...(input.scope !== undefined ? { scope: input.scope } : {}),
-      ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
-    });
+    const extensions: Record<string, unknown> = workAdvisoryExtensions({}, input);
     if (templateReceipt !== undefined && templateRecord !== undefined) {
       extensions[templateRecord.registrationId] = { required: true, value: templateBindingFromReceipt(templateReceipt) };
     }
@@ -4615,10 +4620,7 @@ function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id:
     const summarised: WorkRecord = input.summary === undefined
       ? workFieldsForWrite(current)
       : { ...workFieldsForWrite(current), summary: normalizeWorkSummary(input.summary) };
-    const extensions = workAdvisoryExtensions(summarised.extensions, {
-      ...(input.evidence === undefined ? {} : { evidence: input.evidence }),
-      ...(input.evidenceSnapshot === undefined ? {} : { evidenceSnapshot: input.evidenceSnapshot }),
-    });
+    const extensions = workAdvisoryExtensions(summarised.extensions, input);
     const record: WorkRecord = { ...summarised, extensions: extensions as WorkRecord["extensions"], scopeDigest: workExtensionsDigest(extensions), status: input.status, revision: current.revision + 1, updatedAt: input.occurredAt };
     assertWorkTransitionEvidence(current, record, "WORKSPACE_INPUT_INVALID");
     validateBoundTemplateWork(record, state.templates);
@@ -4637,47 +4639,15 @@ function transitionWorkReducerDelta(state: WorkspaceState, input: { readonly id:
 // STORY-300 slice 3: annotateWork's delta, exposed so a batch can compose it. Like
 // createWork and unlike transitionWork, all of its validation already lived inside the
 // closure, so nothing moves across the replay boundary here.
-export function annotateWorkDelta(input: {
-  readonly id: string;
-  readonly scope?: string;
-  readonly decidedBy?: readonly string[];
-  readonly verify?: string;
-  readonly result?: JsonValue;
-  readonly sprint?: SprintReference;
-  readonly title?: string | null;
-  readonly summary?: string | null;
-  readonly labels?: readonly string[];
-  readonly occurredAt: string;
-}): (state: WorkspaceState) => MutationDelta {
+export function annotateWorkDelta(input: WorkAnnotationInput): (state: WorkspaceState) => MutationDelta {
   return (state) => annotateWorkReducerDelta(state, input);
 }
 
-export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease, input: {
-  readonly id: string;
-  readonly scope?: string;
-  readonly decidedBy?: readonly string[];
-  readonly verify?: string;
-  readonly result?: JsonValue;
-  readonly sprint?: SprintReference;
-  readonly title?: string | null;
-  readonly summary?: string | null;
-  readonly labels?: readonly string[];
-} & WorkspaceMutationOptions): Promise<WorkspaceState> {
+export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease, input: WorkAnnotationInput & WorkspaceMutationOptions): Promise<WorkspaceState> {
   return appendEvent(workspaceRoot, lease, (state) => annotateWorkReducerDelta(state, input), input);
 }
 
-function annotateWorkReducerDelta(state: WorkspaceState, input: {
-  readonly id: string;
-  readonly scope?: string;
-  readonly decidedBy?: readonly string[];
-  readonly verify?: string;
-  readonly result?: JsonValue;
-  readonly sprint?: SprintReference;
-  readonly title?: string | null;
-  readonly summary?: string | null;
-  readonly labels?: readonly string[];
-  readonly occurredAt: string;
-}): MutationDelta {
+function annotateWorkReducerDelta(state: WorkspaceState, input: WorkAnnotationInput): MutationDelta {
   {
     const current = workById(state, input.id);
     if (current.tombstone) {
@@ -4686,21 +4656,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (input.scope === undefined && input.decidedBy === undefined && input.verify === undefined && input.result === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
       fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, verify, result, sprint, title, summary, or labels");
     }
-    if (input.scope !== undefined && input.scope.length === 0) {
-      fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
-    }
-    if (input.decidedBy !== undefined && (input.decidedBy.length === 0 || !input.decidedBy.every((item) => isMinutesId(item)))) {
-      fail("WORKSPACE_INPUT_INVALID", "advisory decided-by must be a non-empty list of minutes ids");
-    }
-    if (input.sprint !== undefined && !isSprintReference(input.sprint)) {
-      fail("WORKSPACE_INPUT_INVALID", "advisory sprint must be a {workspaceId, workId} qualified reference");
-    }
-    if (input.verify !== undefined) {
-      assertAdvisoryEntryShape(ADVISORY_VERIFY_KEY, { required: false, value: input.verify }, input.id, "WORKSPACE_INPUT_INVALID");
-    }
-    if (input.result !== undefined) {
-      assertAdvisoryEntryShape(ADVISORY_RESULT_KEY, { required: false, value: input.result }, input.id, "WORKSPACE_INPUT_INVALID");
-    }
+    validateWorkAdvisoryInput(input, input.id, "WORKSPACE_INPUT_INVALID");
     const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
     const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
     // TCRN-CROSS-STORY-363. This is the door the historical backfill goes through:
@@ -4708,13 +4664,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     // that is the only way a pre-363 record acquires one -- by an event that says
     // who wrote it and when, not by a replay-time default.
     const summary = input.summary === undefined ? current.summary : normalizeWorkSummary(input.summary);
-    const extensions = workAdvisoryExtensions(current.extensions, {
-      ...(input.scope !== undefined ? { scope: input.scope } : {}),
-      ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
-      ...(input.verify !== undefined ? { verify: input.verify } : {}),
-      ...(input.result !== undefined ? { result: input.result } : {}),
-      ...(input.sprint !== undefined ? { sprint: input.sprint } : {}),
-    });
+    const extensions = workAdvisoryExtensions(current.extensions, input);
     // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.
     // title, labels and summary are top-level work fields rather than extensions, so an
     // annotation that moved only them once satisfied a separate no-op check here and

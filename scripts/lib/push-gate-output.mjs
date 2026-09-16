@@ -3,10 +3,11 @@
 import { isNonBlockingProofBudgetWarning } from "./proof-budget.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
 import { P8_RELEASE_ARTIFACTS, P8_SUPPORTED_AOS_RELEASES, P8_TAG } from "./p8-workflow-rc.mjs";
+import { P1_TASKS } from "../p1-sequence.mjs";
 
 const DIAGNOSTIC_WORD = /(?:^|[^A-Za-z])(?:warning|warn|error|errors|failed|failure|blocked|refused|denied)(?:$|[^A-Za-z])/iu;
 const P8_SUCCESS_FIELDS = Object.freeze([
-  "artifacts", "mutation", "network", "p8BasisCommit", "privacy", "privacySurfaces",
+  "artifacts", "command", "mutation", "network", "ok", "p8BasisCommit", "privacy", "privacySurfaces",
   "publication", "reasonCode", "releaseStatus", "reproducibility", "sbom",
   "sourceArchive", "supportedAosReleases", "tag", "tests", "trust",
 ]);
@@ -22,6 +23,24 @@ const P8_PRIVACY_SURFACE_FIELDS = Object.freeze([
 ]);
 const P8_PRIVACY_SURFACE_ROW_FIELDS = Object.freeze(["bytes", "entries", "sha256"]);
 const GUARD_SUCCESS_FIELDS = Object.freeze(["guards", "killed", "ok", "reasonCode"]);
+const P1_REASON_CODES = Object.freeze({
+  "format-check": ["FORMAT_VERIFIED"],
+  lint: ["LINT_VERIFIED"],
+  typecheck: ["TYPECHECK_VERIFIED"],
+  build: ["BUILD_VERIFIED"],
+  test: ["TESTS_VERIFIED"],
+  portal: ["PORTAL_VERIFY_TRAIN_GREEN"],
+  source: ["SOURCE_ALLOWLIST_VERIFIED"],
+  archive: ["ARCHIVE_VERIFIED"],
+  "no-sibling-dependency": ["NO_SIBLING_DEPENDENCY"],
+  offline: ["OFFLINE_BOUNDARY_VERIFIED"],
+  governance: ["GOVERNANCE_TOOLCHAIN_VERIFIED"],
+  privacy: ["PRIVACY_SOURCE_CLEAN"],
+  "verification-map": ["VERIFICATION_MAP_VERIFIED"],
+  budget: ["PROOF_BUDGET_VERIFIED", "PROOF_BUDGET_WARNING", "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING"],
+  links: ["MARKDOWN_LINKS_RESOLVED"],
+  "retrieval-eval": ["RETRIEVAL_EVAL_VERIFIED"],
+});
 
 const SUCCESS_RULES = Object.freeze({
   "verify:p8": {
@@ -61,14 +80,23 @@ function diagnosticText(value) {
   return typeof value === "string" && DIAGNOSTIC_WORD.test(value);
 }
 
-function diagnosticValue(value) {
+function diagnosticValue(value, { allowBudgetReasonCode = false, location = "$" } = {}) {
   if (typeof value === "string") return diagnosticText(value);
-  if (Array.isArray(value)) return value.some((entry) => diagnosticValue(entry));
+  if (Array.isArray(value)) return value.some((entry) => diagnosticValue(entry, { allowBudgetReasonCode, location }));
   if (!value || typeof value !== "object") return false;
   return Object.entries(value).some(([key, child]) => {
     // Null/false/empty diagnostic fields are ordinary successful receipt shape.
     if (["error", "errors", "warning", "warnings"].includes(key) && (child === null || child === false || Array.isArray(child) && child.length === 0)) return false;
-    return diagnosticValue(child);
+    // verify:p1 exposes the reason of every inner command in an enumerated
+    // `observedReasonCodes` array.  The budget command's policy-valid warning
+    // is the one typed reason that contains the generic diagnostic word;
+    // permit that exact value only after the caller has established that the
+    // same terminal receipt carries a valid budget notice.  A reason in any
+    // other field, or any other warning/error value in the array, remains red.
+    if (allowBudgetReasonCode && key === "observedReasonCodes" && Array.isArray(child)) {
+      return child.some((entry) => entry !== "PROOF_BUDGET_WARNING" && diagnosticValue(entry, { allowBudgetReasonCode: false, location: `${location}.${key}` }));
+    }
+    return diagnosticValue(child, { allowBudgetReasonCode, location: `${location}.${key}` });
   });
 }
 
@@ -113,9 +141,9 @@ function residualReceipt(receipt, options = {}) {
   };
 }
 
-function receiptHasNonBudgetDiagnostic(receipt, options = {}) {
+function receiptHasNonBudgetDiagnostic(receipt, options = {}, { allowBudgetReasonCode = false } = {}) {
   const residual = residualReceipt(receipt, options);
-  return residual !== null && diagnosticValue(residual);
+  return residual !== null && diagnosticValue(residual, { allowBudgetReasonCode });
 }
 
 /** Return only valid budget notices from one uniquely identified P1 receipt. */
@@ -134,7 +162,13 @@ export function budgetWarningNotices(output, script, options = {}) {
 export function onlyBudgetWarning(output, script, options = {}) {
   const parsed = parseP1TerminalOutput(output, script);
   if (parsed.receipt === null || parsed.budgetNotices.length === 0 || parsed.budgetNotices.some((notice) => !isNonBlockingProofBudgetWarning(notice, options))) return false;
-  if (receiptHasNonBudgetDiagnostic(parsed.receipt, options)) return false;
+  if (parsed.receipt.ok !== true || parsed.receipt.command !== "verify-p1" || !Array.isArray(parsed.receipt.commands) || !Array.isArray(parsed.receipt.observedReasonCodes)) return false;
+  if (JSON.stringify(parsed.receipt.commands) !== JSON.stringify(P1_TASKS)) return false;
+  if (parsed.receipt.observedReasonCodes.length !== P1_TASKS.length) return false;
+  if (parsed.receipt.observedReasonCodes.some((reasonCode, index) => !P1_REASON_CODES[P1_TASKS[index]]?.includes(reasonCode))) return false;
+  if (parsed.budgetNotices.length !== 1) return false;
+  if (parsed.receipt.observedReasonCodes[P1_TASKS.indexOf("budget")] !== parsed.budgetNotices[0].reasonCode) return false;
+  if (receiptHasNonBudgetDiagnostic(parsed.receipt, options, { allowBudgetReasonCode: true })) return false;
   if (parsed.otherJson.some(({ value, line }) => diagnosticValue(value) || diagnosticText(line))) return false;
   if (parsed.nonJson.some((line) => diagnosticText(line))) return false;
   return true;
@@ -152,7 +186,9 @@ export function hasWarningOrError(output, script, expected = {}) {
   const parsed = parseP1TerminalOutput(output, script);
   if (parsed.terminalReceipts.length !== 1 && parsed.terminalReceipts.some((receipt) => Array.isArray(receipt?.notices) && receipt.notices.some((notice) => notice?.command === "budget"))) return true;
   if (parsed.budgetNotices.some((notice) => !isNonBlockingProofBudgetWarning(notice, expected))) return true;
-  if (parsed.terminalReceipts.some((receipt) => receiptHasNonBudgetDiagnostic(receipt, expected))) return true;
+  const allowBudgetReasonCode = parsed.budgetNotices.length > 0 && parsed.budgetNotices.every((notice) => isNonBlockingProofBudgetWarning(notice, expected));
+  if (allowBudgetReasonCode && !onlyBudgetWarning(output, script, expected)) return true;
+  if (parsed.terminalReceipts.some((receipt) => receiptHasNonBudgetDiagnostic(receipt, expected, { allowBudgetReasonCode }))) return true;
   if (parsed.otherJson.some(({ value, line }) => diagnosticValue(value) || diagnosticText(line))) return true;
   return parsed.nonJson.some((line) => diagnosticText(line));
 }
@@ -198,6 +234,8 @@ function childText(value, location, findings) {
 
 function inspectP8Receipt(receipt, expectedSourceFiles, expectedBasisCommit, findings) {
   exactKeys(receipt, P8_SUCCESS_FIELDS, "$", findings);
+  if (receipt.command !== "p8") findings.push({ code: "P8_COMMAND_INVALID", location: "$.command", expected: "p8", actual: receipt.command ?? null });
+  if (receipt.ok !== true) findings.push({ code: "P8_OK_INVALID", location: "$.ok", expected: true, actual: receipt.ok ?? null });
   if (receipt.reasonCode !== "P8_WORKFLOW_RC_VERIFIED") findings.push({ code: "CHILD_TERMINAL_REASON_INVALID", location: "$.reasonCode" });
   if (receipt.tag !== P8_TAG) findings.push({ code: "P8_TAG_MISMATCH", location: "$.tag", expected: P8_TAG, actual: receipt.tag ?? null });
   if (typeof receipt.p8BasisCommit !== "string" || !/^[a-f0-9]{40}$/u.test(receipt.p8BasisCommit)) findings.push({ code: "P8_BASIS_COMMIT_INVALID", location: "$.p8BasisCommit" });

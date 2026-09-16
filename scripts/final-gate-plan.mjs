@@ -4,10 +4,10 @@
 // This module plans work; it never turns a missing or failed result into a cache hit.
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
@@ -1143,44 +1143,104 @@ function unwrapNativeResult(value) {
   return source;
 }
 
+const NATIVE_RESULT_FIELDS = Object.freeze([
+  "candidateDigest", "candidateId", "command", "dependencies", "evidence", "exitCode", "invalidated", "ok",
+  "queueDigest", "reason", "revision", "schemaVersion", "scopeDigest", "stale", "status", "workId",
+]);
+
+function nativeEvidencePath(locator) {
+  if (typeof locator !== "string" || locator.trim().length === 0 || locator.includes("\u0000")) return null;
+  const path = isAbsolute(locator) ? resolve(locator) : resolve(repositoryRoot, locator);
+  try {
+    const info = lstatSync(path);
+    return info.isFile() && !info.isSymbolicLink() ? path : null;
+  } catch {
+    return null;
+  }
+}
+
+function evidenceSubjects(path) {
+  try {
+    const value = JSON.parse(readFileSync(path, "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    const rows = [value, value.record, value.work, value.subject, value.result];
+    return rows.flatMap((row) => row && typeof row === "object" && !Array.isArray(row)
+      ? [row.workId, row.taskId, row.id, row.externalKey, row.key]
+      : []).filter((entry) => typeof entry === "string");
+  } catch {
+    return [];
+  }
+}
+
+function nativeEvidenceProblems(evidence, { workId, externalKey } = {}) {
+  const entries = typeof evidence === "string" ? [evidence] : Array.isArray(evidence) ? evidence : [];
+  const problems = [];
+  const seen = new Set();
+  const key = typeof externalKey === "string" ? externalKey : null;
+  const suffix = key?.match(/(\d+)$/u)?.[1] ?? null;
+  for (const locator of entries) {
+    const path = nativeEvidencePath(locator);
+    if (path === null) {
+      problems.push(`native result evidence is missing or not a regular file: ${String(locator)}`);
+      continue;
+    }
+    if (seen.has(path)) {
+      problems.push(`native result evidence is duplicated: ${String(locator)}`);
+      continue;
+    }
+    seen.add(path);
+    const subjects = evidenceSubjects(path);
+    const explicitSubjects = subjects.filter((subject) => subject === workId || subject === key || subject === suffix);
+    const contradictory = subjects.length > 0 && explicitSubjects.length === 0;
+    const pathMatches = suffix !== null && new RegExp(`(?:^|[^0-9])${suffix}(?:[^0-9]|$)`, "u").test(path);
+    if (contradictory || subjects.length === 0 && !pathMatches) problems.push(`native result evidence does not match ${String(workId ?? externalKey ?? "work")}: ${String(locator)}`);
+  }
+  return problems;
+}
+
 /** Normalize and bind one native implementation outcome to its work record. */
-export function normalizeNativeImplementationResult(value, { workId = null, revision = null, scopeDigest = null, scope = null } = {}) {
+export function normalizeNativeImplementationResult(value, { workId = null, revision = null, scopeDigest = null, scope = null, externalKey = null } = {}) {
   const source = unwrapNativeResult(value);
   if (source === null) return { present: false, valid: false, status: "missing", reason: "native implementation result annotation is missing", result: null };
   if (source.__nativeMarkerInvalid === true) return { present: true, valid: false, status: "invalid", reason: "native implementation result marker is not valid JSON", result: source };
-  const status = batchString(source.status ?? source.state ?? source.outcome ?? source.resultStatus)?.toLowerCase() ?? null;
-  const exitCode = source.exitCode ?? source.exit ?? source.code;
-  const command = batchString(source.command ?? source.invocation ?? source.verifyCommand);
-  const evidence = source.evidence ?? source.evidenceId ?? source.evidencePath ?? source.rawOutput ?? source.artifact;
-  const candidateWorkId = source.workId ?? source.taskId ?? (typeof source.id === "string" && source.id.startsWith("work:") ? source.id : undefined);
-  const boundWorkId = batchString(candidateWorkId);
-  const boundRevision = source.revision ?? source.workRevision;
-  const boundScopeDigest = batchString(source.scopeDigest ?? source.workScopeDigest);
+  const unknownFields = Object.keys(source).filter((field) => !NATIVE_RESULT_FIELDS.includes(field));
+  const status = batchString(source.status)?.toLowerCase() ?? null;
+  const exitCode = source.exitCode;
+  const command = batchString(source.command);
+  const evidence = source.evidence;
+  const boundWorkId = batchString(source.workId);
+  const boundRevision = source.revision;
+  const boundScopeDigest = batchString(source.scopeDigest);
+  const candidateId = batchString(source.candidateId);
+  const candidateDigest = batchString(source.candidateDigest);
+  const successful = status !== null && NATIVE_RESULT_SUCCESS_STATES.has(status);
   const problems = [];
+  if (unknownFields.length > 0) problems.push(`native result has unknown fields: ${unknownFields.join(", ")}`);
+  if (typeof boundWorkId !== "string" || !/^work:[a-f0-9]{24}$/u.test(boundWorkId)) problems.push("result workId is missing or malformed");
+  if (workId !== null && boundWorkId !== workId) problems.push("result work binding differs from the native record");
+  if (!Number.isSafeInteger(boundRevision) || boundRevision < 1) problems.push("result revision is missing or invalid");
+  if (revision !== null && boundRevision !== revision) problems.push("result revision differs from the native record");
+  if (boundScopeDigest === null || !/^[a-f0-9]{64}$/u.test(boundScopeDigest)) problems.push("result scope digest is missing or malformed");
+  if (typeof scope !== "string" || scope.length === 0) problems.push("native stable scope text is missing");
+  else if (boundScopeDigest !== null && sha256(scope) !== boundScopeDigest) problems.push("result scope digest differs from the native scope");
+  if (!Array.isArray(source.dependencies) || source.dependencies.some((dependency) => typeof dependency !== "string" || dependency.trim().length === 0) || new Set(source.dependencies).size !== source.dependencies.length) problems.push("result dependencies must be an explicit unique string array");
+  if (typeof evidence !== "string" && !Array.isArray(evidence) || typeof evidence === "string" && evidence.trim().length === 0 || Array.isArray(evidence) && (evidence.length === 0 || evidence.some((entry) => typeof entry !== "string" || entry.trim().length === 0))) problems.push("result evidence is missing or malformed");
+  if (typeof evidence === "string" || Array.isArray(evidence)) problems.push(...nativeEvidenceProblems(evidence, { workId: boundWorkId, externalKey }));
   if (status === null || !NATIVE_RESULT_SUCCESS_STATES.has(status)) problems.push(status === null ? "result status is missing" : `result status is not successful: ${status}`);
-  if (exitCode !== 0) problems.push("result exitCode is not 0");
-  if (source.ok !== true) problems.push("result ok must be true");
+  if (successful && exitCode !== 0 || !successful && exitCode !== null && (!Number.isSafeInteger(exitCode) || exitCode < 0)) problems.push("result exitCode is invalid for its status");
+  if (successful && source.ok !== true || !successful && source.ok !== false) problems.push(`result ok must be ${successful ? "true" : "false"}`);
   if (command === null) problems.push("result command is missing");
-  const evidencePresent = typeof evidence === "string" && evidence.trim().length > 0
-    || Array.isArray(evidence) && evidence.length > 0 && evidence.every((entry) => typeof entry === "string" && entry.trim().length > 0);
-  if (!evidencePresent) problems.push("successful result evidence is missing");
-  if (workId !== null && boundWorkId !== null && boundWorkId !== workId) problems.push("result work binding differs from the native record");
-  if (revision !== null && boundRevision !== undefined && boundRevision !== revision) problems.push("result revision differs from the native record");
-  // `record.scopeDigest` covers the whole advisory-extension map and therefore
-  // necessarily moves when this result annotation is added.  Bind the result's
-  // scope digest to the stable scope text when the native read exposes it; keep
-  // the extension-map digest as an audit observation rather than comparing an
-  // always-changing value to itself.
-  if (typeof scope === "string" && boundScopeDigest !== null && sha256(scope) !== boundScopeDigest) problems.push("result scope digest differs from the native scope");
   if (source.stale === true || source.invalidated === true) problems.push("result is explicitly stale or invalidated");
+  if (successful && (candidateId === null || candidateDigest === null || !/^[a-f0-9]{64}$/u.test(candidateDigest))) problems.push("successful result candidate identity and digest are missing or malformed");
+  if (candidateId !== null && candidateId.length > 256) problems.push("result candidateId is too long");
   return {
     present: true,
     valid: problems.length === 0,
     status: problems.length === 0 ? "success" : status ?? "invalid",
     reason: problems.length === 0 ? "native result is successful and evidence-bound" : problems.join("; "),
     result: source,
-    candidateId: batchString(source.candidateId ?? source.candidate ?? source.tree ?? source.commit),
-    candidateDigest: batchString(source.candidateDigest ?? source.inputDigest),
+    candidateId,
+    candidateDigest,
     queueDigest: batchString(source.queueDigest),
     workId: boundWorkId,
     revision: Number.isSafeInteger(boundRevision) ? boundRevision : null,
@@ -1221,6 +1281,7 @@ function nativeWorkObservation(record, advisory) {
     revision: Number.isSafeInteger(record?.revision) ? record.revision : null,
     scopeDigest: record?.scopeDigest ?? null,
     scope: advisory?.scope ?? null,
+    externalKey: record?.externalKey ?? null,
   });
   const dependencies = nativeDependencyCandidate(record, advisory, result);
   const blockedReason = batchString(record?.blockedReason ?? record?.blockReason ?? record?.reason ?? result.result?.blockedReason ?? result.result?.reason)
@@ -1281,15 +1342,15 @@ export function isGovernedBatchSeries(value) {
 }
 
 function normalizedBatchTask(value, index) {
-  if (typeof value === "string") return { id: value, status: "unknown", dependencies: [], postAction: false, raw: value };
-  if (!value || typeof value !== "object") return { id: `task-${index + 1}`, status: "unknown", dependencies: [], postAction: false, raw: value };
+  if (typeof value === "string") return { id: value, status: "unknown", dependencies: null, postAction: false, raw: value };
+  if (!value || typeof value !== "object") return { id: `task-${index + 1}`, status: "unknown", dependencies: null, postAction: false, raw: value };
   const status = batchString(value.status ?? value.state) ?? "unknown";
   const nativeObservation = nativeWorkObservation(value, value.advisory);
   const dependencyInput = Object.hasOwn(value, "dependencies") ? value.dependencies
     : Object.hasOwn(value, "dependsOn") ? value.dependsOn
       : Object.hasOwn(value, "prerequisites") ? value.prerequisites
         : nativeObservation.dependencies.valid ? nativeObservation.dependencies.dependencies : undefined;
-  const dependencies = batchArray(dependencyInput).map((entry) => {
+  const dependencies = dependencyInput === undefined ? null : batchArray(dependencyInput).map((entry) => {
     if (typeof entry === "string") return entry;
     return entry && typeof entry === "object" ? batchString(entry.id ?? entry.workId ?? entry.taskId) : null;
   }).filter(Boolean);
@@ -1297,11 +1358,10 @@ function normalizedBatchTask(value, index) {
   const kind = String(value.kind ?? value.type ?? value.category ?? "").toLowerCase();
   const postAction = value.postAction === true || value.postApproved === true || value.approvedPostAction === true || (value.approved === true && /publish|release|install|measure|metric|publication/u.test(`${stage} ${kind}`));
   const suppliedResult = value.implementationResultObservation ?? value.nativeImplementationResult ?? value.implementationResult ?? value.nativeResult ?? value.resultAnnotation ?? null;
+  const rawSuppliedResult = suppliedResult?.result ?? suppliedResult;
   const implementationResult = suppliedResult === null
     ? nativeObservation.result
-    : suppliedResult?.valid === undefined
-      ? normalizeNativeImplementationResult(suppliedResult, { workId: value.id ?? value.workId ?? value.taskId ?? null, revision: value.revision ?? null, scopeDigest: value.scopeDigest ?? null, scope: value.scope ?? null })
-      : suppliedResult;
+    : normalizeNativeImplementationResult(rawSuppliedResult, { workId: value.id ?? value.workId ?? value.taskId ?? null, revision: value.revision ?? null, scopeDigest: value.scopeDigest ?? null, scope: value.scope ?? value.advisory?.scope ?? null, externalKey: value.externalKey ?? null });
   const blockedReason = batchString(value.blockedReason ?? value.blockReason ?? value.reason ?? value.reasonCode ?? implementationResult?.blockedReason ?? implementationResult?.reason);
   const realBlocked = BATCH_BLOCKED_STATES.has(status.toLowerCase()) && blockedReason !== null;
   return {
@@ -1310,7 +1370,7 @@ function normalizedBatchTask(value, index) {
     revision: Number.isSafeInteger(value.revision) ? value.revision : null,
     scopeDigest: batchString(value.scopeDigest ?? value.digest),
     dependencies,
-    dependencySchemaPresent: dependencyInput !== undefined && Array.isArray(dependencyInput),
+    dependencySchemaPresent: Array.isArray(dependencyInput),
     postAction,
     executable: value.executable === true || value.runnable === true,
     running: value.running === true,
@@ -1835,7 +1895,7 @@ export function qualifyBatch(input = {}) {
   const unfinishedDependencies = [];
   const blockedDependencies = [];
   for (const task of activeTasks) {
-    for (const dependency of task.dependencies) {
+    for (const dependency of task.dependencies ?? []) {
       const target = taskMap.get(dependency);
       if (!target) missingDependencies.push(`${task.id}->${dependency}`);
       else if (!target.postAction && target.realBlocked) blockedDependencies.push(`${task.id}->${dependency}`);
