@@ -4,6 +4,7 @@
 // explicit unknown observations.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import test from "node:test";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,7 @@ import {
 } from "../scripts/dispatch-adapter.mjs";
 
 const WORKSPACE = resolve(fileURLToPath(new URL("../../../", import.meta.url)), [".tcrn", "workspace"].join("-"), "cross-project/workspace");
+const CLI_SCRIPT = fileURLToPath(new URL("../scripts/dispatch-adapter.mjs", import.meta.url));
 const ACTIVE_WORK = "work:1891880eb2925c9c777d1d22";
 
 function lifecycle(overrides = {}) {
@@ -42,6 +44,40 @@ test("native resolution reads the live dispatch settings and returns the configu
   assert.equal(result.executable, true);
   assert.equal(result.resolution.value.model, "gpt-5.6-luna");
   assert.equal(result.resolution.value.effort, "max");
+});
+
+test("the actual CLI success entry emits parseable JSON with one real newline", () => {
+  const result = spawnSync(process.execPath, [CLI_SCRIPT, "--workspace", WORKSPACE, "--host", "codex", "--class", "implement"], {
+    cwd: resolve(CLI_SCRIPT, "../.."),
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.error, undefined, String(result.error ?? ""));
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout.endsWith("\\n"), false);
+  assert.equal(result.stdout.endsWith("\n"), true);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(result.stdout, `${JSON.stringify(payload)}\n`);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.reasonCode, "DISPATCH_RESOLUTION_READY");
+});
+
+test("the actual CLI error entry emits parseable JSON with one real newline", () => {
+  const result = spawnSync(process.execPath, [CLI_SCRIPT, "--workspace", WORKSPACE, "--host", "not-a-host", "--class", "implement"], {
+    cwd: resolve(CLI_SCRIPT, "../.."),
+    encoding: "utf8",
+    maxBuffer: 4 * 1024 * 1024,
+  });
+  assert.equal(result.status, 1, result.stderr);
+  assert.equal(result.error, undefined, String(result.error ?? ""));
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout.endsWith("\\n"), false);
+  assert.equal(result.stdout.endsWith("\n"), true);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(result.stdout, `${JSON.stringify(payload)}\n`);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.reasonCode, "DISPATCH_HOST_UNSUPPORTED");
 });
 
 test("fresh lifecycle keeps the instance rule but does not require a host role/provider claim", () => {
