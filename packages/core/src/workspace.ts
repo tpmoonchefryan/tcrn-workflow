@@ -1749,10 +1749,12 @@ export interface SprintReference {
 }
 
 type WorkAdvisoryInput = {
-  readonly scope?: string; readonly decidedBy?: readonly string[];
+  readonly scope?: string;
+  readonly decidedBy?: readonly string[];
   readonly verify?: string;
   readonly sprint?: SprintReference;
-  readonly evidence?: string; readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
+  readonly evidence?: string;
+  readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
   readonly result?: JsonValue;
 };
 
@@ -4648,59 +4650,57 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
 }
 
 function annotateWorkReducerDelta(state: WorkspaceState, input: WorkAnnotationInput): MutationDelta {
-  {
-    const current = workById(state, input.id);
-    if (current.tombstone) {
-      fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
-    }
-    if (input.scope === undefined && input.decidedBy === undefined && input.verify === undefined && input.result === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
-      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, verify, result, sprint, title, summary, or labels");
-    }
-    validateWorkAdvisoryInput(input, input.id, "WORKSPACE_INPUT_INVALID");
-    const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
-    const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
-    // TCRN-CROSS-STORY-363. This is the door the historical backfill goes through:
-    // an annotation may set the summary of a record that has no summary field, and
-    // that is the only way a pre-363 record acquires one -- by an event that says
-    // who wrote it and when, not by a replay-time default.
-    const summary = input.summary === undefined ? current.summary : normalizeWorkSummary(input.summary);
-    const extensions = workAdvisoryExtensions(current.extensions, input);
-    // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.
-    // title, labels and summary are top-level work fields rather than extensions, so an
-    // annotation that moved only them once satisfied a separate no-op check here and
-    // failed the reducer -- the write returned a complete receipt and every later read of
-    // the workspace came back WORKSPACE_EVENT_CORRUPT, with recover no help because the
-    // log was intact and the appended record was the damage. There is now one predicate
-    // and no second no-op comparison beside it: a duplicate that agreed with the reducer
-    // would mask this call's removal, and a duplicate that disagreed would recreate
-    // INC-269 exactly. TCRN-CROSS-STORY-363.
-    assertWorkAnnotation(
-      workAnnotationFields(current),
-      { extensions, title, summary: summary ?? null, labels },
-      input.id,
-      "WORKSPACE_INPUT_INVALID",
-    );
-    const record: WorkRecord = {
-      ...workFieldsForWrite(current),
-      extensions: extensions as WorkRecord["extensions"],
-      scopeDigest: workExtensionsDigest(extensions),
-      title,
-      labels,
-      ...(summary === undefined ? {} : { summary }),
-      revision: current.revision + 1,
-      updatedAt: input.occurredAt,
-    };
-    const templateBound = templateBindingFromWorkRecord(record) !== null;
-    if (record.kind === "Story" && input.scope !== undefined && !templateBound) {
-      const compliance = validateStoryRecord(record);
-      if (!compliance.ok) {
-        fail("WORKSPACE_STORY_SCOPE_INVALID", describeStoryScopeProblems(compliance.problems));
-      }
-    }
-    validateBoundTemplateWork(record, state.templates);
-    const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
-    return { payload: { operation: "work.annotated", record: workJsonFields(record) }, projects: state.projects, work };
+  const current = workById(state, input.id);
+  if (current.tombstone) {
+    fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
   }
+  if (input.scope === undefined && input.decidedBy === undefined && input.verify === undefined && input.result === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
+    fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, verify, result, sprint, title, summary, or labels");
+  }
+  validateWorkAdvisoryInput(input, input.id, "WORKSPACE_INPUT_INVALID");
+  const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
+  const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
+  // TCRN-CROSS-STORY-363. This is the door the historical backfill goes through:
+  // an annotation may set the summary of a record that has no summary field, and
+  // that is the only way a pre-363 record acquires one -- by an event that says
+  // who wrote it and when, not by a replay-time default.
+  const summary = input.summary === undefined ? current.summary : normalizeWorkSummary(input.summary);
+  const extensions = workAdvisoryExtensions(current.extensions, input);
+  // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.
+  // title, labels and summary are top-level work fields rather than extensions, so an
+  // annotation that moved only them once satisfied a separate no-op check here and
+  // failed the reducer -- the write returned a complete receipt and every later read of
+  // the workspace came back WORKSPACE_EVENT_CORRUPT, with recover no help because the
+  // log was intact and the appended record was the damage. There is now one predicate
+  // and no second no-op comparison beside it: a duplicate that agreed with the reducer
+  // would mask this call's removal, and a duplicate that disagreed would recreate
+  // INC-269 exactly. TCRN-CROSS-STORY-363.
+  assertWorkAnnotation(
+    workAnnotationFields(current),
+    { extensions, title, summary: summary ?? null, labels },
+    input.id,
+    "WORKSPACE_INPUT_INVALID",
+  );
+  const record: WorkRecord = {
+    ...workFieldsForWrite(current),
+    extensions: extensions as WorkRecord["extensions"],
+    scopeDigest: workExtensionsDigest(extensions),
+    title,
+    labels,
+    ...(summary === undefined ? {} : { summary }),
+    revision: current.revision + 1,
+    updatedAt: input.occurredAt,
+  };
+  const templateBound = templateBindingFromWorkRecord(record) !== null;
+  if (record.kind === "Story" && input.scope !== undefined && !templateBound) {
+    const compliance = validateStoryRecord(record);
+    if (!compliance.ok) {
+      fail("WORKSPACE_STORY_SCOPE_INVALID", describeStoryScopeProblems(compliance.problems));
+    }
+  }
+  validateBoundTemplateWork(record, state.templates);
+  const work = validateWorkGraph(state.work.map((entry) => entry.id === record.id ? record : entry), templateRegistry(state.templates));
+  return { payload: { operation: "work.annotated", record: workJsonFields(record) }, projects: state.projects, work };
 }
 
 
