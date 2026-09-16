@@ -85,6 +85,15 @@ function failure(reasonCode, error, details = {}) {
   };
 }
 
+/** Read the authoritative scope from the native `work-show` envelope. */
+export function storyScopeFromWorkShow(workShow) {
+  const scope = workShow?.advisory?.scope;
+  if (typeof scope !== "string" || scope.trim().length === 0) {
+    return failure("DISPATCH_WORK_SCOPE_INVALID", "work-show did not expose a non-empty Story scope");
+  }
+  return { ok: true, scope, source: "work-show.advisory.scope" };
+}
+
 function reasonCode(error, fallback = "DISPATCH_RESOLUTION_FAILED") {
   return typeof error?.reasonCode === "string" ? error.reasonCode : fallback;
 }
@@ -401,7 +410,9 @@ function liveWorkRead(workspace, workId) {
     const record = envelope?.record;
     if (!isRecord(record) || record.id !== workId) return failure("DISPATCH_WORK_BINDING_MISMATCH", "work-show returned a different work item", { expected: workId, actual: record?.id ?? null });
     if (record.tombstone !== false || !["ready", "active"].includes(record.status)) return failure("DISPATCH_WORK_NOT_READY", "the bound work item is not ready for dispatch", { status: record.status ?? null, tombstone: record.tombstone ?? null });
-    return { ok: true, envelope, record };
+    const scope = storyScopeFromWorkShow(envelope);
+    if (!scope.ok) return scope;
+    return { ok: true, envelope, record, scope: scope.scope };
   } catch (error) {
     return failure("DISPATCH_WORK_READ_INVALID", "current work-show is not readable JSON", { error: String(error?.message ?? error) });
   }
@@ -514,7 +525,7 @@ export async function validateDispatchInvocation({ prepared, workspace, host, ta
     resolution: current.resolution,
     invocation: { model: actualModel, effort: actualEffort, workId: boundWorkId, scopeDigest: live.record.scopeDigest ?? null },
     lifecycle: evidence,
-    work: { id: live.record.id, revision: live.record.revision, scopeDigest: live.record.scopeDigest, status: live.record.status },
+    work: { id: live.record.id, revision: live.record.revision, scopeDigest: live.record.scopeDigest, scope: live.scope, status: live.record.status },
     observations: {
       nativeRole: invocationValue(observedLifecycle, ["nativeRole", "agentRole"]) ?? null,
       provider: invocationValue(observedLifecycle, ["provider", "providerIdentity"]) ?? null,
