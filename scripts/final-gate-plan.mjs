@@ -1186,14 +1186,19 @@ function normalizedBatchTask(value, index) {
     postAction,
     executable: value.executable === true || value.runnable === true,
     running: value.running === true,
+    // An implementation result is a native work note (normally an advisory
+    // verify command recorded by work-annotate), not a second completion
+    // receipt. It is considered complete only by an acceptance-stage read.
+    implementationRecorded: value.implementationRecorded === true,
     realBlocked,
     blockedReason,
     raw: value,
   };
 }
 
-function taskIsComplete(task) {
-  return BATCH_COMPLETE_STATES.has(String(task?.status ?? "").toLowerCase());
+function taskIsComplete(task, { acceptanceStage = false } = {}) {
+  return BATCH_COMPLETE_STATES.has(String(task?.status ?? "").toLowerCase())
+    || acceptanceStage && task?.implementationRecorded === true;
 }
 
 function batchCandidate(value) {
@@ -1373,6 +1378,7 @@ function stableTaskSnapshot(taskSource) {
     revision: task?.revision ?? null,
     scopeDigest: task?.scopeDigest ?? null,
     dependencies: task?.dependencies ?? task?.dependsOn ?? task?.prerequisites,
+    implementationRecorded: task?.implementationRecorded === true,
   }));
 }
 
@@ -1454,7 +1460,17 @@ export async function readNativeBatchState({ workspace, engineCli, workIds = [],
     if (!record || record.id !== id || !Number.isSafeInteger(record.revision) || record.revision < 1) return { ok: false, reasonCode: "BATCH_NATIVE_REVISION_NOT_VERIFIABLE", workId: id };
     const listed = selectedRecords.find((candidate) => candidate.id === id);
     if (listed?.revision !== record.revision) return { ok: false, reasonCode: "BATCH_NATIVE_REVISION_DRIFT", workId: id, listed: listed?.revision ?? null, shown: record.revision };
-    shows.push(record);
+    const advisory = shown.result?.advisory ?? shown.result?.result?.advisory;
+    shows.push({
+      ...record,
+      // The command is a native readback; carrying its verify pointer lets
+      // acceptance qualification distinguish implemented active work from
+      // untouched active work without creating a completion-store authority.
+      ...(typeof advisory?.verify === "string" && advisory.verify.trim().length > 0 ? {
+        implementationRecorded: true,
+        implementationVerify: advisory.verify,
+      } : {}),
+    });
   }
   const approvedDependencies = approvedStageDependencies({ series, pack, workIds });
   if (approvedDependencies !== null) {
@@ -1679,6 +1695,7 @@ export function qualifyBatch(input = {}) {
   // This keeps batch qualification on the same chain read used by every other
   // work operation and avoids a second completion state machine.
   const tasks = taskSource.map(normalizedBatchTask);
+  const acceptanceStage = ["candidate-final", "publication", "merge-sensitive"].includes(actualBinding.stage);
   const activeTasks = tasks.filter((task) => !task.postAction);
   const postActions = tasks.filter((task) => task.postAction || batchPostAction(task.raw));
   const taskMap = new Map(tasks.map((task) => [task.id, task]));
@@ -1690,7 +1707,7 @@ export function qualifyBatch(input = {}) {
       const target = taskMap.get(dependency);
       if (!target) missingDependencies.push(`${task.id}->${dependency}`);
       else if (!target.postAction && target.realBlocked) blockedDependencies.push(`${task.id}->${dependency}`);
-      else if (!target.postAction && !taskIsComplete(target)) unfinishedDependencies.push(`${task.id}->${dependency}`);
+      else if (!target.postAction && !taskIsComplete(target, { acceptanceStage })) unfinishedDependencies.push(`${task.id}->${dependency}`);
     }
   }
   if (missingDependencies.length > 0 || blockedDependencies.length > 0) {
@@ -1701,7 +1718,7 @@ export function qualifyBatch(input = {}) {
   }
   if (expectedQueueDigest === null || actualQueueDigest === null) return { ...base, status: "not-verifiable", reasonCode: "BATCH_QUEUE_DIGEST_NOT_VERIFIABLE", tasks, postActions, queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the current task queue has no stable comparison digest"] };
   if (actualQueueDigest !== expectedQueueDigest) return { ...base, status: "rejected", reasonCode: "BATCH_QUEUE_STALE", tasks, postActions, queueDigest: { expected: expectedQueueDigest, actual: actualQueueDigest }, reasons: ["the task queue changed while qualification was being evaluated"] };
-  const remainingTasks = activeTasks.filter((task) => !taskIsComplete(task) && !task.realBlocked);
+  const remainingTasks = activeTasks.filter((task) => !taskIsComplete(task, { acceptanceStage }) && !task.realBlocked);
   const executableWork = remainingTasks.filter((task) => task.executable || task.running || BATCH_EXECUTABLE_STATES.has(task.status.toLowerCase()) || task.status.toLowerCase() === "unknown");
   const unknownRepositoryAgents = strictObservation || hasObserver ? mergeObservedRows(observerUnknownRepositoryProcesses(observerResult.observer, "agents"), observerUnknownScopeProcesses(observerResult.observer)) : [];
   const runningAgentSource = strictObservation || hasObserver ? observerArray(observerResult.observer, "agents") : source.runningAgents ?? source.runningSubagents ?? source.inFlightAgents ?? source.activeSubagents ?? source.subagents ?? source.state?.runningAgents;
@@ -1710,7 +1727,7 @@ export function qualifyBatch(input = {}) {
   const writes = mergeObservedRows(batchArray(strictObservation || hasObserver ? observerArray(observerResult.observer, "writes") : source.writesInProgress ?? source.activeWrites ?? source.writes ?? source.transactions), unknownRepositoryWrites).filter(observedProcessActive);
   const writeStatus = String(strictObservation || hasObserver ? "" : source.writeStatus ?? source.writeState ?? source.transactionStatus ?? "").toLowerCase();
   const runningWrites = strictObservation || hasObserver ? writes.length > 0 : source.writeInProgress === true || source.writing === true || BATCH_RUNNING_STATES.has(writeStatus) || writes.length > 0;
-  const remainingPrerequisites = activeTasks.filter((task) => !taskIsComplete(task) && !task.realBlocked).map((task) => task.id);
+  const remainingPrerequisites = activeTasks.filter((task) => !taskIsComplete(task, { acceptanceStage }) && !task.realBlocked).map((task) => task.id);
   const blockedWithoutEvidence = activeTasks.filter((task) => BATCH_BLOCKED_STATES.has(task.status.toLowerCase()) && !task.realBlocked).map((task) => task.id);
   if (blockedWithoutEvidence.length > 0) return { ...base, status: "not-verifiable", reasonCode: "BATCH_BLOCKED_NOT_VERIFIABLE", tasks, postActions, remainingPrerequisites: blockedWithoutEvidence, reasons: [`blocked task lacks a real reason/evidence: ${blockedWithoutEvidence.join(", ")}`] };
   if (remainingTasks.length > 0 || runningAgents.length > 0 || runningWrites) {
