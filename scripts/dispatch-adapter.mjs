@@ -400,7 +400,7 @@ function liveWorkRead(workspace, workId) {
     const envelope = JSON.parse(String(result.stdout ?? ""));
     const record = envelope?.record;
     if (!isRecord(record) || record.id !== workId) return failure("DISPATCH_WORK_BINDING_MISMATCH", "work-show returned a different work item", { expected: workId, actual: record?.id ?? null });
-    if (record.tombstone !== false || record.status !== "active") return failure("DISPATCH_WORK_NOT_ACTIVE", "the bound work item is not active", { status: record.status ?? null, tombstone: record.tombstone ?? null });
+    if (record.tombstone !== false || !["ready", "active"].includes(record.status)) return failure("DISPATCH_WORK_NOT_READY", "the bound work item is not ready for dispatch", { status: record.status ?? null, tombstone: record.tombstone ?? null });
     return { ok: true, envelope, record };
   } catch (error) {
     return failure("DISPATCH_WORK_READ_INVALID", "current work-show is not readable JSON", { error: String(error?.message ?? error) });
