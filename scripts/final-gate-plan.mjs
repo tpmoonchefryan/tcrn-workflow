@@ -1148,9 +1148,16 @@ export function isGovernedBatchSeries(value) {
   // carrying a batch object.  The work id is the reliable series boundary in
   // that legacy-shaped envelope, so it also suppresses the old advisory path.
   const workIds = new Set([
+    "work:7adbe918fcd753cfdc46dd4", "work:35924e9a902cd39feb6356cc",
+    "work:09d99af89b027f335a2e0bde", "work:ec5a800eaa9c24fe9442505c",
+    "work:32efa49143fa4e2dcf3148c0",
     "work:f3d3166ff702e7c32c7c6e50", "work:8b9f35d8e42cf84e8a01181c",
     "work:17929c5b42ac1736bcecb1f2", "work:b621023cb60591c0716e69eb",
-    "work:98f1f575b1d3612fdc302d80", "work:8331d5d13a8df2124b1bba44",
+    "work:98f1f575b1d3612fdc302d80", "work:80a3d77ab631e5f9762437c1",
+    "work:62d23a27246cad5bfc78bc17", "work:8ee553b42a5574f4ba33185f",
+    "work:4e0e1938be1c82f6267006c3", "work:ff139825bcdfdb1828b05ae2",
+    "work:31ebdb5e66c984aea5d82e82", "work:5889debe71fa5c214fa3eb87",
+    "work:8c1de912dd6721a7e1375139", "work:8331d5d13a8df2124b1bba44",
     "work:a9e16b025a21b9cf7238a5ce", "work:1891880eb2925c9c777d1d22",
     "work:08e1f20a81121b28fa5a4d32", "work:2eb462340584547dd258e4f5",
   ]);
