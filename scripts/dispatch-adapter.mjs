@@ -443,6 +443,12 @@ export function buildNativeSpawnInput(prepared, lifecycle) {
     model: Object.hasOwn(lifecycle, "model") ? lifecycle.model : value.model,
     effort: Object.hasOwn(lifecycle, "effort") ? lifecycle.effort : value.effort,
   };
+  const lifecycleClass = invocationValue(lifecycle, ["taskClass", "dispatchClass", "class"]);
+  if (lifecycleClass !== undefined && lifecycleClass !== prepared.resolution.taskClass) return failure("DISPATCH_CLASS_MISMATCH", "lifecycle class does not match the engine resolution", { expected: prepared.resolution.taskClass, actual: lifecycleClass });
+  const lifecycleHost = invocationValue(lifecycle, ["host"]);
+  if (lifecycleHost !== undefined && lifecycleHost !== prepared.resolution.host) return failure("DISPATCH_HOST_MISMATCH", "lifecycle host does not match the engine resolution", { expected: prepared.resolution.host, actual: lifecycleHost });
+  const lifecycleMode = invocationValue(lifecycle, ["mode", "dispatchMode"]);
+  if (lifecycleMode !== undefined && lifecycleMode !== prepared.resolution.mode) return failure("DISPATCH_MODE_MISMATCH", "lifecycle mode does not match the engine resolution", { expected: prepared.resolution.mode, actual: lifecycleMode });
   const lifecycleResult = validateAgentLifecycle(declared);
   if (!lifecycleResult.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "lifecycle declaration is not dispatchable", { lifecycle: lifecycleResult });
   if (declared.model !== value.model) return failure("DISPATCH_MODEL_MISMATCH", "lifecycle model does not match the engine resolution", { expected: value.model, actual: declared.model });
@@ -489,6 +495,16 @@ export async function validateDispatchInvocation({ prepared, workspace, host, ta
   if (actualModel !== current.resolution.value.model) return failure("DISPATCH_MODEL_MISMATCH", "native invocation model does not match the engine resolution", { expected: current.resolution.value.model, actual: actualModel });
   if (actualEffort !== current.resolution.value.effort) return failure("DISPATCH_EFFORT_MISMATCH", "native invocation effort does not match the engine resolution", { expected: current.resolution.value.effort, actual: actualEffort });
 
+  for (const [name, expected, aliases] of [
+    ["workspaceId", current.workspaceId, ["workspaceId", "workspace_id"]],
+    ["host", current.resolution.host, ["host"]],
+    ["taskClass", current.resolution.taskClass, ["taskClass", "dispatchClass", "class"]],
+    ["mode", current.resolution.mode, ["mode", "dispatchMode"]],
+  ]) {
+    const actual = invocationValue(invocation, aliases);
+    if (actual !== undefined && actual !== expected) return failure("DISPATCH_INVOCATION_BINDING_MISMATCH", `native invocation ${name} does not match the engine resolution`, { field: name, expected, actual });
+  }
+
   if (!isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "a lifecycle declaration is required for native dispatch");
   const declared = {
     ...lifecycle,
@@ -497,6 +513,12 @@ export async function validateDispatchInvocation({ prepared, workspace, host, ta
   };
   const lifecycleResult = validateAgentLifecycle(declared);
   if (!lifecycleResult.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "lifecycle declaration is not dispatchable", { lifecycle: lifecycleResult });
+  const lifecycleClass = invocationValue(lifecycle, ["taskClass", "dispatchClass", "class"]);
+  if (lifecycleClass !== undefined && lifecycleClass !== current.resolution.taskClass) return failure("DISPATCH_CLASS_MISMATCH", "lifecycle class does not match the engine resolution", { expected: current.resolution.taskClass, actual: lifecycleClass });
+  const lifecycleHost = invocationValue(lifecycle, ["host"]);
+  if (lifecycleHost !== undefined && lifecycleHost !== current.resolution.host) return failure("DISPATCH_HOST_MISMATCH", "lifecycle host does not match the engine resolution", { expected: current.resolution.host, actual: lifecycleHost });
+  const lifecycleMode = invocationValue(lifecycle, ["mode", "dispatchMode"]);
+  if (lifecycleMode !== undefined && lifecycleMode !== current.resolution.mode) return failure("DISPATCH_MODE_MISMATCH", "lifecycle mode does not match the engine resolution", { expected: current.resolution.mode, actual: lifecycleMode });
   const boundWorkId = workId ?? invocationValue(lifecycle, ["workId", "work_id", "taskId", "task_id"]) ?? invocationValue(invocation, ["workId", "work_id", "taskId", "task_id"]);
   if (typeof boundWorkId !== "string" || boundWorkId.trim().length === 0) return failure("DISPATCH_WORK_BINDING_REQUIRED", "a work id is required for native dispatch");
   const declaredWorkId = invocationValue(lifecycle, ["workId", "work_id", "taskId", "task_id"]);
