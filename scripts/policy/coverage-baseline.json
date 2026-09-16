@@ -396,8 +396,8 @@
       ]
     },
     "tests/dispatch-readiness-compliance.test.mjs": {
-      "testCount": 22,
-      "assertionCount": 132,
+      "testCount": 26,
+      "assertionCount": 182,
       "testNames": [
         "dispatch brief accepts all five execution elements",
         "removing each dispatch element is a stable red leg",
@@ -417,9 +417,13 @@
         "STORY-424: real spawn plus child turn context is green, while task-id/compaction-only reuse is red",
         "STORY-424 R01: every missing observed identity/fact is structured unknown, never an exception",
         "STORY-424 R01: outer work binding is retained while explicit inner/source contradictions are red",
+        "dispatch adapter reads real source CLI work-show advisory.scope and safely rejects incomplete or mismatched scope shapes",
         "STORY-424 R2: code-owned role/work/Pack/phase binding is checked against the live scope and brief",
         "STORY-424 R2: stale chain, work, configuration, and source baselines are rejected",
         "STORY-424 R2: receipt bytes and actual spawn/child association bind the full digest and resolved tuple",
+        "STORY-434 R3: canonical receipt JSON omits optional undefined objects and nulls undefined array slots",
+        "STORY-434 R3: absent, explicit-null, and terminal predecessors yield parseable verifiable receipts",
+        "STORY-434 R3: optional-field normalization preserves digest-derived task-name stability and self-reference exclusion",
         "STORY-424 R3: missing and wrong-type storyScope return structured red instead of throwing"
       ]
     },
@@ -1530,7 +1534,7 @@
     },
     "tests/s301-proof-budget.test.mjs": {
       "testCount": 16,
-      "assertionCount": 107,
+      "assertionCount": 142,
       "testNames": [
         "STORY-301: the proof budget runs inside the gate train",
         "STORY-301: the budget verb refuses a ratio above the recorded line",
@@ -1538,7 +1542,7 @@
         "STORY-301: reading the budget policy does not change it",
         "EPIC135: the approved budget thresholds classify every real boundary",
         "EPIC135: only the complete structured budget notice is non-blocking",
-        "TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocking for the exact bound closure",
+        "TCRN-CROSS-STORY-430: the raw exceeded ratio stays nonblocking only for the exact R3 execution binding",
         "TCRN-CROSS-STORY-430: missing, caller-invented, future, or malformed bindings stay hard-red",
         "EPIC135: push-gate budget exemption requires one terminal receipt and no other diagnostics",
         "TCRN-CROSS-STORY-430: scoped exceeded notice is shared by P1/push and never hides a real error",

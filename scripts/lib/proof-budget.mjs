@@ -15,7 +15,7 @@ export const PROOF_BUDGET_VERIFIED_REASON = "PROOF_BUDGET_VERIFIED";
 export const PROOF_BUDGET_SCOPED_NONBLOCKING_REASON = "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING";
 export const PROOF_BUDGET_SCOPE_BINDING_ENV = "TCRN_PROOF_BUDGET_SCOPE_BINDING_SHA256";
 
-const APPROVED_SCOPE_BINDING_SHA256 = "d3fdf10954cf84e213d6a6349af92195989762615b452042492bd070e347aaaf";
+const APPROVED_SCOPE_BINDING_SHA256 = "97f50959e960e34adc431964f8cf46b1b5700ae47c4b38c274fc27165ab75e49";
 
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -102,7 +102,7 @@ function configuredScopeBinding(policy) {
     || execution.bindingKind !== "governed-task-role"
     || execution.role !== "implementation" || execution.personaProfileId !== null
     || execution.phase !== "rework" || execution.taskClass !== "implement"
-    || execution.pack !== "INC320/RECEIPT-FREEZE-REPAIR"
+    || execution.pack !== "INC320/RECEIPT-JSON-FREEZE-R3"
     || !/^[a-f0-9]{64}$/u.test(execution.activePackBriefSha256 ?? "")
     || !/^[a-f0-9]{64}$/u.test(execution.technicalPackSha256 ?? "")
     || !/^[a-f0-9]{64}$/u.test(execution.roleBindingAmendmentSha256 ?? "")
@@ -113,11 +113,15 @@ function configuredScopeBinding(policy) {
     || execution.workIds.length !== binding.allowedWork.length
     || binding.allowedWork.some((work) => !execution.workIds.includes(work.id))
     || !dispatch || typeof dispatch !== "object" || Array.isArray(dispatch)
-    || dispatch.workspaceId !== binding.workspaceId || dispatch.workspaceVersion !== 6369
-    || dispatch.headEventHash !== "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca"
+    || dispatch.workspaceId !== binding.workspaceId || dispatch.workspaceVersion !== 6379
+    || dispatch.headEventHash !== "583946c834a9c7bf98df12472d0caf0726a7e083f3ee42c8f71fac1e2de3447b"
     || dispatch.configDigest !== "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f"
     || dispatch.host !== "codex" || dispatch.mode !== "frontier" || dispatch.resolutionInput !== "implement"
     || dispatch.model !== "gpt-5.6-luna" || dispatch.effort !== "max" || dispatch.forkTurns !== "none"
+    || !dispatch.primaryWorkAtSpawn || dispatch.primaryWorkAtSpawn.externalKey !== primary.externalKey
+    || dispatch.primaryWorkAtSpawn.id !== primary.id || dispatch.primaryWorkAtSpawn.revision !== 5
+    || dispatch.primaryWorkAtSpawn.scopeDigest !== "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c"
+    || dispatch.primaryWorkAtSpawn.status !== "active"
     || !/^[a-f0-9]{64}$/u.test(execution.bindingSha256 ?? "")) {
     throw policyError("scopedDisposition.currentExecution");
   }

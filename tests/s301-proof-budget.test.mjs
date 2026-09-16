@@ -136,14 +136,14 @@ test("EPIC135: only the complete structured budget notice is non-blocking", asyn
   assert.equal(isNonBlockingProofBudgetWarning({ ...warning, reasonCode: "OTHER_WARNING" }), false);
 });
 
-test("TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocking for the exact bound closure", async () => {
+test("TCRN-CROSS-STORY-430: the raw exceeded ratio stays nonblocking only for the exact R3 execution binding", async () => {
   const policy = await readPolicy();
   const binding = policy.ratioPolicy.scopedDisposition.binding;
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
   assert.equal(policy.warningRatio, 2.4);
   assert.equal(policy.hardRatio, 2.5);
-  assert.equal(binding.scopeId, "INIT-051/INC320/RECEIPT-FREEZE-REPAIR");
-  assert.equal(binding.currentExecution.pack, "INC320/RECEIPT-FREEZE-REPAIR");
+  assert.equal(binding.scopeId, "INIT-051/INC320/RECEIPT-JSON-FREEZE-R3");
+  assert.equal(binding.currentExecution.pack, "INC320/RECEIPT-JSON-FREEZE-R3");
   assert.equal(binding.currentExecution.phase, "rework");
   assert.equal(binding.currentExecution.primaryWork.externalKey, "TCRN-CROSS-STORY-434");
   assert.equal(binding.currentExecution.primaryWork.id, "work:1891880eb2925c9c777d1d22");
@@ -152,8 +152,8 @@ test("TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocki
   assert.equal(binding.currentExecution.role, "implementation");
   assert.equal(binding.currentExecution.bindingKind, "governed-task-role");
   assert.equal(binding.currentExecution.personaProfileId, null);
-  assert.equal(binding.currentExecution.dispatch.workspaceVersion, 6369);
-  assert.equal(binding.currentExecution.dispatch.headEventHash, "a05b72faf3759572fb200c4c906b8b04c29869d3f7793dcb0b5542c4544bb9ca");
+  assert.equal(binding.currentExecution.dispatch.workspaceVersion, 6379);
+  assert.equal(binding.currentExecution.dispatch.headEventHash, "583946c834a9c7bf98df12472d0caf0726a7e083f3ee42c8f71fac1e2de3447b");
   assert.equal(binding.currentExecution.dispatch.configDigest, "c64d5248a2580243fd301485a3afc4629d2dccd1f928a3d527d6fd1f3d00f91f");
   assert.equal(binding.currentExecution.dispatch.host, "codex");
   assert.equal(binding.currentExecution.dispatch.mode, "frontier");
@@ -161,11 +161,15 @@ test("TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocki
   assert.equal(binding.currentExecution.dispatch.model, "gpt-5.6-luna");
   assert.equal(binding.currentExecution.dispatch.effort, "max");
   assert.equal(binding.currentExecution.dispatch.forkTurns, "none");
-  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.revision, 2);
-  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.scopeDigest, "cfc7fab183148c3c09a2616b7bf559422fece73cb0bdaa586285cb2418a5f5d3");
-  assert.equal(binding.currentExecution.sourceAtDispatch.engine.commit, "3c6e1c7755423d9efbaa475f8f761ab475fade2e");
-  assert.equal(binding.currentExecution.sourceAtDispatch.helper.commit, "2f5d78cf52814c8c18f5b68de04c300bbabb3ce8");
-  assert.equal(binding.currentExecution.sourceBoundary.engineBaseCommit, "3c6e1c7755423d9efbaa475f8f761ab475fade2e");
+  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.revision, 5);
+  assert.equal(binding.currentExecution.dispatch.primaryWorkAtSpawn.scopeDigest, "b87572224ba58f10c78b916a15af72acc78d524ab1a4f123533012434fb1746c");
+  assert.equal(binding.currentExecution.sourceAtDispatch.engine.commit, "aa3706028b6bd5803ec6bf9fdef048586b56788f");
+  assert.equal(binding.currentExecution.sourceAtDispatch.engine.tree, "89395f9a8b7a1a1e52c566232921530f61067b60");
+  assert.equal(binding.currentExecution.sourceAtDispatch.helper.commit, "9cf5807d14f12ebbb0a113dade2c8973492a37b2");
+  assert.equal(binding.currentExecution.sourceAtDispatch.helper.tree, "e4c758bdc64d41882159a7c81d746dbfddb7e86a");
+  assert.equal(binding.currentExecution.sourceBoundary.engineBaseCommit, "aa3706028b6bd5803ec6bf9fdef048586b56788f");
+  assert.equal(binding.currentExecution.dispatch.nativeToolCallId, null);
+  assert.equal(binding.currentExecution.dispatch.sourceEvidenceDigest, null);
   for (const field of ["activePackBriefSha256", "technicalPackSha256", "roleBindingAmendmentSha256", "serialPackRecordSha256"]) {
     assert.match(binding.currentExecution[field], /^[a-f0-9]{64}$/u, field);
   }
@@ -179,8 +183,11 @@ test("TCRN-CROSS-STORY-430: the raw 2.5348 ratio stays exceeded but is nonblocki
     "TCRN-CROSS-STORY-434",
   ]);
   assert.equal(binding.allowedWork.some((work) => work.externalKey === "TCRN-CROSS-STORY-431"), false);
+  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings.length, 2);
   assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[0].executionSha256, "6f9d7142ac6c940db0c452f564d8e24bd2be29b39b191d18216d9405ae497f76");
-  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[0].disposition, "retained for historical audit only; not reusable as the current execution");
+  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[1].executionSha256, "3665620350a71e8f4258699d988cfbb50f3fd25a9564e7019a994e986a5be5e7");
+  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings[1].pack, "INC320/RECEIPT-FREEZE-REPAIR");
+  assert.equal(policy.ratioPolicy.scopedDisposition.historicalBindings.every((entry) => entry.disposition === "retained for historical audit only; not reusable as the current execution"), true);
   const correctionWork = binding.allowedWork.filter((work) => ["TCRN-CROSS-STORY-432", "TCRN-CROSS-STORY-433", "TCRN-CROSS-STORY-434"].includes(work.externalKey));
   assert.equal(correctionWork.length, 3);
   assert.equal(correctionWork.every((work) => binding.currentExecution.workIds.includes(work.id)), true);

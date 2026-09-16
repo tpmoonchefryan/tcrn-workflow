@@ -49,12 +49,48 @@ function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function stableJson(value) {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+function jsonSerializationError(path, detail) {
+  return Object.assign(new TypeError(`canonical JSON value at ${path} is invalid: ${detail}`), {
+    reasonCode: "DISPATCH_JSON_VALUE_INVALID",
+    field: path,
+  });
+}
+
+function stableJson(value, { path = "$", inArray = false, active = new Set() } = {}) {
+  if (value === undefined) return inArray ? "null" : undefined;
+  if (value === null || typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw jsonSerializationError(path, "number must be finite");
+    return JSON.stringify(value);
   }
-  return JSON.stringify(value);
+  if (typeof value !== "object") throw jsonSerializationError(path, `unsupported ${typeof value}`);
+  if (active.has(value)) throw jsonSerializationError(path, "cyclic object");
+
+  active.add(value);
+  let encoded;
+  if (Array.isArray(value)) {
+    const items = Array.from({ length: value.length }, (_, index) => (
+      stableJson(value[index], { path: `${path}[${index}]`, inArray: true, active }) ?? "null"
+    ));
+    encoded = `[${items.join(",")}]`;
+  } else {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw jsonSerializationError(path, "object must be a plain JSON record");
+    }
+    const fields = [];
+    for (const key of Object.keys(value).sort()) {
+      const child = value[key];
+      // JSON's schema-safe object behavior is to omit optional undefined fields.
+      // Required fields are checked by their owning schema before/after encoding.
+      if (child === undefined) continue;
+      const childJson = stableJson(child, { path: `${path}.${key}`, active });
+      if (childJson !== undefined) fields.push(`${JSON.stringify(key)}:${childJson}`);
+    }
+    encoded = `{${fields.join(",")}}`;
+  }
+  active.delete(value);
+  return encoded;
 }
 
 function digest(value) {
@@ -69,8 +105,10 @@ function isSha256(value) {
   return typeof value === "string" && /^[a-f0-9]{64}$/u.test(value);
 }
 
-function canonicalJsonBytes(value) {
-  return Buffer.from(`${stableJson(value)}\n`, "utf8");
+export function canonicalJsonBytes(value) {
+  const encoded = stableJson(value);
+  if (typeof encoded !== "string") throw jsonSerializationError("$", "the receipt root must be a JSON value");
+  return Buffer.from(`${encoded}\n`, "utf8");
 }
 
 function fileDigestRecord(path, bytes) {
@@ -298,6 +336,7 @@ export function validateTaskRoleBinding({ binding, brief, liveWork, liveScope, r
   if (lifecycle?.newInstance !== true || lifecycle?.forkTurns !== "none" || lifecycle?.sameTaskRunning !== false) problems.push({ code: "DISPATCH_LIFECYCLE_INVALID", field: "agentLifecycle", expected: { newInstance: true, forkTurns: "none", sameTaskRunning: false }, actual: { newInstance: lifecycle?.newInstance ?? null, forkTurns: lifecycle?.forkTurns ?? null, sameTaskRunning: lifecycle?.sameTaskRunning ?? null } });
   if (lifecycle?.agentId !== undefined && lifecycle.agentId !== null) problems.push({ code: "DISPATCH_PRESPAWN_AGENT_ID_FORBIDDEN", field: "agentLifecycle.agentId", actual: lifecycle.agentId });
   if (stableJson(lifecycle?.predecessor ?? null) !== stableJson(tuple.predecessor)) problems.push({ code: "DISPATCH_PREDECESSOR_BINDING_MISMATCH", field: "agentLifecycle.predecessor" });
+  if (stableJson(lifecycle?.predecessorEvidence ?? null) !== stableJson(tuple.predecessorEvidence)) problems.push({ code: "DISPATCH_PREDECESSOR_EVIDENCE_MISMATCH", field: "agentLifecycle.predecessorEvidence" });
   const briefValidation = validateDispatchBrief(brief);
   if (!briefValidation.ok) problems.push({ code: "DISPATCH_BRIEF_INVALID", field: "brief", reasonCode: briefValidation.reasonCode, problems: briefValidation.problems });
 
@@ -686,6 +725,8 @@ export async function preparePreSpawnReceipt({ workspace, roleBindingPath, brief
   }
   const expectedPredecessor = binding.predecessor ?? null;
   if (templateLifecycle.predecessor !== undefined && stableJson(templateLifecycle.predecessor) !== stableJson(expectedPredecessor)) return failure("DISPATCH_PREDECESSOR_BINDING_MISMATCH", "brief predecessor differs from the task-role binding");
+  const expectedPredecessorEvidence = binding.predecessorEvidence ?? null;
+  if (templateLifecycle.predecessorEvidence !== undefined && stableJson(templateLifecycle.predecessorEvidence) !== stableJson(expectedPredecessorEvidence)) return failure("DISPATCH_PREDECESSOR_EVIDENCE_MISMATCH", "brief predecessor evidence differs from the task-role binding");
   if (templateLifecycle.model !== undefined && templateLifecycle.model !== resolved.resolution.value.model) return failure("DISPATCH_MODEL_MISMATCH", "caller brief model differs from the engine resolution", { expected: resolved.resolution.value.model, actual: templateLifecycle.model });
   if (templateLifecycle.effort !== undefined && templateLifecycle.effort !== resolved.resolution.value.effort) return failure("DISPATCH_EFFORT_MISMATCH", "caller brief effort differs from the engine resolution", { expected: resolved.resolution.value.effort, actual: templateLifecycle.effort });
   if (briefTemplate.structuredHandoff !== undefined) {
@@ -716,9 +757,16 @@ export async function preparePreSpawnReceipt({ workspace, roleBindingPath, brief
     newInstance: true,
     forkTurns: "none",
     sameTaskRunning: false,
-    predecessor: binding.predecessor ?? templateLifecycle.predecessor,
     sourceEvidence,
   };
+  // The lifecycle schema treats predecessor as optional object metadata. A
+  // binding's absent or explicit-null predecessor is represented by omission
+  // in lifecycle (while the receipt taskRole tuple carries canonical null).
+  // Terminal predecessor objects are retained with their evidence.
+  if (expectedPredecessor === null) delete lifecycle.predecessor;
+  else lifecycle.predecessor = expectedPredecessor;
+  if (expectedPredecessorEvidence === null) delete lifecycle.predecessorEvidence;
+  else lifecycle.predecessorEvidence = expectedPredecessorEvidence;
   const effectiveBrief = {
     ...briefTemplate,
     repositoryRoot: ENGINE_ROOT,
@@ -781,7 +829,14 @@ export async function preparePreSpawnReceipt({ workspace, roleBindingPath, brief
     actualNextSpawn: { status: "pending-actual-native-spawn", nativeRole: null, childId: null, parentThreadId: null },
     nonClaim: "This is a code-owned pre-spawn resolution receipt; it does not observe a host call, child, native role, plaintext message, or provider authentication.",
   };
-  const receiptBytes = canonicalJsonBytes(receipt);
+  let receiptBytes;
+  try {
+    receiptBytes = canonicalJsonBytes(receipt);
+  } catch (error) {
+    return failure(reasonCode(error, "DISPATCH_JSON_VALUE_INVALID"), "pre-spawn receipt could not be encoded as canonical JSON", { field: error?.field ?? null, error: String(error?.message ?? error) });
+  }
+  const receiptCheck = validatePreSpawnReceiptBytes(receiptBytes);
+  if (!receiptCheck.ok) return failure(receiptCheck.reasonCode, "generated pre-spawn receipt failed its own canonical schema verifier", { receiptCheck });
   const receiptSha256 = digestBytes(receiptBytes);
   const taskName = `${binding.taskNamePrefix}_${receiptSha256}`;
   return {
@@ -906,9 +961,13 @@ export function validatePreSpawnReceiptBytes(receiptBytes) {
     return failure("DISPATCH_RECEIPT_WORK_SHOW_EVIDENCE_MISSING", "lifecycle evidence must bind the current primary work-show scope digest");
   }
   if (taskRole.predecessor !== null && taskRole.predecessor !== undefined) {
-    if (!isRecord(taskRole.predecessorEvidence) || !hasVerifiedArtifact(taskRole.predecessorEvidence.sha256) || stableJson(lifecycle.predecessor) !== stableJson(taskRole.predecessor)) {
+    if (!isRecord(taskRole.predecessorEvidence) || !hasVerifiedArtifact(taskRole.predecessorEvidence.sha256) || stableJson(lifecycle.predecessor ?? null) !== stableJson(taskRole.predecessor) || stableJson(lifecycle.predecessorEvidence ?? null) !== stableJson(taskRole.predecessorEvidence)) {
       return failure("DISPATCH_RECEIPT_PREDECESSOR_EVIDENCE_MISSING", "terminal predecessor and its raw observation digest must be retained");
     }
+  } else if (taskRole.predecessorEvidence !== null && taskRole.predecessorEvidence !== undefined) {
+    return failure("DISPATCH_RECEIPT_PREDECESSOR_EVIDENCE_INVALID", "predecessor evidence cannot be present without a terminal predecessor");
+  } else if (stableJson(lifecycle.predecessor ?? null) !== "null" || stableJson(lifecycle.predecessorEvidence ?? null) !== "null") {
+    return failure("DISPATCH_RECEIPT_PREDECESSOR_BINDING_MISMATCH", "absent predecessor fields must remain null in lifecycle metadata");
   }
   if (effectiveBrief.workId !== receipt.liveWork.id || effectiveBrief.storyId !== receipt.liveWork.id || effectiveBrief.taskClass !== taskRole.taskClass || effectiveBrief.host !== resolution.host || effectiveBrief.mode !== resolution.mode || effectiveBrief.technicalPack?.sha256 !== receipt.technicalPack.sha256) {
     return failure("DISPATCH_RECEIPT_EFFECTIVE_BRIEF_BINDING_MISMATCH", "effective brief work/taskClass/host/mode/Pack differs from the receipt");

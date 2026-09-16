@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { DISPATCH_BRIEF_DECLARATIONS, DISPATCH_BRIEF_DECLARATION_FIELDS, DISPATCH_BRIEF_FIELDS, DISPATCH_CONTEXT_PACKAGE_SCHEMA_VERSION, DISPATCH_CONTEXT_READ_POLICY, validateAgentLifecycle, validateAgentLifecycleEvidence, validateDispatchBrief, validateStructuredHandoff } from "../scripts/dispatch-readiness-compliance.mjs";
-import { buildBoundedContextPackage, comparePreSpawnReceiptBytes, DISPATCH_PRESPAWN_RECEIPT_SCHEMA, storyScopeFromWorkShow, validatePreSpawnAssociation, validatePreSpawnBaseline, validatePreSpawnReceiptBytes, validateTaskRoleBinding } from "../scripts/dispatch-adapter.mjs";
+import { buildBoundedContextPackage, canonicalJsonBytes, comparePreSpawnReceiptBytes, DISPATCH_PRESPAWN_RECEIPT_SCHEMA, storyScopeFromWorkShow, validatePreSpawnAssociation, validatePreSpawnBaseline, validatePreSpawnReceiptBytes, validateTaskRoleBinding } from "../scripts/dispatch-adapter.mjs";
 import { acquireWorkspaceLease, createProject, createWork, initializeWorkspace, validateWorkspace } from "../dist/build/packages/core/src/index.js";
 
 const ENGINE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -421,8 +421,8 @@ test("STORY-424 R01: outer work binding is retained while explicit inner/source 
   assert.ok(contradictory.problems.some((problem) => problem.code === "DISPATCH_HANDOFF_SOURCE_DIGEST_MISMATCH"));
 });
 
-function receiptFixture() {
-  const fixture = roleBindingFixture();
+function receiptFixture(bindingOptions = {}) {
+  const fixture = roleBindingFixture(bindingOptions);
   const configuration = { workspaceId: "workspace:1", version: 10, headEventHash: "a".repeat(64), configDigest: "d".repeat(64) };
   const baselineContent = {
     schemaVersion: "tcrn.init-051-final-B-star.v1",
@@ -473,8 +473,8 @@ function receiptFixture() {
       pack: "PACK-R2",
       taskNamePrefix: "sol_accept",
       scopeMarker: fixture.scopeMarker,
-      predecessor: { agentId: "old-sol", status: "completed" },
-      predecessorEvidence: { path: "previous-sol-terminal-observation.json", sha256: "6".repeat(64) },
+      predecessor: fixture.binding.predecessor ?? null,
+      predecessorEvidence: fixture.binding.predecessorEvidence ?? null,
     },
     roleContract: { path: "role-binding.json", bytes: 10, sha256: fixture.roleContractSha256 },
     technicalPack: { path: fixture.brief.technicalPack.path, bytes: 10, sha256: fixture.technicalPackSha256 },
@@ -503,7 +503,7 @@ function canonicalReceiptBytes(value) {
   return Buffer.from(`${JSON.stringify(canonicalValue(value))}\n`, "utf8");
 }
 
-function roleBindingFixture() {
+function roleBindingFixture(options = {}) {
   const roleContractSha256 = "e".repeat(64);
   const technicalPackSha256 = "f".repeat(64);
   const scopeMarker = "Prospective next-Sol task binding: bindingKind=governed-task-role; role=acceptance; personaProfileId=null; phase=acceptance; taskClass=acceptance; workId=work:429; pack=PACK-R2; taskNamePrefix=sol_accept.";
@@ -524,14 +524,21 @@ function roleBindingFixture() {
     taskNamePrefix: "sol_accept",
     scopeMarker,
   };
-  const predecessor = { agentId: "old-sol", status: "completed" };
-  binding.predecessor = predecessor;
-  binding.predecessorEvidence = { path: "previous-sol-terminal-observation.json", sha256: "6".repeat(64) };
+  const defaultPredecessor = { agentId: "old-sol", status: "completed" };
+  const defaultPredecessorEvidence = { path: "previous-sol-terminal-observation.json", sha256: "6".repeat(64) };
+  const predecessor = Object.hasOwn(options, "predecessor") ? options.predecessor : defaultPredecessor;
+  const predecessorEvidence = Object.hasOwn(options, "predecessorEvidence")
+    ? options.predecessorEvidence
+    : predecessor === null || predecessor === undefined ? null : defaultPredecessorEvidence;
+  if (Object.hasOwn(options, "predecessor")) binding.predecessor = predecessor;
+  else binding.predecessor = defaultPredecessor;
+  if (Object.hasOwn(options, "predecessorEvidence")) binding.predecessorEvidence = predecessorEvidence;
+  else binding.predecessorEvidence = defaultPredecessorEvidence;
   const sourceEvidence = [
     { kind: "artifact", locator: "role-binding.json", digest: roleContractSha256, status: "verified" },
     { kind: "artifact", locator: "brief-template.json", digest: briefTemplateSha256, status: "verified" },
     { kind: "artifact", locator: "acceptance-pack.md", digest: technicalPackSha256, status: "verified" },
-    { kind: "artifact", locator: "previous-sol-terminal-observation.json", digest: "6".repeat(64), status: "verified" },
+    ...(predecessorEvidence && typeof predecessorEvidence === "object" ? [{ kind: "artifact", locator: predecessorEvidence.path, digest: predecessorEvidence.sha256, status: "verified" }] : []),
     { kind: "artifact", locator: "B-star.json", digest: "8".repeat(64), status: "verified" },
     { kind: "work-show", locator: "work:429@revision:4", digest: "a".repeat(64), status: "verified" },
   ];
@@ -546,7 +553,8 @@ function roleBindingFixture() {
     newInstance: true,
     forkTurns: "none",
     sameTaskRunning: false,
-    predecessor,
+    ...(predecessor && typeof predecessor === "object" ? { predecessor } : {}),
+    ...(predecessorEvidence && typeof predecessorEvidence === "object" ? { predecessorEvidence } : {}),
     sourceEvidence,
   };
   const brief = {
@@ -772,6 +780,85 @@ test("STORY-424 R2: receipt bytes and actual spawn/child association bind the fu
   const missing = validatePreSpawnAssociation({ ...valid, spawnResult: null });
   assert.equal(missing.status, "not-verifiable");
   assert.ok(missing.unknowns.includes("actual native role"));
+});
+
+test("STORY-434 R3: canonical receipt JSON omits optional undefined objects and nulls undefined array slots", () => {
+  const value = {
+    omitted: undefined,
+    deep: {
+      omitted: undefined,
+      items: [undefined, { nested: [1, undefined, { omitted: undefined, keep: true }] }],
+    },
+    explicitNull: null,
+  };
+  const bytes = canonicalJsonBytes(value);
+  const text = bytes.toString("utf8");
+  assert.equal(text, '{"deep":{"items":[null,{"nested":[1,null,{"keep":true}]}]},"explicitNull":null}\n');
+  assert.doesNotMatch(text, /\bundefined\b/u);
+  assert.deepEqual(JSON.parse(text), {
+    deep: { items: [null, { nested: [1, null, { keep: true }] }] },
+    explicitNull: null,
+  });
+  assert.throws(() => canonicalJsonBytes(Number.NaN), (error) => error?.reasonCode === "DISPATCH_JSON_VALUE_INVALID");
+  assert.throws(() => canonicalJsonBytes(undefined), (error) => error?.reasonCode === "DISPATCH_JSON_VALUE_INVALID");
+});
+
+test("STORY-434 R3: absent, explicit-null, and terminal predecessors yield parseable verifiable receipts", () => {
+  const terminalPredecessor = { agentId: "old-sol", status: "completed" };
+  const terminalEvidence = { path: "previous-sol-terminal-observation.json", sha256: "6".repeat(64) };
+  const cases = [
+    ["absent", { predecessor: undefined, predecessorEvidence: undefined }, null, null],
+    ["explicit null", { predecessor: null, predecessorEvidence: null }, null, null],
+    ["terminal object", { predecessor: terminalPredecessor, predecessorEvidence: terminalEvidence }, terminalPredecessor, terminalEvidence],
+  ];
+
+  for (const [label, options, expectedPredecessor, expectedEvidence] of cases) {
+    const bytes = canonicalJsonBytes(receiptFixture(options));
+    const text = bytes.toString("utf8");
+    assert.doesNotMatch(text, /\bundefined\b/u, `${label}: no undefined token`);
+    assert.doesNotThrow(() => JSON.parse(text), `${label}: JSON parses`);
+    const parsed = validatePreSpawnReceiptBytes(bytes);
+    assert.equal(parsed.ok, true, `${label}: ${JSON.stringify(parsed)}`);
+    assert.deepEqual(parsed.receipt.taskRole.predecessor, expectedPredecessor);
+    assert.deepEqual(parsed.receipt.taskRole.predecessorEvidence, expectedEvidence);
+    assert.deepEqual(parsed.receipt.lifecycle.predecessor ?? null, expectedPredecessor);
+    assert.deepEqual(parsed.receipt.lifecycle.predecessorEvidence ?? null, expectedEvidence);
+    assert.equal(parsed.taskName, `sol_accept_${parsed.receiptSha256}`);
+  }
+});
+
+test("STORY-434 R3: optional-field normalization preserves digest-derived task-name stability and self-reference exclusion", () => {
+  const receipt = receiptFixture();
+  const undefinedOption = structuredClone(receipt);
+  undefinedOption.optionalEnvelope = { nested: { omit: undefined }, slots: [1, undefined, { omit: undefined }] };
+  const explicitCanonicalForm = structuredClone(receipt);
+  explicitCanonicalForm.optionalEnvelope = { nested: {}, slots: [1, null, {}] };
+
+  const firstBytes = canonicalJsonBytes(undefinedOption);
+  const secondBytes = canonicalJsonBytes(explicitCanonicalForm);
+  assert.deepEqual(firstBytes, secondBytes, "undefined object fields omit and array slots become null deterministically");
+  const first = validatePreSpawnReceiptBytes(firstBytes);
+  const second = validatePreSpawnReceiptBytes(secondBytes);
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal(second.ok, true, JSON.stringify(second));
+  assert.equal(first.receiptSha256, second.receiptSha256);
+  assert.equal(first.taskName, second.taskName);
+  assert.equal(first.taskName, `sol_accept_${createHash("sha256").update(firstBytes).digest("hex")}`);
+  assert.equal(Object.hasOwn(first.receipt, "receiptSha256"), false);
+  assert.equal(Object.hasOwn(first.receipt, "task_name"), false);
+
+  for (const forbiddenField of ["receiptSha256", "taskName", "task_name"]) {
+    const selfReferential = structuredClone(receipt);
+    selfReferential.audit = [{ nested: { [forbiddenField]: "must-not-be-in-the-hash" } }];
+    assert.equal(validatePreSpawnReceiptBytes(canonicalJsonBytes(selfReferential)).reasonCode, "DISPATCH_RECEIPT_SELF_REFERENCE_FORBIDDEN", forbiddenField);
+  }
+
+  const missingRequired = structuredClone(receipt);
+  delete missingRequired.taskRole.role;
+  assert.equal(validatePreSpawnReceiptBytes(canonicalJsonBytes(missingRequired)).reasonCode, "DISPATCH_RECEIPT_TASK_ROLE_INVALID");
+  const wrongRequiredType = structuredClone(receipt);
+  wrongRequiredType.taskRole.role = 42;
+  assert.equal(validatePreSpawnReceiptBytes(canonicalJsonBytes(wrongRequiredType)).reasonCode, "DISPATCH_RECEIPT_TASK_ROLE_INVALID");
 });
 
 test("STORY-424 R3: missing and wrong-type storyScope return structured red instead of throwing", () => {
