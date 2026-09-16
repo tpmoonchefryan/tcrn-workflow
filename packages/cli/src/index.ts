@@ -146,7 +146,7 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
 import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
 import { isWorkStatus } from "../../protocol/src/index.js";
-import type { PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
+import type { JsonValue, PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 // ProjectRecord is a core type, not a protocol one. The protocol package never exported
 // it, so this import resolved to nothing; import elision hid the mistake from every
 // runtime check the repo had.
@@ -602,7 +602,8 @@ function workAdvisory(record: WorkRecord): Readonly<Record<string, unknown>> | n
   const sprint = record.extensions["advisory:sprint"] as { readonly value: unknown } | undefined;
   const evidence = record.extensions["advisory:evidence"] as { readonly value: unknown } | undefined;
   const evidenceSnapshot = record.extensions["advisory:evidence-snapshot"] as { readonly value: unknown } | undefined;
-  if (scope === undefined && decidedBy === undefined && verify === undefined && sprint === undefined && evidence === undefined && evidenceSnapshot === undefined) return null;
+  const result = record.extensions["advisory:result"] as { readonly value: unknown } | undefined;
+  if (scope === undefined && decidedBy === undefined && verify === undefined && sprint === undefined && evidence === undefined && evidenceSnapshot === undefined && result === undefined) return null;
   return {
     ...(scope !== undefined ? { scope: scope.value } : {}),
     ...(decidedBy !== undefined ? { decidedBy: decidedBy.value } : {}),
@@ -610,6 +611,7 @@ function workAdvisory(record: WorkRecord): Readonly<Record<string, unknown>> | n
     ...(sprint !== undefined ? { sprint: sprint.value } : {}),
     ...(evidence !== undefined ? { evidence: evidence.value } : {}),
     ...(evidenceSnapshot !== undefined ? { evidenceSnapshot: evidenceSnapshot.value } : {}),
+    ...(result !== undefined ? { result: result.value } : {}),
   };
 }
 
@@ -1008,7 +1010,7 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
   { name: "validate", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "vocabulary", availability: "cli", mutates: false, flags: [] },
-  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "verify", required: false, valueKind: "string" }, { name: "sprint", required: false, valueKind: "string" }, { name: "title", required: false, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
+  { name: "work-annotate", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "verify", required: false, valueKind: "string" }, { name: "result", required: false, valueKind: "json" }, { name: "sprint", required: false, valueKind: "string" }, { name: "title", required: false, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-batch", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "from-file", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-create", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "project-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "kind", required: true, valueKind: "string" }, { name: "parent-id", required: false, valueKind: "string", nullSentinel: "-", deprecatedAliases: ["null"] }, { name: "status", required: false, valueKind: "string" }, { name: "scope", required: false, valueKind: "string" }, { name: "decided-by", required: false, valueKind: "list" }, { name: "title", required: true, valueKind: "string" }, { name: "summary", required: false, valueKind: "string" }, { name: "labels", required: false, valueKind: "list" }, { name: "template-receipt", required: false, valueKind: "json" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "work-delete", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -2301,9 +2303,9 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     // right since TCRN-CROSS-STORY-363, so what the core still refuses is an annotation
     // that moves nothing at all: it is WORKSPACE_INPUT_INVALID here rather than an
     // appended event no later read can replay (TCRN-CROSS-INC-269).
-    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "verify", "sprint", "title", "summary", "labels", "actor"]);
+    const values = parseArguments(rest, [...shared, "id", "scope", "decided-by", "verify", "result", "sprint", "title", "summary", "labels", "actor"]);
     required(values, [...requiredShared, "id"]);
-    if (values.scope === undefined && values["decided-by"] === undefined && values.verify === undefined && values.sprint === undefined && values.title === undefined && values.summary === undefined && values.labels === undefined) fail("CLI_ARGUMENT_MALFORMED", "annotation-field");
+    if (values.scope === undefined && values["decided-by"] === undefined && values.verify === undefined && values.result === undefined && values.sprint === undefined && values.title === undefined && values.summary === undefined && values.labels === undefined) fail("CLI_ARGUMENT_MALFORMED", "annotation-field");
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
     const state = await withLease(workspace, at, async (lease) => annotateWork(workspace, lease, {
@@ -2311,6 +2313,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values.scope !== undefined ? { scope: values.scope } : {}),
       ...(values["decided-by"] !== undefined ? { decidedBy: listValue(values["decided-by"]) } : {}),
       ...(values.verify !== undefined ? { verify: values.verify } : {}),
+      ...(values.result !== undefined ? { result: jsonValue(values.result, "result") as JsonValue } : {}),
       ...(values.sprint !== undefined ? { sprint: sprintReference(values.sprint) } : {}),
       ...(values.title !== undefined ? { title: values.title } : {}),
       ...(values.summary !== undefined ? { summary: values.summary } : {}),

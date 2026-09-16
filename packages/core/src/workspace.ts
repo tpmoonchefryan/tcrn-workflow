@@ -1712,6 +1712,12 @@ const ADVISORY_DECIDED_BY_KEY = "advisory:decided-by";
 const ADVISORY_VERIFY_KEY = "advisory:verify";
 const ADVISORY_EVIDENCE_KEY = "advisory:evidence";
 const ADVISORY_EVIDENCE_SNAPSHOT_KEY = "advisory:evidence-snapshot";
+// TCRN-CROSS-STORY-435/436: a native result annotation is the small, on-chain
+// outcome surface used by current-stage batch qualification. It is deliberately
+// advisory (like scope/verify): it never changes status and never substitutes for
+// the acceptance roster or a gate.
+const ADVISORY_RESULT_KEY = "advisory:result";
+const NATIVE_IMPLEMENTATION_RESULT_VERSION = "tcrn.native-implementation-result.v1";
 const WORK_SCOPE_REFERENCE_VERSION = "tcrn.work-scope-reference.v1" as const;
 // INIT-008: advisory:sprint is the member-side tag that puts a work record on a
 // sprint / release-train batch. Its value is a QUALIFIED reference to the sprint
@@ -1730,6 +1736,7 @@ const ADVISORY_KEYS: readonly string[] = [
   ADVISORY_SPRINT_KEY,
   ADVISORY_EVIDENCE_KEY,
   ADVISORY_EVIDENCE_SNAPSHOT_KEY,
+  ADVISORY_RESULT_KEY,
 ];
 
 // A sprint reference is a qualified cross-partition pointer: the workspaceId (derived,
@@ -1766,6 +1773,7 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
   readonly sprint?: SprintReference;
   readonly evidence?: string;
   readonly evidenceSnapshot?: TelemetryEvidenceSnapshot;
+  readonly result?: JsonValue;
 }): Readonly<Record<string, unknown>> {
   const next: Record<string, unknown> = { ...base };
   if (advisory.scope !== undefined) {
@@ -1785,6 +1793,9 @@ function workAdvisoryExtensions(base: Readonly<Record<string, unknown>>, advisor
   }
   if (advisory.evidenceSnapshot !== undefined) {
     next[ADVISORY_EVIDENCE_SNAPSHOT_KEY] = { required: false, value: advisory.evidenceSnapshot };
+  }
+  if (advisory.result !== undefined) {
+    next[ADVISORY_RESULT_KEY] = { required: false, value: advisory.result };
   }
   return next;
 }
@@ -2001,6 +2012,44 @@ function assertAdvisoryEntryShape(key: string, entry: unknown, id: string, reaso
       if (error instanceof ProtocolError) fail(reasonCode, error.message);
       if (error instanceof TelemetryError) fail(reasonCode, `${error.reasonCode}:${error.message}`);
       throw error;
+    }
+    return;
+  }
+  if (key === ADVISORY_RESULT_KEY) {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      fail(reasonCode, `work ${id} advisory result is malformed`);
+    }
+    const result = value as Readonly<Record<string, unknown>>;
+    const required = [
+      "command", "dependencies", "evidence", "exitCode", "ok", "revision", "schemaVersion", "scopeDigest", "status", "workId",
+    ];
+    const allowed = [
+      "candidateDigest", "candidateId", "command", "dependencies", "evidence", "exitCode",
+      "invalidated", "ok", "queueDigest", "reason", "revision", "schemaVersion", "scopeDigest",
+      "stale", "status", "workId",
+    ];
+    const actual = Object.keys(result).sort(compareCanonicalText);
+    if (actual.some((field) => !allowed.includes(field)) || required.some((field) => !Object.hasOwn(result, field))) {
+      fail(reasonCode, `work ${id} advisory result fields are malformed`);
+    }
+    if (result.schemaVersion !== NATIVE_IMPLEMENTATION_RESULT_VERSION
+      || typeof result.status !== "string" || result.status.length === 0
+      || typeof result.ok !== "boolean"
+      || (result.exitCode !== null && (typeof result.exitCode !== "number" || !Number.isSafeInteger(result.exitCode) || result.exitCode < 0))
+      || typeof result.command !== "string" || result.command.length === 0 || Buffer.byteLength(result.command, "utf8") > 4_096
+      || (typeof result.evidence === "string" ? result.evidence.length === 0 : (!Array.isArray(result.evidence) || result.evidence.length === 0 || !result.evidence.every((entry) => typeof entry === "string" && entry.length > 0)))
+      || !Array.isArray(result.dependencies) || result.dependencies.some((dependency) => typeof dependency !== "string" || dependency.length === 0)
+      || new Set(result.dependencies).size !== result.dependencies.length
+      || typeof result.workId !== "string" || result.workId !== id
+      || typeof result.revision !== "number" || !Number.isSafeInteger(result.revision) || result.revision < 1
+      || typeof result.scopeDigest !== "string" || !/^[a-f0-9]{64}$/u.test(result.scopeDigest)
+      || result.candidateId !== undefined && result.candidateId !== null && typeof result.candidateId !== "string"
+      || result.candidateDigest !== undefined && result.candidateDigest !== null && (typeof result.candidateDigest !== "string" || !/^[a-f0-9]{64}$/u.test(result.candidateDigest))
+      || result.queueDigest !== undefined && result.queueDigest !== null && typeof result.queueDigest !== "string"
+      || result.invalidated !== undefined && result.invalidated !== null && typeof result.invalidated !== "boolean"
+      || result.stale !== undefined && result.stale !== null && typeof result.stale !== "boolean"
+      || result.reason !== undefined && result.reason !== null && (typeof result.reason !== "string" || result.reason.length === 0)) {
+      fail(reasonCode, `work ${id} advisory result fields are malformed`);
     }
     return;
   }
@@ -4593,6 +4642,7 @@ export function annotateWorkDelta(input: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly verify?: string;
+  readonly result?: JsonValue;
   readonly sprint?: SprintReference;
   readonly title?: string | null;
   readonly summary?: string | null;
@@ -4607,6 +4657,7 @@ export async function annotateWork(workspaceRoot: string, lease: WorkspaceLease,
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly verify?: string;
+  readonly result?: JsonValue;
   readonly sprint?: SprintReference;
   readonly title?: string | null;
   readonly summary?: string | null;
@@ -4620,6 +4671,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
   readonly scope?: string;
   readonly decidedBy?: readonly string[];
   readonly verify?: string;
+  readonly result?: JsonValue;
   readonly sprint?: SprintReference;
   readonly title?: string | null;
   readonly summary?: string | null;
@@ -4631,8 +4683,8 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (current.tombstone) {
       fail("WORKSPACE_INPUT_INVALID", `work ${input.id} is deleted`);
     }
-    if (input.scope === undefined && input.decidedBy === undefined && input.verify === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
-      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, verify, sprint, title, summary, or labels");
+    if (input.scope === undefined && input.decidedBy === undefined && input.verify === undefined && input.result === undefined && input.sprint === undefined && input.title === undefined && input.summary === undefined && input.labels === undefined) {
+      fail("WORKSPACE_INPUT_INVALID", "an annotation must set scope, decided-by, verify, result, sprint, title, summary, or labels");
     }
     if (input.scope !== undefined && input.scope.length === 0) {
       fail("WORKSPACE_INPUT_INVALID", "advisory scope must be a non-empty string");
@@ -4646,6 +4698,9 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
     if (input.verify !== undefined) {
       assertAdvisoryEntryShape(ADVISORY_VERIFY_KEY, { required: false, value: input.verify }, input.id, "WORKSPACE_INPUT_INVALID");
     }
+    if (input.result !== undefined) {
+      assertAdvisoryEntryShape(ADVISORY_RESULT_KEY, { required: false, value: input.result }, input.id, "WORKSPACE_INPUT_INVALID");
+    }
     const title = input.title === undefined ? current.title ?? null : normalizeWorkTitle(input.title);
     const labels = input.labels === undefined ? current.labels ?? [] : normalizeWorkLabels(input.labels);
     // TCRN-CROSS-STORY-363. This is the door the historical backfill goes through:
@@ -4657,6 +4712,7 @@ function annotateWorkReducerDelta(state: WorkspaceState, input: {
       ...(input.scope !== undefined ? { scope: input.scope } : {}),
       ...(input.decidedBy !== undefined ? { decidedBy: input.decidedBy } : {}),
       ...(input.verify !== undefined ? { verify: input.verify } : {}),
+      ...(input.result !== undefined ? { result: input.result } : {}),
       ...(input.sprint !== undefined ? { sprint: input.sprint } : {}),
     });
     // TCRN-CROSS-INC-269: the reducer's own predicate, run before the event exists.

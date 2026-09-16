@@ -1144,7 +1144,7 @@ function unwrapNativeResult(value) {
 }
 
 /** Normalize and bind one native implementation outcome to its work record. */
-export function normalizeNativeImplementationResult(value, { workId = null, revision = null, scopeDigest = null } = {}) {
+export function normalizeNativeImplementationResult(value, { workId = null, revision = null, scopeDigest = null, scope = null } = {}) {
   const source = unwrapNativeResult(value);
   if (source === null) return { present: false, valid: false, status: "missing", reason: "native implementation result annotation is missing", result: null };
   if (source.__nativeMarkerInvalid === true) return { present: true, valid: false, status: "invalid", reason: "native implementation result marker is not valid JSON", result: source };
@@ -1166,7 +1166,12 @@ export function normalizeNativeImplementationResult(value, { workId = null, revi
   if (!evidencePresent) problems.push("successful result evidence is missing");
   if (workId !== null && boundWorkId !== null && boundWorkId !== workId) problems.push("result work binding differs from the native record");
   if (revision !== null && boundRevision !== undefined && boundRevision !== revision) problems.push("result revision differs from the native record");
-  if (scopeDigest !== null && boundScopeDigest !== null && boundScopeDigest !== scopeDigest) problems.push("result scope digest differs from the native record");
+  // `record.scopeDigest` covers the whole advisory-extension map and therefore
+  // necessarily moves when this result annotation is added.  Bind the result's
+  // scope digest to the stable scope text when the native read exposes it; keep
+  // the extension-map digest as an audit observation rather than comparing an
+  // always-changing value to itself.
+  if (typeof scope === "string" && boundScopeDigest !== null && sha256(scope) !== boundScopeDigest) problems.push("result scope digest differs from the native scope");
   if (source.stale === true || source.invalidated === true) problems.push("result is explicitly stale or invalidated");
   return {
     present: true,
@@ -1215,6 +1220,7 @@ function nativeWorkObservation(record, advisory) {
     workId: record?.id ?? null,
     revision: Number.isSafeInteger(record?.revision) ? record.revision : null,
     scopeDigest: record?.scopeDigest ?? null,
+    scope: advisory?.scope ?? null,
   });
   const dependencies = nativeDependencyCandidate(record, advisory, result);
   const blockedReason = batchString(record?.blockedReason ?? record?.blockReason ?? record?.reason ?? result.result?.blockedReason ?? result.result?.reason)
@@ -1294,7 +1300,7 @@ function normalizedBatchTask(value, index) {
   const implementationResult = suppliedResult === null
     ? nativeObservation.result
     : suppliedResult?.valid === undefined
-      ? normalizeNativeImplementationResult(suppliedResult, { workId: value.id ?? value.workId ?? value.taskId ?? null, revision: value.revision ?? null, scopeDigest: value.scopeDigest ?? null })
+      ? normalizeNativeImplementationResult(suppliedResult, { workId: value.id ?? value.workId ?? value.taskId ?? null, revision: value.revision ?? null, scopeDigest: value.scopeDigest ?? null, scope: value.scope ?? null })
       : suppliedResult;
   const blockedReason = batchString(value.blockedReason ?? value.blockReason ?? value.reason ?? value.reasonCode ?? implementationResult?.blockedReason ?? implementationResult?.reason);
   const realBlocked = BATCH_BLOCKED_STATES.has(status.toLowerCase()) && blockedReason !== null;
