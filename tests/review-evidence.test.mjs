@@ -14,7 +14,7 @@ import {
   diffEvidence,
   parseTestRunOutput,
 } from "../scripts/review-evidence.mjs";
-import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, createGateReceiptAuthority, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, issueGateReceipt, queryGateReceipt, recordExecution } from "../scripts/final-gate-plan.mjs";
+import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, buildGateImpactMap, createGateReceiptAuthority, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, issueGateReceipt, queryGateReceipt, recordExecution } from "../scripts/final-gate-plan.mjs";
 import { classifyProcess } from "../scripts/operational-batch-entry.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 
@@ -276,6 +276,21 @@ test("STORY-420: dynamic impact selects affected roots, reuses only bound termin
     const phasePlan = buildDynamicGatePlan({ ...options, phase, changedFiles: ["scripts/final-gate-plan.mjs"] });
     assert.deepEqual(phasePlan.selected.map(({ id }) => id), ["engine-release"]);
   }
+});
+
+test("STORY-439: gate selection is derivable from containment", () => {
+  const containment = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "..", "scripts/policy/gate-containment.json"), "utf8"));
+
+  const engine = buildGateImpactMap({ containment, changedFiles: ["scripts/agents-zero-hook.mjs"] });
+  assert.deepEqual(engine.affected, ["engine-release"]);
+
+  assert.deepEqual(containment.topLevel, ["engine-release", "platform-layout", "product-gates"]);
+  assert.equal(containment.topLevel.length, 3);
+
+  const unknown = buildGateImpactMap({ containment, environmentChanges: ["unregistered-runtime"] });
+  assert.ok(unknown.unknown.length > 0);
+  assert.deepEqual(unknown.affected, containment.topLevel);
+  assert.deepEqual(unknown.forcedInvalidation, containment.topLevel);
 });
 
 test("EPIC135 closeout: only an issued receipt with the exact invocation can be reused", async () => {
