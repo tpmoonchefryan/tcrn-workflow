@@ -68,6 +68,11 @@ export function workspaceForPartition(partition, containerRoot = PLATFORM_ROOT) 
 }
 
 export const ENGINE_CLI = resolve(SCRIPT_DIRECTORY, "tcrn-workflow.mjs");
+const DISPATCH_HOST_ALIASES = Object.freeze({ claude: "claude-code", codex: "codex" });
+
+export function dispatchHostName(host) {
+  return DISPATCH_HOST_ALIASES[host] ?? host;
+}
 
 /**
  * One read against this repository's own engine.
@@ -502,13 +507,13 @@ export async function sealObservationDay(root, { at = new Date().toISOString(), 
   return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record };
 }
 
-async function queryLanguageAnswer(prompt, settings) {
+async function queryLanguageAnswer(prompt, settings, host) {
   const core = await languageModule();
   if (core?.readKnowledgeLanguagePolicy && core?.resolveQueryLanguage) {
     const policy = core.readKnowledgeLanguagePolicy((settings ?? []).map((entry) => ({
       key: entry.key,
-      value: entry.currentValue ?? entry.value ?? "",
-    })));
+      value: entry.currentValue ?? entry.value ?? entry.defaultValue ?? "",
+    })), dispatchHostName(host));
     return core.resolveQueryLanguage(prompt, policy);
   }
   return { queryLanguage: null, queryTranslation: null, telemetry: { queryTranslations: 0 } };
@@ -527,8 +532,9 @@ export function truncateToBudget(text, budget) {
  * The engine decides THAT a translation is owed and WHICH model owes it -- the recall verb
  * answers with `queryTranslation` and a `telemetry.queryTranslations` count. It cannot
  * perform the translation: packages/* reach no network and verify:p1's offline leg measures
- * that. So the same division the write path uses applies here. The Agent asks the model
- * recorded in model.economyTier and hands the answer over as data; this file translates
+ * that. So the same division the write path uses applies here. The Agent asks the
+ * economy-tier model configured for the current host and hands the answer over as data;
+ * this file translates
  * once, asks again, and reports the two counts added together.
  */
 export function bundleTranslator(bundlePath) {
@@ -560,6 +566,7 @@ export async function runInjection({
   triggerKeywords,
   limit,
   containerRoot = PLATFORM_ROOT,
+  host = process.env.TCRN_HOST ?? "claude",
   translate = null,
   settings = null,
   recall = null,
@@ -587,6 +594,7 @@ export async function runInjection({
     partition,
     query,
     limit: recallLimit,
+    host: dispatchHostName(host),
     "allow-trailing": true,
     at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
   }, { containerRoot, withPartitionFlag: true });
@@ -619,7 +627,7 @@ export async function runInjection({
   // as a fail-open compatibility branch for callers that do not have a settings catalog.
   if (typeof translate === "function") {
     const catalogSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
-    const languageAnswer = await queryLanguageAnswer(originalPrompt, catalogSettings);
+    const languageAnswer = await queryLanguageAnswer(originalPrompt, catalogSettings, host);
     owed = languageAnswer.queryTranslation ?? null;
     if (owed !== null) {
       const answer = await invokeTranslator(originalPrompt, owed);
@@ -755,9 +763,19 @@ async function sessionRetirementSweep(event, partition, containerRoot) {
   }
 }
 
-function settingValue(settings, key) {
-  const entry = (settings ?? []).find((candidate) => candidate.key === key);
-  return entry?.currentValue ?? entry?.value ?? entry?.defaultValue ?? null;
+async function economyModelForHost(settings, host) {
+  const core = await languageModule();
+  if (typeof core?.readDispatchConfig !== "function") return null;
+  try {
+    const views = (settings ?? []).map((entry) => ({
+      key: entry.key,
+      value: entry.currentValue ?? entry.value ?? entry.defaultValue ?? "",
+    }));
+    const model = core.readDispatchConfig(views).tiers[dispatchHostName(host)]?.economy?.model;
+    return typeof model === "string" && model.length > 0 ? model : null;
+  } catch {
+    return null;
+  }
 }
 
 async function productionModelCalls({ host, model, translate, judgeEnabled, judge }) {
@@ -850,6 +868,7 @@ export async function runSessionInjection({
   const pendingMode = deliveryMode === "pending";
   try {
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
+    const economyModel = await economyModelForHost(effectiveSettings, host);
     const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
     const observationBoundary = event === "SessionStart" ? await recordObservationBoundary({ partition, containerRoot, sessionId, host, workspaceState, phase: "start" }) : null;
     observationCoverage = await sessionObservationCoverage(event, partition, containerRoot, workspaceState);
@@ -864,7 +883,7 @@ export async function runSessionInjection({
     const auxiliaryModelsAllowed = !subagent;
     calls = auxiliaryModelsAllowed ? await productionModelCalls({
       host,
-      model: settingValue(effectiveSettings, "model.economyTier"),
+      model: economyModel,
       translate,
       judgeEnabled,
       judge,
@@ -924,6 +943,7 @@ export async function runSessionInjection({
             translate: subagent ? null : calls.translate,
             recall,
             telemetry,
+            host,
             dispatchContext: dispatch.bound === true ? dispatch : null,
           });
         } finally {
@@ -960,7 +980,7 @@ export async function runSessionInjection({
             prompt: promptDigest(prompt),
             candidateIds: fresh.map(recordIdentity).filter(Boolean),
             judgment: typeof judgment === "boolean" ? judgment : null,
-            model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
+            model: judgement?.model ?? economyModel,
             ...(judgement?.reasonCode ? { reasonCode: judgement.reasonCode } : {}),
             at: new Date().toISOString(),
           });
@@ -969,7 +989,7 @@ export async function runSessionInjection({
             payload: {
               candidateCount: fresh.length,
               judgment: typeof judgment === "boolean" ? judgment : null,
-              model: judgement?.model ?? settingValue(effectiveSettings, "model.economyTier"),
+              model: judgement?.model ?? economyModel,
               ...(judgement?.reasonCode ? { reasonCode: judgement.reasonCode } : {}),
             },
           });

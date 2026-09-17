@@ -39,7 +39,7 @@ export const InjectionPlacementManifest = Object.freeze({
     codex: 'node "${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --host codex',
   }),
   modelMapping: Object.freeze({
-    setting: "model.economyTier",
+    setting: "execution.dispatchTiers",
     translator: "independent-uninjected-call-before-recall",
     judge: "independent-uninjected-call-after-recall",
     maxCallsPerPrompt: 1,
@@ -70,7 +70,7 @@ export function validateInjectionPlacementManifest(value) {
     if (!Array.isArray(manifest.events?.[host]) || JSON.stringify(manifest.events[host]) !== JSON.stringify(InjectionPlacementManifest.events[host])) return false;
     if (typeof manifest.commands?.[host] !== "string" || !manifest.commands[host].includes("knowledge-inject-hook.mjs")) return false;
   }
-  if (manifest.modelMapping?.setting !== "model.economyTier" || manifest.modelMapping?.maxCallsPerPrompt !== 1 || manifest.modelMapping?.timeoutMs !== 10_000 || manifest.modelMapping?.subagentAuxiliaryModels !== false || JSON.stringify(manifest.modelMapping?.contextBinding) !== JSON.stringify(["role", "workId", "pack"])) return false;
+  if (manifest.modelMapping?.setting !== "execution.dispatchTiers" || manifest.modelMapping?.maxCallsPerPrompt !== 1 || manifest.modelMapping?.timeoutMs !== 10_000 || manifest.modelMapping?.subagentAuxiliaryModels !== false || JSON.stringify(manifest.modelMapping?.contextBinding) !== JSON.stringify(["role", "workId", "pack"])) return false;
   if (manifest.protocol?.version !== INJECTION_PROTOCOL_VERSION || manifest.protocol?.maxBytes !== MAX_INJECTION_PROTOCOL_BYTES || manifest.protocol?.acknowledgement !== "wrapper-after-parse" || manifest.protocol?.retryLimit !== 1) return false;
   if (manifest.runtimeState?.path?.includes(".tcrn-workflow") || manifest.runtimeState?.path?.includes(".tcrn-workspace")) return false;
   return manifest.placementOwner === "STORY-371" && manifest.installer === null;

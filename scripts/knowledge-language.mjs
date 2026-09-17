@@ -6,7 +6,7 @@
 // WHY A SCRIPT AND NOT A VERB. The engine calls no model: packages/* declare no runtime
 // dependency, scripts/lib/local-command.mjs admits only node and git, and verify:p1's
 // offline leg measures both. So the model's answers arrive here as data — a bundle the
-// Agent produced by asking the model named in `model.economyTier` — and this file turns
+// Agent produced by asking the economy-tier model configured for the current host — and this file turns
 // them into the provider the core write path requires. It decides what to say; the engine
 // decides how to store it, exactly as scripts/knowledge-capture-hook.mjs already does.
 //
@@ -31,7 +31,7 @@
 //            The write-path hook for one new card.
 //
 // BUNDLE SHAPE
-//   { "model": "<the value recorded in model.economyTier>",
+//   { "model": "<the economy-tier model configured for the current host>",
 //     "translations": { "<source text>": "<translated text>" },
 //     "expansions": { "<knowledge id or NEW>": { "<language tag>": ["…", "…", "…"] } } }
 // A translation the bundle does not carry is a refusal, not a passthrough: the write path
@@ -93,6 +93,8 @@ export async function planCommand(core, values) {
   const { listKnowledgeMetadata, materializeWorkspace, readKnowledgeLanguagePolicy, detectLanguage } = core;
   const workspace = values.workspace ?? "";
   const state = await materializeWorkspace(workspace);
+  // plan has no host input in its command contract, so the optional host remains
+  // undefined rather than being guessed here.
   const policy = readKnowledgeLanguagePolicy(state.settings);
   if (policy.artifactLanguage === null) return fail("KNOWLEDGE_LANGUAGE_UNCONFIGURED", "artifact.language is not recorded in this workspace");
   const answer = await listKnowledgeMetadata(workspace, { at: values.at ?? new Date().toISOString().replace(/\.\d+Z$/u, "Z"), selection: "all", limit: 1_048_576, allowTrailing: true });
@@ -128,6 +130,8 @@ export async function migrateCommand(core, values) {
   const at = values.at ?? new Date().toISOString().replace(/\.\d+Z$/u, "Z");
   const bundle = readBundle(values.bundle ?? "");
   const state = await materializeWorkspace(workspace);
+  // migrate has no host input in its command contract, so the optional host remains
+  // undefined rather than being guessed here.
   const policy = readKnowledgeLanguagePolicy(state.settings);
   if (policy.artifactLanguage === null) return fail("KNOWLEDGE_LANGUAGE_UNCONFIGURED", "artifact.language is not recorded in this workspace");
   const answer = await listKnowledgeMetadata(workspace, { at, selection: "all", limit: 1_048_576, allowTrailing: true });

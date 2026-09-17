@@ -58,6 +58,7 @@ import { planCommand, migrateCommand } from "../scripts/knowledge-language.mjs";
 const instant = (second) => `2026-09-08T00:00:${String(second).padStart(2, "0")}Z`;
 const OWNER = deriveStableId("owner", "STORY-364-OWNER");
 const ECONOMY_MODEL = "claude-sonnet-5";
+const DISPATCH_TIERS_VALUE = JSON.stringify({ "claude-code": { economy: { model: ECONOMY_MODEL, effort: "medium" } } });
 
 // The stand-in for the economy-tier model. The engine never calls a model, so what a test
 // supplies and what the write-path hook supplies are the same kind of thing: answers.
@@ -123,7 +124,7 @@ async function seedDistractors(workspace, languageProvider, startAt) {
     await captureKnowledgeUnit(workspace, {
       occurredAt: instant(second), subject, summary, snippet, tags: ["lesson"],
       accountableOwnerId: OWNER, body: `${subject}。${summary}。`, externalKey, coexist: true,
-    }, { languageProvider });
+    }, { languageProvider, host: "claude-code" });
     second += 1;
   }
 }
@@ -292,9 +293,9 @@ test("STORY-364: an unconfigured workspace stores exactly the prose it was hande
 test("STORY-364: a card captured in English is stored in the artefact language, with phrasings", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
   });
-  const written = await captureKnowledgeUnit(workspace, englishCard, { languageProvider: provider() });
+  const written = await captureKnowledgeUnit(workspace, englishCard, { languageProvider: provider(), host: "claude-code" });
   assert.equal(written.reasonCode, "KNOWLEDGE_UNIT_CREATED");
   const records = (await listKnowledgeMetadata(workspace, { at: instant(12), allowTrailing: true })).records;
   const stored = records[0];
@@ -318,10 +319,10 @@ test("STORY-364: a language-configured workspace refuses a write it cannot trans
   );
   const noAnswers = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
   });
   await assert.rejects(
-    () => captureKnowledgeUnit(noAnswers, englishCard),
+    () => captureKnowledgeUnit(noAnswers, englishCard, { host: "claude-code" }),
     (error) => error.reasonCode === "KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE",
     "a model named but no answers carried is the second; both refuse rather than degrade",
   );
@@ -332,8 +333,8 @@ test("STORY-364: a language-configured workspace refuses a write it cannot trans
 test("STORY-364: the answers are checked against the model the workspace actually records", () => {
   const policy = readKnowledgeLanguagePolicy([
     { key: "artifact.language", value: "zh-CN" },
-    { key: "model.economyTier", value: ECONOMY_MODEL },
-  ]);
+    { key: "execution.dispatchTiers", value: DISPATCH_TIERS_VALUE },
+  ], "claude-code");
   assert.equal(policy.economyModel, ECONOMY_MODEL);
   assert.deepEqual([...policy.promptLanguages], ["zh-CN"], "prompt languages default to the artefact language");
   assert.throws(
@@ -350,8 +351,8 @@ test("STORY-364: the answers are checked against the model the workspace actuall
 test("STORY-364: phrasings outside the normative bounds are refused", () => {
   const policy = readKnowledgeLanguagePolicy([
     { key: "artifact.language", value: "zh-CN" },
-    { key: "model.economyTier", value: ECONOMY_MODEL },
-  ]);
+    { key: "execution.dispatchTiers", value: DISPATCH_TIERS_VALUE },
+  ], "claude-code");
   const fields = { subject: "凭据不是前置", summary: "密钥未批不阻塞实现", snippet: "对着接口做" };
   assert.equal(KNOWLEDGE_EXPANSION_LIMITS.maximumBytes, 1_024);
   for (const [label, phrasings] of [
@@ -384,8 +385,8 @@ test("STORY-364: a prompt outside the recorded prompt languages is counted once,
   const policy = readKnowledgeLanguagePolicy([
     { key: "artifact.language", value: "zh-CN" },
     { key: "retrieval.promptLanguages", value: "zh-CN" },
-    { key: "model.economyTier", value: ECONOMY_MODEL },
-  ]);
+    { key: "execution.dispatchTiers", value: DISPATCH_TIERS_VALUE },
+  ], "claude-code");
   const outside = resolveQueryLanguage("is the key still blocking development", policy);
   assert.equal(outside.queryLanguage, "en");
   assert.deepEqual(outside.telemetry, { queryTranslations: 1 });
@@ -401,7 +402,7 @@ test("STORY-364: a prompt outside the recorded prompt languages is counted once,
 test("STORY-364: the recall verb reports the query language and its telemetry", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
     "retrieval.promptLanguages": "zh-CN",
   });
   await captureKnowledgeUnit(workspace, {
@@ -409,11 +410,11 @@ test("STORY-364: the recall verb reports the query language and its telemetry", 
     subject: "凭据不是实现的前置",
     summary: "密钥还没批下来并不阻塞要用它的工作",
     snippet: "对着接口做，不对着密钥做",
-  }, { languageProvider: provider() });
+  }, { languageProvider: provider(), host: "claude-code" });
   await seedDistractors(workspace, provider(), 10);
   resetRecallCache();
   let output = "";
-  await runCli(["recall", "--workspace", workspace, "--at", instant(20),
+  await runCli(["recall", "--workspace", workspace, "--host", "claude-code", "--at", instant(20),
     "--query", "is the key still blocking development", "--allow-trailing", "true"],
   { write(value) { output = value; } });
   const answer = JSON.parse(output);
@@ -425,7 +426,7 @@ test("STORY-364: the recall verb reports the query language and its telemetry", 
     "the verb names the model that owes the translation; it never calls one");
   resetRecallCache();
   let second = "";
-  await runCli(["recall", "--workspace", workspace, "--at", instant(21),
+  await runCli(["recall", "--workspace", workspace, "--host", "claude-code", "--at", instant(21),
     "--query", "密钥还没申请下来是不是整个开发都得先卡住", "--allow-trailing", "true"],
   { write(value) { second = value; } });
   const translated = JSON.parse(second);
@@ -438,7 +439,7 @@ test("STORY-364: the recall verb reports the query language and its telemetry", 
 test("STORY-364: phrasings feed the weight-6 recall column, so a question worded differently lands", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
   });
   await captureKnowledgeUnit(workspace, {
     ...englishCard,
@@ -450,11 +451,12 @@ test("STORY-364: phrasings feed the weight-6 recall column, so a question worded
     languageProvider: provider({
       expand: () => ["密钥没申请下来开发要不要停", "开发能不能先做", "等凭据是不是必须的"],
     }),
+    host: "claude-code",
   });
   await seedDistractors(workspace, provider(), 10);
   resetRecallCache();
   let output = "";
-  await runCli(["recall", "--workspace", workspace, "--at", instant(22),
+  await runCli(["recall", "--workspace", workspace, "--host", "claude-code", "--at", instant(22),
     "--query", "密钥没申请下来开发要不要停", "--allow-trailing", "true"],
   { write(value) { output = value; } });
   const answer = JSON.parse(output);
@@ -492,7 +494,7 @@ function cliJson(argv) {
 test("STORY-364 R3: knowledge-create reaches the write-path hook, and is refused without answers", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
   });
   const bundle = await writeBundle(join(containerOf(workspace), "create-bundle.json"), {
     model: ECONOMY_MODEL,
@@ -507,7 +509,7 @@ test("STORY-364 R3: knowledge-create reaches the write-path hook, and is refused
     "--source-digest", DIGEST, "--evidence-ids", deriveStableId("evidence", "STORY-364-CREATE"),
     "--lifecycle", "active", "--retrieval", "default", "--freshness", "fresh",
     "--last-verified", instant(9), "--stale-days", "90", "--export", "metadata-only",
-    "--body", englishCard.body, ...extra];
+    "--body", englishCard.body, "--host", "claude-code", ...extra];
 
   await assert.rejects(() => cliJson(argv()),
     (error) => error.reasonCode === "KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE",
@@ -523,7 +525,7 @@ test("STORY-364 R3: knowledge-create reaches the write-path hook, and is refused
 test("STORY-364 R3: a batch's create members each get their own answers, keyed by external key", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
   });
   const container = containerOf(workspace);
   const member = (externalKey) => ({
@@ -551,7 +553,7 @@ test("STORY-364 R3: a batch's create members each get their own answers, keyed b
     },
   });
   const argv = (...extra) => ["knowledge-batch", "--workspace", workspace, "--expected-version", "0",
-    "--at", instant(10), "--from-file", document, ...extra];
+    "--at", instant(10), "--from-file", document, "--host", "claude-code", ...extra];
 
   await assert.rejects(() => cliJson(argv()),
     (error) => JSON.parse(error.message).failed.reasonCode === "KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE",
@@ -569,7 +571,7 @@ test("STORY-364 R3: a batch's create members each get their own answers, keyed b
 test("STORY-364 R3: conference-close --distill reaches the write-path hook", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "en",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
   });
   const bundle = await writeBundle(join(containerOf(workspace), "distill-bundle.json"), {
     model: ECONOMY_MODEL,
@@ -593,7 +595,7 @@ test("STORY-364 R3: conference-close --distill reaches the write-path hook", asy
     "--at", instant(second), "--conference-id", deriveStableId("conference", `STORY-364-CONFERENCE-${suffix}`),
     "--minutes-external-key", `STORY-364-MINUTES-${suffix}`, "--summary", "the approach was ratified",
     "--outcome-class", "role_decision", "--decisions", "record the artefact language as a setting",
-    "--unresolved-issues", "-", "--distill", "true", "--accountable-owner-id", OWNER,
+    "--unresolved-issues", "-", "--distill", "true", "--accountable-owner-id", OWNER, "--host", "claude-code",
     "--stale-days", "90", "--evidence-ids", deriveStableId("evidence", "STORY-364-CLOSE"), ...extra];
 
   await assert.rejects(() => cliJson(argv("A", 12)),
@@ -612,7 +614,7 @@ test("STORY-364 R3: conference-close --distill reaches the write-path hook", asy
 test("STORY-364 R4: the injection hook translates once and asks again, and adds the two counts", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",
-    "model.economyTier": ECONOMY_MODEL,
+    "execution.dispatchTiers": DISPATCH_TIERS_VALUE,
     "retrieval.promptLanguages": "zh-CN",
   });
   const containerRoot = containerOf(workspace);
@@ -621,7 +623,7 @@ test("STORY-364 R4: the injection hook translates once and asks again, and adds 
     subject: "凭据不是实现的前置",
     summary: "密钥还没批下来并不阻塞要用它的工作",
     snippet: "对着接口做，不对着密钥做",
-  }, { languageProvider: provider() });
+  }, { languageProvider: provider(), host: "claude-code" });
   await seedDistractors(workspace, provider(), 10);
   const prompt = "is the key still blocking development";
   const bundle = await writeBundle(join(containerRoot, "query-bundle.json"), {
@@ -629,14 +631,14 @@ test("STORY-364 R4: the injection hook translates once and asks again, and adds 
     translations: { [prompt]: "密钥还没申请下来是不是整个开发都得先卡住" },
   });
 
-  const untranslated = await runInjection({ prompt, partition: "cross-project", containerRoot });
+  const untranslated = await runInjection({ prompt, partition: "cross-project", containerRoot, host: "claude" });
   assert.equal(untranslated.ok, true);
   assert.deepEqual(untranslated.queryTranslation, { from: "en", to: "zh-CN", model: ECONOMY_MODEL },
     "the engine says a translation is owed and names the model that owes it");
   assert.equal(untranslated.translatedQuery, null, "with no translator the hook keeps the first answer");
   assert.deepEqual(untranslated.telemetry, { queryTranslations: 1 });
 
-  const translated = await runInjection({ prompt, partition: "cross-project", containerRoot, translate: bundleTranslator(bundle) });
+  const translated = await runInjection({ prompt, partition: "cross-project", containerRoot, host: "claude", translate: bundleTranslator(bundle) });
   assert.equal(translated.translatedQuery, "密钥还没申请下来是不是整个开发都得先卡住");
   assert.deepEqual(translated.telemetry, { queryTranslations: 1 },
     "one owed on the first ask plus none owed on the second: the two counts added, not counted twice");
@@ -644,7 +646,7 @@ test("STORY-364 R4: the injection hook translates once and asks again, and adds 
     "and the second ask is the one whose answer is injected");
 
   const missing = await runInjection({
-    prompt, partition: "cross-project", containerRoot,
+    prompt, partition: "cross-project", containerRoot, host: "claude",
     translate: bundleTranslator(await writeBundle(join(containerRoot, "empty-bundle.json"), { model: ECONOMY_MODEL, translations: {} })),
   });
   assert.equal(missing.ok, true);

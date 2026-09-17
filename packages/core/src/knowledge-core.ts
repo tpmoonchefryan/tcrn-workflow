@@ -336,6 +336,7 @@ export interface KnowledgeMutationOptions extends KnowledgeReadOptions {
   // here, and a workspace that has recorded an artefact language refuses the write when
   // they are absent.
   readonly languageProvider?: KnowledgeLanguageProvider;
+  readonly host?: string;
 }
 
 export interface KnowledgeListQuery extends KnowledgeReadOptions {
@@ -1659,6 +1660,7 @@ function buildMetadata(
   body: Buffer,
   workspace: WorkspaceState,
   languageProvider?: KnowledgeLanguageProvider,
+  host?: string,
 ): KnowledgeUnitMetadata {
   let externalKey: string;
   try {
@@ -1708,7 +1710,7 @@ function buildMetadata(
   try {
     language = applyWriteLanguagePolicy(
       { subject: input.subject, summary: input.summary, snippet: input.snippet },
-      readKnowledgeLanguagePolicy(workspace.settings),
+      readKnowledgeLanguagePolicy(workspace.settings, host),
       languageProvider,
     );
   } catch (error) {
@@ -1853,7 +1855,7 @@ export async function createKnowledgeUnit(workspaceRoot: string, input: CreateKn
   const sourceDigest = input.sourceDigest && input.sourceDigest.length > 0
     ? input.sourceDigest
     : await calculateKnowledgeSourceDigest(workspaceRoot, workspace, input.sourceReferences, input.body);
-  const metadata = buildMetadata({ ...input, sourceDigest }, body, workspace, options.languageProvider);
+  const metadata = buildMetadata({ ...input, sourceDigest }, body, workspace, options.languageProvider, options.host);
   const initial = await mutationAdmissionScan(workspaceRoot, options);
   const claim = await acquireMutationClaim(initial);
   // WSC-6: every escape from the claim-held region that leaves this process alive must
@@ -3076,7 +3078,7 @@ export async function refreshKnowledgeArticle(
     try {
       language = applyWriteLanguagePolicy(
         { subject: article.title, summary: input.summary, snippet: truncateArticleUtf8(input.summary, KNOWLEDGE_LIMITS.maximumSnippetBytes) },
-        readKnowledgeLanguagePolicy(scan.workspace.settings),
+        readKnowledgeLanguagePolicy(scan.workspace.settings, options.host),
         options.languageProvider,
       );
     } catch (error) {

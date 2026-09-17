@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { canonicalJson, compareCanonicalText } from "../../protocol/src/index.js";
+import { readDispatchConfig } from "./dispatch-config.js";
 
 /**
  * TCRN-CROSS-STORY-364: the artefact language of a knowledge card, and the question
@@ -106,7 +107,7 @@ export interface SettingsView {
   readonly value: string;
 }
 
-export function readKnowledgeLanguagePolicy(settings: readonly SettingsView[]): KnowledgeLanguagePolicy {
+export function readKnowledgeLanguagePolicy(settings: readonly SettingsView[], host?: string): KnowledgeLanguagePolicy {
   const valueOf = (key: string): string | null => settings.find((entry) => entry.key === key)?.value ?? null;
   const artifactValue = valueOf("artifact.language");
   const artifactLanguage = isArtifactLanguageTag(artifactValue) ? artifactValue : null;
@@ -114,7 +115,15 @@ export function readKnowledgeLanguagePolicy(settings: readonly SettingsView[]): 
   const promptLanguages = declared.length > 0
     ? declared
     : (artifactLanguage === null ? Object.freeze([]) as readonly ArtifactLanguageTag[] : Object.freeze([artifactLanguage]));
-  const economyModel = valueOf("model.economyTier");
+  let economyModel: string | null = null;
+  if (host !== undefined) {
+    try {
+      const configured = readDispatchConfig(settings).tiers[host]?.economy?.model;
+      economyModel = configured === undefined || configured.length === 0 ? null : configured;
+    } catch {
+      economyModel = null;
+    }
+  }
   return Object.freeze({
     artifactLanguage,
     promptLanguages,
@@ -215,8 +224,8 @@ export function applyWriteLanguagePolicy(
   if (policy.economyModel === null) {
     throw new KnowledgeLanguageError(
       "KNOWLEDGE_LANGUAGE_MODEL_UNAVAILABLE",
-      "artifact.language is recorded but model.economyTier names no model",
-      { artifactLanguage: target, setting: "model.economyTier" },
+      "artifact.language is recorded but no economy-tier model is configured",
+      { artifactLanguage: target },
     );
   }
   if (provider === undefined) {
@@ -308,7 +317,7 @@ export function resolveQueryLanguage(query: string, policy: KnowledgeLanguagePol
  * TCRN-CROSS-STORY-364 requirement 3 names four write entry points, and none of them may
  * reach a network: packages/* declare no runtime dependency and verify:p1's offline leg
  * measures that. So the economy-tier model's answers arrive as data -- a bundle the Agent
- * produced by asking the model recorded in `model.economyTier` -- and this factory turns
+ * produced by asking the economy-tier model configured for the current host -- and this factory turns
  * that data into the provider `applyWriteLanguagePolicy` asks for. The engine still calls
  * no model; it only checks that the answers it was handed are the ones it needs.
  *

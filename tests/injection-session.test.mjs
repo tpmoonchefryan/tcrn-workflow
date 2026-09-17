@@ -31,6 +31,7 @@ import {
 } from "../scripts/knowledge-inject-hook.mjs";
 
 const emptyWorkspace = { work: [], events: [], conferences: [], conferenceMinutes: [] };
+const dispatchTiers = (model) => JSON.stringify({ "claude-code": { economy: { model, effort: "medium" } } });
 
 async function stateDirectory(context, name) {
   const directory = await mkdtemp(join(tmpdir(), `tcrn-injection-${name}-`));
@@ -125,7 +126,7 @@ test("418 rejects an unbound subagent without reading global L0 or calling auxil
     hookInput: { hook_event_name: "SubagentStart", session_id: "unbound-subagent" },
     stateDirectory: directory,
     workspaceState,
-    settings: [{ key: "model.economyTier", currentValue: "not-used" }],
+    settings: [{ key: "execution.dispatchTiers", currentValue: dispatchTiers("not-used") }],
     recall: async () => { recalls += 1; return { ok: true, result: { records: [] } }; },
     translate: async () => { translates += 1; return { text: "translated" }; },
     judge: async () => { judgments += 1; return { judgment: true }; },
@@ -165,7 +166,7 @@ test("418 binds a subagent to one workId and Pack, keeping unrelated active work
     hookInput: { hook_event_name: "SubagentStart", session_id: "bound-subagent", role: "subagent", workId: "work:target", pack: "EPIC135/HC1" },
     stateDirectory: directory,
     workspaceState,
-    settings: [{ key: "model.economyTier", currentValue: "not-used" }],
+    settings: [{ key: "execution.dispatchTiers", currentValue: dispatchTiers("not-used") }],
     recall: async () => { recalls += 1; return { ok: true, result: { records: [] } }; },
     translate: async () => { auxiliary += 1; return { text: "translated" }; },
     judge: async () => { auxiliary += 1; return { judgment: true }; },
@@ -313,11 +314,12 @@ test("R6 invokes its independent translator before the recall call", async () =>
   await runInjection({
     prompt: "hello world",
     partition: "cross-project",
+    host: "claude",
     budget: 24_576,
     settings: [
       { key: "artifact.language", currentValue: "zh-CN" },
       { key: "retrieval.promptLanguages", currentValue: "zh-CN" },
-      { key: "model.economyTier", currentValue: "test-economy" },
+      { key: "execution.dispatchTiers", currentValue: dispatchTiers("test-economy") },
     ],
     translate: async () => { order.push("translate"); return { text: "你好世界", model: "test-economy" }; },
     recall: async (query) => { order.push(`recall:${query}`); return { ok: true, result: { records: [] } }; },
@@ -330,12 +332,13 @@ test("R6 records a translator failure on the last session decision instead of dr
   const settings = [
     { key: "artifact.language", currentValue: "zh-CN" },
     { key: "retrieval.promptLanguages", currentValue: "zh-CN" },
-    { key: "model.economyTier", currentValue: "test-economy" },
+    { key: "execution.dispatchTiers", currentValue: dispatchTiers("test-economy") },
   ];
   const result = await runSessionInjection({
     prompt: "hello world",
     sessionId: "translation-failure",
     event: "UserPromptSubmit",
+    host: "claude",
     stateDirectory: directory,
     workspaceState: emptyWorkspace,
     budget: 24_576,

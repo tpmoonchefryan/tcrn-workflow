@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "1d89950cf7f1362edc0c841acd4609c43ebd66086f6a215b874ddd783e8c1196",
+  "basisDigest": "0441282a0ca15b2b2daa9c1a8b802975048752ef11b4020472ee2ca295b7c5fa",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -16,8 +16,8 @@
     },
     {
       "path": "fixtures/injection-placement-manifest.json",
-      "size": 1472,
-      "sha256": "546e81724ffd3c108fdb2d785be98d8a93fda53b8072ff03b2c3f5317f5d77f2"
+      "size": 1478,
+      "sha256": "10c56e8bf98568b91276e57d8e397214613ce1895b84c3d8b082b3dbe845602c"
     },
     {
       "path": "fixtures/isolated-proof/README.md",

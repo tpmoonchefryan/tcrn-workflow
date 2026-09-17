@@ -392,15 +392,11 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     defaultValue: "docs/knowledge/articles",
   },
   {
-    // TCRN-CROSS-STORY-364 (Owner ruling TCRN-CROSS-MIN-152 D3): the economy-tier model the
-    // write-path hook and the query-side fallback call, recorded as a value so that no model
-    // name appears in engine code. Unset means no model is available, which is what makes a
-    // write on a language-configured workspace refuse rather than degrade.
-    //
-    // Reversible on purpose. TCRN-CROSS-STORY-369 lands a tier table naming a model per tier;
-    // when it does, this key is either that table's economy row read through the same name or
-    // is retired with its one reader, and nothing stored under it constrains that choice -- a
-    // settings record is withdrawn by the ordinary settings path.
+    // TCRN-CROSS-STORY-364 (Owner ruling TCRN-CROSS-MIN-152 D3): this setting is retired.
+    // The write-path hook and query-side fallback read the economy model from the host's
+    // execution.dispatchTiers row; no current reader consults this entry. It remains in the
+    // catalog as a read-only replay-compatibility slot because historical settings events
+    // still validate their key against the catalog.
     key: "model.economyTier",
     type: "string",
     controlType: "text",
