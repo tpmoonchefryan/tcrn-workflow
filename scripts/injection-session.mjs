@@ -822,8 +822,9 @@ async function ensureProcessGroupEmpty(pid) {
 }
 
 function modelCommand(host, model, cwd, systemPrompt) {
-  if (host === "codex") {
-    return { executable: "codex", arguments: ["exec", "-C", cwd, "-m", model, "-s", "read-only", "--ephemeral", "--skip-git-repo-check"], cwd, systemPrompt };
+  const codexCliModel = model.startsWith("codex-cli:") ? model.slice("codex-cli:".length) : null;
+  if (host === "codex" || codexCliModel !== null) {
+    return { executable: "codex", arguments: ["exec", "-C", cwd, "-m", codexCliModel ?? model, "-s", "read-only", "--ephemeral", "--skip-git-repo-check"], cwd, systemPrompt };
   }
   return { executable: "claude", arguments: ["-p", "--bare", "--model", model, "--system-prompt", systemPrompt], cwd, systemPrompt };
 }
@@ -871,7 +872,7 @@ export class UninjectedModelCall {
     });
     // codex exec's argv has no system-prompt flag (unlike claude's --system-prompt above),
     // so its stdin body carries the instruction; claude's stdin stays the bare prompt.
-    const stdinBody = this.host === "codex" ? `${command.systemPrompt}\n\n${String(prompt ?? "")}` : String(prompt ?? "");
+    const stdinBody = command.executable === "codex" ? `${command.systemPrompt}\n\n${String(prompt ?? "")}` : String(prompt ?? "");
     try { child.stdin?.end(stdinBody); } catch { /* a dead model is fail-open */ }
     let timer;
     const timeout = new Promise((resolveTimeout) => {

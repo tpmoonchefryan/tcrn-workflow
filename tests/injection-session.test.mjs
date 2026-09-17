@@ -490,6 +490,40 @@ test("codex stdin opens with the system prompt while claude stdin stays the bare
   assert.equal(bodies[1], "original prompt");
 });
 
+test("codex-cli model prefixes use codex for both hosts and preserve the system prompt", async () => {
+  const systemPrompt = "Return only the requested answer.";
+  const calls = [];
+  const captureSpawn = (executable, args, options) => {
+    const child = new EventEmitter();
+    child.pid = process.pid;
+    child.stdin = { end(body) { calls.push({ executable, args, options, body }); } };
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    setImmediate(() => { child.stdout.emit("data", "reply"); child.emit("close", 0, null); });
+    return child;
+  };
+
+  for (const host of ["claude", "codex"]) {
+    const call = new UninjectedModelCall({
+      host,
+      model: "codex-cli:gpt-5.6-luna/max",
+      cwd: tmpdir(),
+      systemPrompt,
+      spawnImpl: captureSpawn,
+    });
+    await call.call(`prompt-${host}`);
+  }
+
+  assert.equal(calls.length, 2);
+  for (const { executable, args, body } of calls) {
+    assert.equal(executable, "codex");
+    const modelIndex = args.indexOf("-m");
+    assert.equal(args[modelIndex + 1], "gpt-5.6-luna/max");
+    assert.equal(args.some((argument) => argument.includes("codex-cli:")), false);
+    assert.equal(body.split("\n\n")[0], systemPrompt);
+  }
+});
+
 test("a hook payload past 512000 bytes drops tool_response and is marked truncated", () => {
   const small = { hook_event_name: "PostToolUse", prompt: "x" };
   assert.equal(boundedHookInput(small), JSON.stringify(small));
