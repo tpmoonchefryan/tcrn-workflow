@@ -5,10 +5,14 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import test from "node:test";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { runCli } from "../dist/build/packages/cli/src/index.js";
+import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
 import {
   AGENT_LIFECYCLE_SCHEMA_VERSION,
   buildNativeSpawnInput,
@@ -36,6 +40,32 @@ function lifecycle(overrides = {}) {
     sameTaskRunning: false,
     ...overrides,
   };
+}
+
+// The host-scoped lifecycle cases judge the adapter's own branch, so they build a scratch
+// workspace (both hosts' economy tier plus one active work item) instead of reading live settings.
+async function hostFixture(t) {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-dispatch-native-")));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    const path = join(base, kind);
+    await mkdir(path);
+    roots.push({ kind, path });
+  }
+  const at = (second) => new Date(Date.UTC(2026, 0, 1) + second * 1000).toISOString().replace(/\.\d+Z$/u, "Z");
+  await initializeWorkspace({ roots, externalKey: "FIXTURE-DISPATCH-NATIVE", createdAt: at(0) });
+  const workspace = join(base, "workspace");
+  const run = async (args) => {
+    let output = "";
+    await runCli([...args, "--actor", "agent:test"], { write: (value) => { output += value; } });
+    return JSON.parse(output);
+  };
+  await run(["dispatch-tiers-set", "--workspace", workspace, "--expected-version", "0", "--at", at(1), "--host", "claude-code", "--tiers", JSON.stringify({ economy: { model: "claude-fixture-model", effort: "max" } })]);
+  await run(["dispatch-tiers-set", "--workspace", workspace, "--expected-version", "1", "--at", at(2), "--host", "codex", "--tiers", JSON.stringify({ economy: { model: "gpt-5.6-luna", effort: "max" } })]);
+  const project = await run(["project-create", "--workspace", workspace, "--expected-version", "2", "--at", at(3), "--external-key", "FIXTURE-PROJECT", "--name", "Fixture"]);
+  const work = await run(["work-create", "--workspace", workspace, "--expected-version", "3", "--at", at(4), "--project-id", project.record.id, "--external-key", "FIXTURE-WORK", "--kind", "Initiative", "--status", "active", "--scope", "fixture scope", "--title", "Fixture work"]);
+  return { workspace, workId: work.record.id };
 }
 
 test("native resolution reads the live dispatch settings and returns the configured model", async () => {
@@ -105,6 +135,42 @@ test("native spawn input forwards only the engine model/effort and explicit life
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.spawn, { model: "gpt-5.6-luna", effort: "max" });
   assert.equal(result.lifecycle.workId, ACTIVE_WORK);
+});
+
+test("the Claude Code host needs no agentLifecycle record to spawn or to validate its native call", async (t) => {
+  const { workspace, workId } = await hostFixture(t);
+  const prepared = await resolveDispatchRequest({ workspace, host: "claude-code", taskClass: "implement" });
+  assert.equal(prepared.executable, true, JSON.stringify(prepared));
+
+  const spawn = buildNativeSpawnInput(prepared, undefined);
+  assert.equal(spawn.reasonCode, "DISPATCH_NATIVE_SPAWN_READY", JSON.stringify(spawn));
+  assert.deepEqual(spawn.spawn, { model: "claude-fixture-model", effort: "max" });
+  assert.equal(buildNativeSpawnInput(prepared, { workId }).reasonCode, "DISPATCH_NATIVE_SPAWN_READY");
+  assert.equal(buildNativeSpawnInput(prepared, { model: "not-the-resolved-model" }).reasonCode, "DISPATCH_MODEL_MISMATCH");
+  assert.equal(buildNativeSpawnInput(prepared, { effort: "low" }).reasonCode, "DISPATCH_EFFORT_MISMATCH");
+
+  const invocation = { model: "claude-fixture-model", effort: "max", workId };
+  const validated = await validateDispatchInvocation({ prepared, invocation });
+  assert.equal(validated.reasonCode, "DISPATCH_NATIVE_INVOCATION_VALID", JSON.stringify(validated));
+  assert.equal(validated.lifecycle, null);
+  assert.equal(validated.observations.status, "unknown");
+  assert.equal((await validateDispatchInvocation({ prepared, invocation: { ...invocation, model: "wrong-model" } })).reasonCode, "DISPATCH_MODEL_MISMATCH");
+});
+
+test("the codex host still requires a valid agentLifecycle to spawn and to validate its native call", async (t) => {
+  const { workspace, workId } = await hostFixture(t);
+  const prepared = await resolveDispatchRequest({ workspace, host: "codex", taskClass: "implement" });
+  assert.equal(prepared.executable, true, JSON.stringify(prepared));
+
+  assert.equal(buildNativeSpawnInput(prepared, undefined).reasonCode, "DISPATCH_LIFECYCLE_REQUIRED");
+  assert.equal(buildNativeSpawnInput(prepared, lifecycle({ workId, forkTurns: "all" })).reasonCode, "DISPATCH_LIFECYCLE_INVALID");
+  assert.equal(buildNativeSpawnInput(prepared, lifecycle({ workId })).reasonCode, "DISPATCH_NATIVE_SPAWN_READY");
+
+  const invocation = { model: "gpt-5.6-luna", effort: "max", workId };
+  assert.equal((await validateDispatchInvocation({ prepared, invocation })).reasonCode, "DISPATCH_LIFECYCLE_REQUIRED");
+  assert.equal((await validateDispatchInvocation({ prepared, invocation, lifecycle: lifecycle({ workId, forkTurns: "all" }) })).reasonCode, "DISPATCH_LIFECYCLE_INVALID");
+  const validated = await validateDispatchInvocation({ prepared, invocation, lifecycle: lifecycle({ workId }) });
+  assert.equal(validated.reasonCode, "DISPATCH_NATIVE_INVOCATION_VALID", JSON.stringify(validated));
 });
 
 test("invocation validation rereads relevant work/config and ignores unrelated head fields", async () => {

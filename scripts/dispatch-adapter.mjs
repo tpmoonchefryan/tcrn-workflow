@@ -429,28 +429,44 @@ function preparedMatchesCurrent(prepared, current) {
   return { ok: true };
 }
 
-/** Build the exact model/effort and lifecycle values sent to a native spawn. */
+/**
+ * Build the exact model/effort and lifecycle values sent to a native spawn.
+ *
+ * The full agentLifecycle declaration (phase/newInstance/forkTurns/workId, enforced by
+ * validateAgentLifecycle below) is a Codex-adapter-layer concept: fork_turns and instance
+ * reuse only have meaning for Codex's native collaborative dispatch. TCRN-CROSS-MIN-199 D1
+ * keeps the Claude Code host in its own native shape (Agent-tool instance per call,
+ * SendMessage continuation decided by prompt, no agentLifecycle record); TCRN-CROSS-MIN-200
+ * D5 / TCRN-CROSS-MIN-201 D1 move the mandatory lifecycle check and its workId binding to
+ * the Codex path only. A non-Codex host may omit `lifecycle` or pass a partial object: the
+ * resolved model/effort are still forwarded, and an explicit host/class/mode/model/effort
+ * mismatch is still refused for every host.
+ */
 export function buildNativeSpawnInput(prepared, lifecycle) {
   if (!prepared || prepared.schemaVersion !== DISPATCH_ADAPTER_VERSION || prepared.executable !== true || !isRecord(prepared.resolution?.value)) {
     return failure("DISPATCH_RESOLUTION_NOT_EXECUTABLE", "an executable current resolution is required before spawn");
   }
-  if (!isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "a lifecycle declaration is required before spawn");
-  const workId = invocationValue(lifecycle, ["workId", "work_id", "taskId", "task_id"]);
-  if (typeof workId !== "string" || workId.trim().length === 0) return failure("DISPATCH_WORK_BINDING_REQUIRED", "lifecycle workId is required before spawn");
+  const requiresLifecycle = prepared.resolution.host === "codex";
+  if (requiresLifecycle && !isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "a lifecycle declaration is required before spawn");
+  const declaredInput = isRecord(lifecycle) ? lifecycle : {};
+  const workId = invocationValue(declaredInput, ["workId", "work_id", "taskId", "task_id"]);
+  if (requiresLifecycle && (typeof workId !== "string" || workId.trim().length === 0)) return failure("DISPATCH_WORK_BINDING_REQUIRED", "lifecycle workId is required before spawn");
   const value = prepared.resolution.value;
   const declared = {
-    ...lifecycle,
-    model: Object.hasOwn(lifecycle, "model") ? lifecycle.model : value.model,
-    effort: Object.hasOwn(lifecycle, "effort") ? lifecycle.effort : value.effort,
+    ...declaredInput,
+    model: Object.hasOwn(declaredInput, "model") ? declaredInput.model : value.model,
+    effort: Object.hasOwn(declaredInput, "effort") ? declaredInput.effort : value.effort,
   };
-  const lifecycleClass = invocationValue(lifecycle, ["taskClass", "dispatchClass", "class"]);
+  const lifecycleClass = invocationValue(declaredInput, ["taskClass", "dispatchClass", "class"]);
   if (lifecycleClass !== undefined && lifecycleClass !== prepared.resolution.taskClass) return failure("DISPATCH_CLASS_MISMATCH", "lifecycle class does not match the engine resolution", { expected: prepared.resolution.taskClass, actual: lifecycleClass });
-  const lifecycleHost = invocationValue(lifecycle, ["host"]);
+  const lifecycleHost = invocationValue(declaredInput, ["host"]);
   if (lifecycleHost !== undefined && lifecycleHost !== prepared.resolution.host) return failure("DISPATCH_HOST_MISMATCH", "lifecycle host does not match the engine resolution", { expected: prepared.resolution.host, actual: lifecycleHost });
-  const lifecycleMode = invocationValue(lifecycle, ["mode", "dispatchMode"]);
+  const lifecycleMode = invocationValue(declaredInput, ["mode", "dispatchMode"]);
   if (lifecycleMode !== undefined && lifecycleMode !== prepared.resolution.mode) return failure("DISPATCH_MODE_MISMATCH", "lifecycle mode does not match the engine resolution", { expected: prepared.resolution.mode, actual: lifecycleMode });
-  const lifecycleResult = validateAgentLifecycle(declared);
-  if (!lifecycleResult.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "lifecycle declaration is not dispatchable", { lifecycle: lifecycleResult });
+  if (requiresLifecycle) {
+    const lifecycleResult = validateAgentLifecycle(declared);
+    if (!lifecycleResult.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "lifecycle declaration is not dispatchable", { lifecycle: lifecycleResult });
+  }
   if (declared.model !== value.model) return failure("DISPATCH_MODEL_MISMATCH", "lifecycle model does not match the engine resolution", { expected: value.model, actual: declared.model });
   if (declared.effort !== value.effort) return failure("DISPATCH_EFFORT_MISMATCH", "lifecycle effort does not match the engine resolution", { expected: value.effort, actual: declared.effort });
   return {
@@ -505,14 +521,22 @@ export async function validateDispatchInvocation({ prepared, workspace, host, ta
     if (actual !== undefined && actual !== expected) return failure("DISPATCH_INVOCATION_BINDING_MISMATCH", `native invocation ${name} does not match the engine resolution`, { field: name, expected, actual });
   }
 
-  if (!isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "a lifecycle declaration is required for native dispatch");
-  const declared = {
-    ...lifecycle,
-    model: Object.hasOwn(lifecycle, "model") ? lifecycle.model : current.resolution.value.model,
-    effort: Object.hasOwn(lifecycle, "effort") ? lifecycle.effort : current.resolution.value.effort,
-  };
-  const lifecycleResult = validateAgentLifecycle(declared);
-  if (!lifecycleResult.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "lifecycle declaration is not dispatchable", { lifecycle: lifecycleResult });
+  // The agentLifecycle declaration and its evidence are the Codex adapter layer's fields
+  // (TCRN-CROSS-MIN-199 D1, TCRN-CROSS-MIN-200 D5). Every host keeps the model, effort,
+  // binding, work and scope refusals above and below.
+  const requiresLifecycle = current.resolution.host === "codex";
+  if (requiresLifecycle && !isRecord(lifecycle)) return failure("DISPATCH_LIFECYCLE_REQUIRED", "a lifecycle declaration is required for native dispatch");
+  const declared = requiresLifecycle
+    ? {
+      ...lifecycle,
+      model: Object.hasOwn(lifecycle, "model") ? lifecycle.model : current.resolution.value.model,
+      effort: Object.hasOwn(lifecycle, "effort") ? lifecycle.effort : current.resolution.value.effort,
+    }
+    : null;
+  if (requiresLifecycle) {
+    const lifecycleResult = validateAgentLifecycle(declared);
+    if (!lifecycleResult.ok) return failure("DISPATCH_LIFECYCLE_INVALID", "lifecycle declaration is not dispatchable", { lifecycle: lifecycleResult });
+  }
   const lifecycleClass = invocationValue(lifecycle, ["taskClass", "dispatchClass", "class"]);
   if (lifecycleClass !== undefined && lifecycleClass !== current.resolution.taskClass) return failure("DISPATCH_CLASS_MISMATCH", "lifecycle class does not match the engine resolution", { expected: current.resolution.taskClass, actual: lifecycleClass });
   const lifecycleHost = invocationValue(lifecycle, ["host"]);
@@ -536,8 +560,8 @@ export async function validateDispatchInvocation({ prepared, workspace, host, ta
   if (expectedScope !== undefined && (typeof liveScope !== "string" || expectedScope !== liveScope)) {
     return failure("DISPATCH_SCOPE_MISMATCH", "native invocation scope differs from the current work-show", { expected: liveScope ?? null, actual: expectedScope });
   }
-  const evidence = validateAgentLifecycleEvidence(declared, observedLifecycle);
-  if (evidence.status === "red") return failure("DISPATCH_LIFECYCLE_EVIDENCE_RED", "native lifecycle facts contradict the declaration", { lifecycle: evidence });
+  const evidence = requiresLifecycle ? validateAgentLifecycleEvidence(declared, observedLifecycle) : null;
+  if (evidence?.status === "red") return failure("DISPATCH_LIFECYCLE_EVIDENCE_RED", "native lifecycle facts contradict the declaration", { lifecycle: evidence });
   return {
     schemaVersion: DISPATCH_ADAPTER_VERSION,
     ok: true,
@@ -551,7 +575,7 @@ export async function validateDispatchInvocation({ prepared, workspace, host, ta
     observations: {
       nativeRole: invocationValue(observedLifecycle, ["nativeRole", "agentRole"]) ?? null,
       provider: invocationValue(observedLifecycle, ["provider", "providerIdentity"]) ?? null,
-      status: evidence.status,
+      status: evidence?.status ?? "unknown",
     },
   };
 }
