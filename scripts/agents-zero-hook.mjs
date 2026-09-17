@@ -17,7 +17,7 @@ export const ZERO_SECTION_HEADING = "## 零、输出行文（硬约束）";
 export const OWNER_CONTRACT_RELATIVE_PATH = "platform-docs/owner-output-contract.md";
 const OWNER_CONTRACT_FILE_NAME = "owner-output-contract.md";
 export const OWNER_AUDIENCE = "owner";
-export const OWNER_ON_DEMAND_EVENTS = Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "SubagentStart"]);
+export const OWNER_ON_DEMAND_EVENTS = Object.freeze(["UserPromptSubmit"]);
 export const OWNER_ON_DEMAND_PURPOSES = Object.freeze(["owner-output", "owner-review", "owner-response", "owner-facing", "presentation"]);
 
 function containerRoot() {
@@ -44,7 +44,8 @@ function audienceValue(input = {}) {
   const value = input?.audience ?? input?.outputAudience ?? input?.targetAudience ?? input?.binding?.audience ?? input?.context?.audience;
   if (typeof value !== "string" || value.trim().length === 0) return "missing";
   const normalized = value.trim().toLowerCase();
-  if (["owner", "owner-facing", "owner_facing", "owner-facing-output"].includes(normalized)) return OWNER_AUDIENCE;
+  const event = typeof input?.hook_event_name === "string" ? input.hook_event_name : input?.hookEventName;
+  if (["owner", "owner-facing", "owner_facing", "owner-facing-output"].includes(normalized) && OWNER_ON_DEMAND_EVENTS.includes(event)) return OWNER_AUDIENCE;
   if (["internal", "internal-subagent", "subagent", "main-orchestrator", "acceptance"].includes(normalized)) return "internal";
   return "unknown";
 }
@@ -64,7 +65,10 @@ function ownerRequest(input = {}) {
 export function shouldLoadOwnerContract(input = {}) {
   const event = typeof input?.hook_event_name === "string" ? input.hook_event_name : input?.hookEventName;
   const request = ownerRequest(input);
-  return OWNER_ON_DEMAND_EVENTS.includes(event) && request.explicit && OWNER_ON_DEMAND_PURPOSES.includes(request.purpose);
+  return audienceValue(input) === OWNER_AUDIENCE
+    && OWNER_ON_DEMAND_EVENTS.includes(event)
+    && request.explicit
+    && OWNER_ON_DEMAND_PURPOSES.includes(request.purpose);
 }
 
 /** Resolve the Owner contract through a pointer in the resident index. */
@@ -148,7 +152,7 @@ export function buildHookResponse(input = {}, { root } = {}) {
   }
   const resolvedRoot = root ?? containerRoot();
   const audience = audienceValue(input);
-  const requestedOwnerContract = audience === OWNER_AUDIENCE && shouldLoadOwnerContract(input);
+  const requestedOwnerContract = shouldLoadOwnerContract(input);
   const contract = requestedOwnerContract ? readOwnerOutputContract(resolvedRoot) : null;
   // A legacy heading remains readable for old fixtures only. Production's
   // resident index has no Owner section and internal/unknown audiences never

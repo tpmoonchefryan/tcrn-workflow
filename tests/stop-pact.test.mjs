@@ -75,6 +75,9 @@ test("EPIC135: Owner contract pointers resolve structurally and fail closed", ()
     assert.equal(relative.ok, true);
     assert.equal(relative.text, contract);
     assert.equal(relative.path, join(root, "platform-docs", "owner-output-contract.md"));
+    const ownerRequest = { audience: "owner", request: { purpose: "owner-output" } };
+    assert.match(buildHookResponse({ ...ownerRequest, hook_event_name: "UserPromptSubmit" }, { root }).hookSpecificOutput.additionalContext, /Owner-facing output contract/);
+    assert.equal(buildHookResponse({ ...ownerRequest, hook_event_name: "SubagentStart" }, { root }).hookSpecificOutput.additionalContext, "");
 
     const absolutePath = join(external, "owner-output-contract.md");
     writeFileSync(absolutePath, "# external owner contract\n");
