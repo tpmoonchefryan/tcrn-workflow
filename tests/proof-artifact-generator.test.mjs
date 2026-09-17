@@ -86,6 +86,7 @@ async function fixture(context) {
     "scripts/lib/local-command.mjs": "// route fixture\n",
     "scripts/lib/p8-workflow-rc.mjs": "// route fixture\n",
     "scripts/lib/private-token-roster.mjs": "// route fixture\n",
+    "tests/fixtures/acceptance-gate-groups.json": "{}\n",
     "tools/stop-pact/codex-executor.mjs": "// route fixture\n",
     "tests/codex-stop-pact.test.mjs": "// route fixture\n",
     "scripts/lib/proof-artifacts.mjs": "// route fixture\n",

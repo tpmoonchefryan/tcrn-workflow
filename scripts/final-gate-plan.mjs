@@ -2403,12 +2403,20 @@ export function buildFinalGatePlan({ roster, containment, phase = "candidate-fin
   return legacyPlan;
 }
 
-export function recordExecution(plan, results, { blocked: blockedOverride } = {}) {
+const ROSTER_UNAVAILABLE_PROBLEM = "GATE_PLAN_ROSTER_UNAVAILABLE:";
+
+function executionIntegrityReasonCode(problems) {
+  return problems.length > 0 && problems.every((problem) => problem.startsWith(ROSTER_UNAVAILABLE_PROBLEM))
+    ? "GATE_PLAN_ROSTER_UNAVAILABLE"
+    : "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED";
+}
+
+export function recordExecution(plan, results, { blocked: blockedOverride, rosterPath } = {}) {
   if (plan?.executable !== true) throw planError("GATE_PLAN_NOT_EXECUTABLE", "plan has blocked prerequisites");
   const context = plan && typeof plan === "object" ? DYNAMIC_PLAN_CONTEXTS.get(plan) : undefined;
   if (context === undefined) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", "code-owned planning context is missing");
-  const integrityProblems = executionPlanProblems(plan);
-  if (integrityProblems.length > 0) throw planError("GATE_PLAN_EXECUTION_INTEGRITY_REFUSED", integrityProblems.join("; "));
+  const integrityProblems = executionPlanProblems(plan, { rosterPath });
+  if (integrityProblems.length > 0) throw planError(executionIntegrityReasonCode(integrityProblems), integrityProblems.join("; "));
   const rows = Array.isArray(results) ? results : [];
   const selectedIds = new Set((plan?.selected ?? []).map((entry) => entry.id));
   const executedIds = rows.map((entry) => entry?.id).filter(Boolean);
@@ -2427,7 +2435,7 @@ export function recordExecution(plan, results, { blocked: blockedOverride } = {}
   return next;
 }
 
-function executionPlanProblems(plan) {
+function executionPlanProblems(plan, { rosterPath = defaultRosterPath } = {}) {
   const problems = [];
   const integrity = plan?.integrity;
   if (!integrity || integrity.schemaVersion !== GATE_PLAN_INTEGRITY_VERSION) return ["execution integrity envelope is missing"];
@@ -2449,7 +2457,7 @@ function executionPlanProblems(plan) {
   // a caller cannot edit selected/gates/bindings together and then reseal the
   // public plan digest around an unrelated command.
   try {
-    const roster = JSON.parse(readFileSync(defaultRosterPath, "utf8"));
+    const roster = JSON.parse(readFileSync(rosterPath, "utf8"));
     const containment = JSON.parse(readFileSync(containmentPath, "utf8"));
     const authority = validateRoster(roster, containment);
     const authoritativeRoots = new Map(authority.contained.selected.map((entry) => [entry.id, entry]));
@@ -2465,7 +2473,7 @@ function executionPlanProblems(plan) {
       if (!authorityEntry || normalizeCommand(entry.command) !== normalizeCommand(authorityCommand)) problems.push(`gate command is not bound to the code-owned roster for ${entry?.id ?? "unknown"}`);
     }
   } catch (error) {
-    problems.push(`code-owned roster/containment could not be re-read: ${String(error?.reasonCode ?? error?.message ?? error)}`);
+    problems.push(`${ROSTER_UNAVAILABLE_PROBLEM}${String(error?.reasonCode ?? error?.message ?? error)}`);
   }
   const computedPlanDigest = digestValue({
     phase: plan.phase,
@@ -2508,18 +2516,18 @@ function measuredResultProblems(row, expectedInputs, { requireTrusted = false, e
 }
 
 /** Execute only the selected roots, in declaration order, and retain measured rows. */
-export async function executeSelectedRoots(plan, runner, { getInputs, currentInputs } = {}) {
+export async function executeSelectedRoots(plan, runner, { getInputs, currentInputs, rosterPath } = {}) {
   if (plan?.execution?.strategy !== "serial" || plan?.execution?.maxConcurrent !== 1) {
     throw planError("GATE_PLAN_SERIAL_POLICY_INVALID", "same-repository roots must execute serially");
   }
   if (typeof runner !== "function") throw planError("GATE_PLAN_RUNNER_REQUIRED", "a root runner is required");
   const planContext = plan && typeof plan === "object" ? DYNAMIC_PLAN_CONTEXTS.get(plan) : undefined;
-  const integrityProblems = executionPlanProblems(plan);
+  const integrityProblems = executionPlanProblems(plan, { rosterPath });
   if (integrityProblems.length > 0) {
     return {
       ...plan,
       executed: [],
-      reasonCode: "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED",
+      reasonCode: executionIntegrityReasonCode(integrityProblems),
       blocked: [...(plan.blocked ?? []), { id: "execution-integrity", reason: integrityProblems.join("; ") }],
       executable: false,
       executionPermission: "denied",
@@ -2610,7 +2618,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
     rows.push(row);
     if (drifted) return { ...plan, executed: rows, blocked, invalidated: [...(plan.invalidated ?? []), { id: entry.id, evidenceId: entry.evidenceId ?? null, reasons: ["gate inputs changed while the root was running"] }], executable: false, executionPermission: "denied" };
   }
-  const recorded = recordExecution(plan, rows, { blocked });
+  const recorded = recordExecution(plan, rows, { blocked, rosterPath });
   return {
     ...recorded,
     executable: blocked.length === 0,

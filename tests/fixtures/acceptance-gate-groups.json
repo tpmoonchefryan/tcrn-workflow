@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "tcrn.acceptance-gate-groups.v1",
+  "topLevel": [
+    "engine-release",
+    "platform-layout",
+    "product-gates"
+  ],
+  "note": "Synthetic fixture manually synchronized from the platform acceptance-gate roster for the self-contained STORY-413, STORY-420, and EPIC135 tests; platform-level consistency remains owned by platform-doctor.",
+  "recordedAt": "2026-08-19",
+  "recoveredFrom": "The nine groups were reconstructed from the 2026-08-17 closeout session's own green table, then each was re-run on 2026-08-19 and kept only if it still executes. Where a group's command had moved, the entry carries what runs today rather than what ran then.",
+  "groups": [
+    {
+      "id": "engine-suite",
+      "title": "Engine unit and integration suite",
+      "repository": "TCRN Platform/tcrn-workflow",
+      "command": "pnpm test",
+      "proves": "Every engine behaviour with a test, including the protocol and workspace kernels.",
+      "contains": []
+    },
+    {
+      "id": "engine-p1",
+      "title": "Engine P1 gate train",
+      "repository": "TCRN Platform/tcrn-workflow",
+      "command": "pnpm verify:p1",
+      "proves": "The full ordered gate roster: format, lint, typecheck, build, suite, portal, trust, archive, sbom, licences, vulnerabilities, source, sibling independence, lifecycle, offline, governance, workspace, privacy, roots, ci, verification map, history, and the proof budget.",
+      "contains": [
+        "engine-suite"
+      ]
+    },
+    {
+      "id": "engine-guards",
+      "title": "Guard mutation proof",
+      "repository": "TCRN Platform/tcrn-workflow",
+      "command": "pnpm guard-check",
+      "proves": "Every declared guard is killed by its registered mutation -- that each guard has a proof rather than a claim.",
+      "contains": []
+    },
+    {
+      "id": "engine-release",
+      "title": "Release consistency",
+      "repository": "TCRN Platform/tcrn-workflow",
+      "command": "node scripts/push-gate.mjs",
+      "proves": "Version, badges, release note, translation pins and tag reachability agree across the committed tree. Judges the committed tree, so it runs after the commit.",
+      "contains": [
+        "engine-p1",
+        "engine-guards"
+      ]
+    },
+    {
+      "id": "platform-layout",
+      "title": "Platform layout and deployment freshness",
+      "repository": "TCRN Platform/tcrn-workflow",
+      "command": "node scripts/platform-doctor.mjs --platform-root <container>",
+      "proves": "Partition topology, engine copy alignment, installed adapter markers, trust archive and consumer roots.",
+      "contains": [
+        "chain-validate"
+      ],
+      "acceptedExceptions": [
+        {
+          "acceptedAt": "2026-08-15",
+          "reasonCode": "PLATFORM_LAUNCHD_NOT_ON_DUTY",
+          "reason": "OWNER_RULING_BACKUP_LAYERS_STOPPED"
+        }
+      ]
+    },
+    {
+      "id": "chain-validate",
+      "title": "Every partition validates",
+      "repository": "chain container",
+      "command": "for each partition: tcrn-workflow validate --workspace <partition>/workspace",
+      "proves": "Each chain replays, and its derived views match what the current engine projects. This is the group a view-shape change makes red until every chain is recovered.",
+      "contains": []
+    },
+    {
+      "id": "product-gates",
+      "title": "Product repository gates",
+      "repository": "TCRN Platform/TCRN-Design-System",
+      "command": "pnpm verify",
+      "proves": "The product repository that carries gates and is in MVP scope. Narrowed from DS+AOS to DS alone by Owner ruling on 2026-08-19: the MVP is the workflow and helper repositories, AOS integration is explicitly out of scope, and the AOS red (TCRN-CROSS-INC-234 -- three imports of the engine's MCP facade retired in v0.11.18) is a known exception to be repaired after MVP. Restoring AOS to this group is part of closing INC-234, not a separate decision. The pairing rationale this group originally carried -- a cross-repo change left one repository red for a day because only the author's gate got run -- is precisely what INC-234 caught again, and is why AOS returns here rather than leaving quietly.",
+      "contains": []
+    }
+  ],
+  "narrowedBy": {
+    "ruling": "Owner, 2026-08-19, in-session: 同意收窄 (agree to narrow)",
+    "scope": "MVP phase only; product-gates judges TCRN-Design-System alone",
+    "restoration": "closing TCRN-CROSS-INC-234 restores TCRN-AOS to the product-gates group"
+  }
+}

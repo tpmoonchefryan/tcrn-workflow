@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import test from "node:test";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -17,10 +17,12 @@ import {
 import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, buildGateImpactMap, createGateReceiptAuthority, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, issueGateReceipt, queryGateReceipt, recordExecution } from "../scripts/final-gate-plan.mjs";
 import { classifyProcess } from "../scripts/operational-batch-entry.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
+import { runCli } from "../dist/build/packages/cli/src/index.js";
+import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
 
-const PLATFORM_ROOT = process.env.TCRN_PLATFORM_ROOT ?? resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-const CHAIN_WORKSPACE = join(PLATFORM_ROOT, [".tcrn", "workspace"].join("-"), "cross-project", "workspace");
-const STORY_374 = "work:bba2301b55370dabd7854616";
+const REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const ROSTER_PATH = resolve(REPOSITORY_ROOT, "tests/fixtures/acceptance-gate-groups.json");
+const CONTAINMENT_PATH = resolve(REPOSITORY_ROOT, "scripts/policy/gate-containment.json");
 
 function gitFixture(t) {
   const root = mkdtempSync(join(tmpdir(), "tcrn-review-evidence-repo-"));
@@ -42,11 +44,36 @@ function runUnpreloadedCollect(options) {
   return JSON.parse(result.stdout);
 }
 
-test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separates runner and AST counts", (t) => {
+async function runCliJson(args) {
+  let output = "";
+  await runCli([...args, "--actor", "agent:test"], { write: (value) => { output += value; } });
+  return JSON.parse(output);
+}
+
+async function reviewWorkspace(t, verifyCommand) {
+  const base = realpathSync(mkdtempSync(join(tmpdir(), "tcrn-review-evidence-workspace-")));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => {
+    const path = join(base, kind);
+    mkdirSync(path, { recursive: true });
+    return { kind, path };
+  });
+  const at = (second) => new Date(Date.UTC(2026, 0, 1) + second * 1000).toISOString().replace(/\.\d+Z$/u, "Z");
+  await initializeWorkspace({ roots, externalKey: "STORY-375-REVIEW-EVIDENCE", createdAt: at(0) });
+  const workspace = join(base, "workspace");
+  const project = await runCliJson(["project-create", "--workspace", workspace, "--expected-version", "0", "--at", at(1), "--external-key", "FIXTURE-PROJECT", "--name", "Fixture"]);
+  const work = await runCliJson(["work-create", "--workspace", workspace, "--expected-version", String(project.version), "--at", at(2), "--project-id", project.record.id, "--external-key", "FIXTURE-WORK", "--kind", "Initiative", "--status", "active", "--scope", "fixture scope", "--title", "Fixture work"]);
+  await runCliJson(["work-annotate", "--workspace", workspace, "--expected-version", String(work.version), "--at", at(3), "--id", work.record.id, "--verify", verifyCommand]);
+  return { workspace, workId: work.record.id };
+}
+
+test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separates runner and AST counts", async (t) => {
   const { root: repositoryRoot, base } = gitFixture(t);
+  const verifyCommand = `${JSON.stringify(process.execPath)} --test tests/fixture.test.mjs`;
+  const { workspace, workId } = await reviewWorkspace(t, verifyCommand);
   const result = runUnpreloadedCollect({
-    workspace: CHAIN_WORKSPACE,
-    workId: STORY_374,
+    workspace,
+    workId,
     repositoryRoot,
     base,
     allowedFiles: [],
@@ -58,8 +85,8 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
   assert.ok(result.problems.some((problem) => problem.includes("allowedFiles")));
 
   const rerun = runUnpreloadedCollect({
-    workspace: CHAIN_WORKSPACE,
-    workId: STORY_374,
+    workspace,
+    workId,
     repositoryRoot,
     base,
     allowedFiles: ["tests/fixture.test.mjs"],
@@ -84,8 +111,8 @@ test("STORY-375 GWT1: review-evidence reads the bound verify, runs it, and separ
   try {
     const pidFile = join(timeoutRoot, "child.pid");
     const timeout = runUnpreloadedCollect({
-      workspace: CHAIN_WORKSPACE,
-      workId: STORY_374,
+      workspace,
+      workId,
       repositoryRoot,
       base,
       allowedFiles: ["tests/fixture.test.mjs"],
@@ -142,8 +169,8 @@ test("STORY-375: runner counts come from machine output, not prose or a caller-s
 });
 
 test("STORY-413: gate planning and evidence reuse use one positive and negative predicate", async () => {
-  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
-  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const roster = JSON.parse(readFileSync(ROSTER_PATH, "utf8"));
+  const containment = JSON.parse(readFileSync(CONTAINMENT_PATH, "utf8"));
   const inputs = { sourceDigest: "source-a", environmentDigest: "environment-a", commandDigest: "command-a", baselineDigest: "baseline-a" };
   const successful = { id: "evidence-1", ok: true, status: "completed", inputs };
   const reusable = assessEvidenceReuse({ evidence: successful, inputs });
@@ -166,7 +193,7 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   const buildPlan = (overrides = {}) => buildFinalGatePlan({ ...planOptions, ...overrides });
   const assertNoRootExecution = async (candidate) => {
     let calls = 0;
-    const result = await executeSelectedRoots(candidate, async () => { calls += 1; return { ok: true }; });
+    const result = await executeSelectedRoots(candidate, async () => { calls += 1; return { ok: true }; }, { rosterPath: ROSTER_PATH });
     assert.equal(calls, 0);
     assert.deepEqual(result.executed, []);
     return result;
@@ -178,17 +205,17 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   assert.equal(plan.execution.strategy, "serial");
   assert.deepEqual(plan.reused, [{ id: "evidence-1", reason: "same source, environment, command, and baseline inputs" }]);
   assert.ok(plan.coveredBy.every(({ coveredBy }) => coveredBy !== null));
-  const executed = recordExecution(plan, plan.selected.map(({ id }) => ({ id, ok: true })));
+  const executed = recordExecution(plan, plan.selected.map(({ id }) => ({ id, ok: true })), { rosterPath: ROSTER_PATH });
   assert.deepEqual(executed.executed.map(({ id }) => id), plan.executionOrder);
   const order = [];
   const measured = await executeSelectedRoots(plan, async (entry) => {
     order.push(entry.id);
     return { ok: true, reasonCode: "FIXTURE_ROOT_GREEN" };
-  });
+  }, { rosterPath: ROSTER_PATH });
   assert.deepEqual(order, plan.executionOrder);
   assert.deepEqual(measured.executed.map(({ id, reasonCode }) => ({ id, reasonCode })), plan.executionOrder.map((id) => ({ id, reasonCode: "FIXTURE_ROOT_GREEN" })));
   assert.ok(measured.executed.every(({ elapsedMs }) => Number.isSafeInteger(elapsedMs) && elapsedMs >= 0));
-  const failedRoot = await executeSelectedRoots(plan, async (entry) => ({ ok: entry.id !== "platform-layout", reasonCode: entry.id === "platform-layout" ? "FIXTURE_ROOT_RED" : "FIXTURE_ROOT_GREEN" }));
+  const failedRoot = await executeSelectedRoots(plan, async (entry) => ({ ok: entry.id !== "platform-layout", reasonCode: entry.id === "platform-layout" ? "FIXTURE_ROOT_RED" : "FIXTURE_ROOT_GREEN" }), { rosterPath: ROSTER_PATH });
   assert.ok(failedRoot.blocked.some(({ id, reason }) => id === "platform-layout" && reason === "FIXTURE_ROOT_RED"));
   assert.equal(failedRoot.executed.find(({ id }) => id === "platform-layout").ok, false);
   const blockedPlan = buildPlan({ blockedDependencies: ["DS candidate pending"] });
@@ -201,8 +228,8 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   await assertNoRootExecution(unknownReadinessPlan);
   const missingRequiredSuite = { ...containment, groups: containment.groups.filter((group) => group.id !== "engine-suite").map((group) => group.id === "engine-p1" ? { ...group, contains: [] } : group) };
   assert.throws(() => buildPlan({ containment: missingRequiredSuite }), (error) => error.reasonCode === "GATE_PLAN_REQUIRED_GROUP_MISSING");
-  assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
-  assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }]), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
+  assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }], { rosterPath: ROSTER_PATH }), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
+  assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }], { rosterPath: ROSTER_PATH }), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
 
   const known = buildDevelopmentPlan({ changedFiles: ["scripts/task.mjs"], inputs, previousEvidence: [successful] });
   assert.deepEqual(known.selected.map(({ id }) => id), ["typecheck", "test"]);
@@ -210,7 +237,7 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   assert.deepEqual(known.blocked, []);
   const docs = buildDevelopmentPlan({ changedFiles: ["docs/dispatch.md"] });
   assert.deepEqual(docs.selected.map(({ id, command }) => ({ id, command })), [{ id: "format-check", command: "pnpm format:check" }, { id: "links", command: "pnpm verify:links" }]);
-  const packageScripts = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/package.json"), "utf8")).scripts;
+  const packageScripts = JSON.parse(readFileSync(resolve(REPOSITORY_ROOT, "package.json"), "utf8")).scripts;
   for (const command of Object.values(DEVELOPMENT_CHECK_COMMANDS)) {
     const tokens = command.split(/\s+/u);
     if (tokens[0] === "pnpm") assert.equal(Object.hasOwn(packageScripts, tokens.at(-1)), true, command);
@@ -221,8 +248,8 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
 });
 
 test("STORY-420: dynamic impact selects affected roots, reuses only bound terminal evidence, and fails closed on unknown impact", async () => {
-  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
-  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const roster = JSON.parse(readFileSync(ROSTER_PATH, "utf8"));
+  const containment = JSON.parse(readFileSync(CONTAINMENT_PATH, "utf8"));
   const inputs = { sourceDigest: "source-420", environmentDigest: "environment-420", commandDigest: "command-420", baselineDigest: "baseline-420" };
   const options = { roster, containment, inputs, candidateReady: true, executionPermission: true };
 
@@ -267,7 +294,7 @@ test("STORY-420: dynamic impact selects affected roots, reuses only bound termin
   assert.ok(missing.reasons.some((reason) => reason.includes("digest")));
 
   let calls = 0;
-  const drifted = await executeSelectedRoots(engine, async () => { calls += 1; return { ok: true }; }, { currentInputs: { ...inputs, sourceDigest: "source-drifted" } });
+  const drifted = await executeSelectedRoots(engine, async () => { calls += 1; return { ok: true }; }, { currentInputs: { ...inputs, sourceDigest: "source-drifted" }, rosterPath: ROSTER_PATH });
   assert.equal(calls, 0);
   assert.equal(drifted.executable, false);
   assert.ok(drifted.blocked.some(({ id }) => id === "input-drift"));
@@ -279,7 +306,7 @@ test("STORY-420: dynamic impact selects affected roots, reuses only bound termin
 });
 
 test("STORY-439: gate selection is derivable from containment", () => {
-  const containment = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "..", "scripts/policy/gate-containment.json"), "utf8"));
+  const containment = JSON.parse(readFileSync(CONTAINMENT_PATH, "utf8"));
 
   const engine = buildGateImpactMap({ containment, changedFiles: ["scripts/agents-zero-hook.mjs"] });
   assert.deepEqual(engine.affected, ["engine-release"]);
@@ -294,10 +321,10 @@ test("STORY-439: gate selection is derivable from containment", () => {
 });
 
 test("EPIC135 closeout: only an issued receipt with the exact invocation can be reused", async () => {
-  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
-  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const roster = JSON.parse(readFileSync(ROSTER_PATH, "utf8"));
+  const containment = JSON.parse(readFileSync(CONTAINMENT_PATH, "utf8"));
   const entry = roster.groups.find(({ id }) => id === "engine-release");
-  const repositoryRoot = resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow");
+  const repositoryRoot = REPOSITORY_ROOT;
   const inputs = { sourceDigest: "source-closeout", environmentDigest: "environment-closeout", commandDigest: "command-closeout", baselineDigest: "baseline-closeout" };
   const invocation = { executable: "node", argv: ["scripts/push-gate.mjs"], cwd: repositoryRoot, command: entry.command };
   const authority = createGateReceiptAuthority();
@@ -321,24 +348,32 @@ test("EPIC135 closeout: only an issued receipt with the exact invocation can be 
   resealed.integrity.requiredSelected = [];
   resealed.integrity.coveredChildren = [];
   let calls = 0;
-  const refused = await executeSelectedRoots(resealed, async () => { calls += 1; return { ok: true }; }, { getInputs: async () => inputs });
+  const refused = await executeSelectedRoots(resealed, async () => { calls += 1; return { ok: true }; }, { getInputs: async () => inputs, rosterPath: ROSTER_PATH });
   assert.equal(calls, 0);
   assert.equal(refused.executable, false);
   assert.equal(refused.reasonCode, "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
 });
 
 test("EPIC135 R1: private plan registration rejects public discriminator and reseal downgrades before any runner call", async () => {
-  const roster = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "platform-docs/acceptance-gate-groups.json"), "utf8"));
-  const containment = JSON.parse(readFileSync(resolve(PLATFORM_ROOT, "TCRN Platform/tcrn-workflow/scripts/policy/gate-containment.json"), "utf8"));
+  const roster = JSON.parse(readFileSync(ROSTER_PATH, "utf8"));
+  const containment = JSON.parse(readFileSync(CONTAINMENT_PATH, "utf8"));
   const inputs = { sourceDigest: "source-r1", environmentDigest: "environment-r1", commandDigest: "command-r1", baselineDigest: "baseline-r1" };
   const options = { roster, containment, phase: "candidate-final", inputs, changedFiles: ["scripts/final-gate-plan.mjs"], dependencies: [], configuration: [], generated: [], environment: [], crossRepoChanges: [], candidateReady: true, executionPermission: true };
   const assertRefused = async (plan) => {
     let calls = 0;
-    const result = await executeSelectedRoots(plan, async () => { calls += 1; return { ok: true }; }, { getInputs: async () => inputs });
+    const result = await executeSelectedRoots(plan, async () => { calls += 1; return { ok: true }; }, { getInputs: async () => inputs, rosterPath: ROSTER_PATH });
     assert.equal(calls, 0);
     assert.equal(result.reasonCode, "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
     assert.equal(result.executable, false);
   };
+  let unavailableCalls = 0;
+  const rosterUnavailable = await executeSelectedRoots(buildDynamicGatePlan(options), async () => {
+    unavailableCalls += 1;
+    return { ok: true };
+  }, { getInputs: async () => inputs, rosterPath: resolve(REPOSITORY_ROOT, "tests/fixtures/acceptance-gate-groups.missing.json") });
+  assert.equal(unavailableCalls, 0);
+  assert.equal(rosterUnavailable.reasonCode, "GATE_PLAN_ROSTER_UNAVAILABLE");
+  assert.equal(rosterUnavailable.executable, false);
   const downgraded = buildDynamicGatePlan(options);
   downgraded.dynamic = false;
   delete downgraded.integrity;
@@ -355,7 +390,7 @@ test("EPIC135 R1: private plan registration rejects public discriminator and res
   resealed.integrity.requiredSelected = [];
   resealed.integrity.requiredSelectionDigest = "0".repeat(64);
   let directCalls = 0;
-  assert.throws(() => recordExecution(resealed, []), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
+  assert.throws(() => recordExecution(resealed, [], { rosterPath: ROSTER_PATH }), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_INTEGRITY_REFUSED");
   assert.equal(directCalls, 0);
 });
 

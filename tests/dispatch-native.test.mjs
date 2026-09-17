@@ -22,9 +22,8 @@ import {
   resolveDispatchRequest,
 } from "../scripts/dispatch-adapter.mjs";
 
-const WORKSPACE = resolve(fileURLToPath(new URL("../../../", import.meta.url)), [".tcrn", "workspace"].join("-"), "cross-project/workspace");
 const CLI_SCRIPT = fileURLToPath(new URL("../scripts/dispatch-adapter.mjs", import.meta.url));
-const ACTIVE_WORK = "work:1891880eb2925c9c777d1d22";
+const ACTIVE_WORK = "work:fixture-active-work";
 
 function lifecycle(overrides = {}) {
   return {
@@ -68,16 +67,18 @@ async function hostFixture(t) {
   return { workspace, workId: work.record.id };
 }
 
-test("native resolution reads the live dispatch settings and returns the configured model", async () => {
-  const result = await resolveDispatchRequest({ workspace: WORKSPACE, host: "codex", taskClass: "implement" });
+test("native resolution reads the live dispatch settings and returns the configured model", async (t) => {
+  const { workspace } = await hostFixture(t);
+  const result = await resolveDispatchRequest({ workspace, host: "codex", taskClass: "implement" });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.executable, true);
   assert.equal(result.resolution.value.model, "gpt-5.6-luna");
   assert.equal(result.resolution.value.effort, "max");
 });
 
-test("the actual CLI success entry emits parseable JSON with one real newline", () => {
-  const result = spawnSync(process.execPath, [CLI_SCRIPT, "--workspace", WORKSPACE, "--host", "codex", "--class", "implement"], {
+test("the actual CLI success entry emits parseable JSON with one real newline", async (t) => {
+  const { workspace } = await hostFixture(t);
+  const result = spawnSync(process.execPath, [CLI_SCRIPT, "--workspace", workspace, "--host", "codex", "--class", "implement"], {
     cwd: resolve(CLI_SCRIPT, "../.."),
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
@@ -93,8 +94,9 @@ test("the actual CLI success entry emits parseable JSON with one real newline", 
   assert.equal(payload.reasonCode, "DISPATCH_RESOLUTION_READY");
 });
 
-test("the actual CLI error entry emits parseable JSON with one real newline", () => {
-  const result = spawnSync(process.execPath, [CLI_SCRIPT, "--workspace", WORKSPACE, "--host", "not-a-host", "--class", "implement"], {
+test("the actual CLI error entry emits parseable JSON with one real newline", async (t) => {
+  const { workspace } = await hostFixture(t);
+  const result = spawnSync(process.execPath, [CLI_SCRIPT, "--workspace", workspace, "--host", "not-a-host", "--class", "implement"], {
     cwd: resolve(CLI_SCRIPT, "../.."),
     encoding: "utf8",
     maxBuffer: 4 * 1024 * 1024,
@@ -129,12 +131,13 @@ test("fork reuse, running predecessor, and prompt claims remain refusals", () =>
   assert.equal(claim.ok, false);
 });
 
-test("native spawn input forwards only the engine model/effort and explicit lifecycle", async () => {
-  const prepared = await resolveDispatchRequest({ workspace: WORKSPACE, host: "codex", taskClass: "implement" });
-  const result = buildNativeSpawnInput(prepared, lifecycle());
+test("native spawn input forwards only the engine model/effort and explicit lifecycle", async (t) => {
+  const { workspace, workId } = await hostFixture(t);
+  const prepared = await resolveDispatchRequest({ workspace, host: "codex", taskClass: "implement" });
+  const result = buildNativeSpawnInput(prepared, lifecycle({ workId }));
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.spawn, { model: "gpt-5.6-luna", effort: "max" });
-  assert.equal(result.lifecycle.workId, ACTIVE_WORK);
+  assert.equal(result.lifecycle.workId, workId);
 });
 
 test("the Claude Code host needs no agentLifecycle record to spawn or to validate its native call", async (t) => {
@@ -173,32 +176,35 @@ test("the codex host still requires a valid agentLifecycle to spawn and to valid
   assert.equal(validated.reasonCode, "DISPATCH_NATIVE_INVOCATION_VALID", JSON.stringify(validated));
 });
 
-test("invocation validation rereads relevant work/config and ignores unrelated head fields", async () => {
-  const prepared = await resolveDispatchRequest({ workspace: WORKSPACE, host: "codex", taskClass: "implement" });
+test("invocation validation rereads relevant work/config and ignores unrelated head fields", async (t) => {
+  const { workspace, workId } = await hostFixture(t);
+  const prepared = await resolveDispatchRequest({ workspace, host: "codex", taskClass: "implement" });
   const staleHeadProjection = structuredClone(prepared);
   staleHeadProjection.source.version = 1;
   staleHeadProjection.source.headEventHash = "0".repeat(64);
   const result = await validateDispatchInvocation({
     prepared: staleHeadProjection,
-    invocation: { model: "gpt-5.6-luna", effort: "max", workId: ACTIVE_WORK },
-    lifecycle: lifecycle(),
+    invocation: { model: "gpt-5.6-luna", effort: "max", workId },
+    lifecycle: lifecycle({ workId }),
   });
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.observations.status, "unknown");
 });
 
-test("wrong work, scope, model, or effort still refuses the native call", async () => {
-  const prepared = await resolveDispatchRequest({ workspace: WORKSPACE, host: "codex", taskClass: "implement" });
-  const base = { prepared, invocation: { model: "gpt-5.6-luna", effort: "max", workId: ACTIVE_WORK }, lifecycle: lifecycle() };
+test("wrong work, scope, model, or effort still refuses the native call", async (t) => {
+  const { workspace, workId } = await hostFixture(t);
+  const prepared = await resolveDispatchRequest({ workspace, host: "codex", taskClass: "implement" });
+  const base = { prepared, invocation: { model: "gpt-5.6-luna", effort: "max", workId }, lifecycle: lifecycle({ workId }) };
   assert.equal((await validateDispatchInvocation({ ...base, invocation: { ...base.invocation, model: "wrong-model" } })).reasonCode, "DISPATCH_MODEL_MISMATCH");
   assert.equal((await validateDispatchInvocation({ ...base, invocation: { ...base.invocation, effort: "low" } })).reasonCode, "DISPATCH_EFFORT_MISMATCH");
   assert.equal((await validateDispatchInvocation({ ...base, invocation: { ...base.invocation, workId: "work:missing" }, workId: "work:missing", lifecycle: lifecycle({ workId: "work:missing" }) })).ok, false);
   assert.equal((await validateDispatchInvocation({ ...base, scopeDigest: "0".repeat(64) })).reasonCode, "DISPATCH_SCOPE_MISMATCH");
 });
 
-test("missing native model/effort facts are a refusal, not an inferred fallback", async () => {
-  const prepared = await resolveDispatchRequest({ workspace: WORKSPACE, host: "codex", taskClass: "implement" });
-  const result = await validateDispatchInvocation({ prepared, invocation: { workId: ACTIVE_WORK }, lifecycle: lifecycle() });
+test("missing native model/effort facts are a refusal, not an inferred fallback", async (t) => {
+  const { workspace, workId } = await hostFixture(t);
+  const prepared = await resolveDispatchRequest({ workspace, host: "codex", taskClass: "implement" });
+  const result = await validateDispatchInvocation({ prepared, invocation: { workId }, lifecycle: lifecycle({ workId }) });
   assert.equal(result.ok, false);
   assert.equal(result.reasonCode, "DISPATCH_SPAWN_INPUT_MISSING");
 });
