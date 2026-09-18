@@ -2002,6 +2002,115 @@ function qualificationRequest(input) {
   };
 }
 
+const TERMINAL_FAILURE_STATES = new Set(["failed", "failure", "error", "rejected", "blocked", "red"]);
+
+function terminalFailure(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const status = String(source.status ?? source.state ?? "").toLowerCase();
+  const exitCode = Number.isSafeInteger(source.exitCode) ? source.exitCode : Number.isSafeInteger(source.exit?.status) ? source.exit.status : Number.isSafeInteger(source.status) ? source.status : null;
+  const signal = batchString(source.signal ?? source.exit?.signal);
+  const failed = source.ok === false || TERMINAL_FAILURE_STATES.has(status) || exitCode !== null && exitCode !== 0 || signal !== null;
+  if (!failed) return null;
+  return {
+    status: status || null,
+    exitCode,
+    signal,
+    reasonCode: batchString(source.reasonCode ?? source.error?.reasonCode ?? source.error?.code ?? source.diagnostic?.reasonCode ?? source.error?.message ?? source.error),
+  };
+}
+
+function capturedJson(value) {
+  const lines = String(value ?? "").split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    try {
+      const parsed = JSON.parse(lines[index]);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // Retained output may contain ordinary command diagnostics before its final JSON envelope.
+    }
+  }
+  return null;
+}
+
+function capturedChildFailure(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const rows = [
+    ...(Array.isArray(source.childResults) ? source.childResults : []),
+    ...(Array.isArray(source.children) ? source.children : []),
+    ...(Array.isArray(source.results) ? source.results : []),
+  ];
+  if (Array.isArray(source.failures) && source.failures.length > 0) return source.failures[0];
+  for (const row of rows) {
+    const assessment = row?.assessment && typeof row.assessment === "object" ? row.assessment : null;
+    if (assessment?.ok === false) return assessment;
+    const failure = terminalFailure(row?.exit ?? row);
+    if (failure !== null) return failure;
+  }
+  return null;
+}
+
+/** Replay retained production adapter output before trusting its outer exit result. */
+export function replayProductionTerminal(result = {}) {
+  const outer = terminalFailure(result);
+  if (outer !== null) return { ok: false, reasonCode: result.reasonCode ?? "GATE_PLAN_TERMINAL_EVIDENCE_INVALID", failure: outer };
+  const captures = [result.stdout, result.stderr, result.output];
+  for (const capture of captures) {
+    const parsed = capturedJson(capture);
+    if (parsed === null) continue;
+    const failure = terminalFailure(parsed) ?? capturedChildFailure(parsed);
+    if (failure !== null) return { ok: false, reasonCode: "GATE_PLAN_TERMINAL_EVIDENCE_INVALID", failure };
+  }
+  const status = String(result.status ?? "").toLowerCase();
+  const declaredSuccess = result.ok === true || ["completed", "passed", "success", "succeeded", "verified", "green"].includes(status);
+  return declaredSuccess ? { ok: true, reasonCode: "GATE_PLAN_TERMINAL_REPLAY_VERIFIED" } : { ok: false, reasonCode: result.reasonCode ?? "GATE_PLAN_TERMINAL_EVIDENCE_INVALID", failure: { status: status || null } };
+}
+
+function requestedFailureReason(input) {
+  const candidates = [input?.lastError, input?.lastFailure, input?.currentError, input?.failure, input?.priorFailure, input?.error, input?.reasonCode];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) return candidate.trim();
+    if (candidate && typeof candidate === "object" && typeof candidate.reasonCode === "string" && candidate.reasonCode.trim().length > 0) return candidate.reasonCode.trim();
+    const failure = terminalFailure(typeof candidate === "string" ? { reasonCode: candidate, ok: false } : candidate);
+    if (failure?.reasonCode !== null && failure?.reasonCode !== undefined) return failure.reasonCode;
+  }
+  return null;
+}
+
+function rerunExplicitlyAllowed(input) {
+  return input?.forceRerun === true || input?.allowRerun === true || input?.rerun === true || typeof input?.rerunReason === "string" && input.rerunReason.trim().length > 0;
+}
+
+function unchangedFailureDiagnostic(input, initial) {
+  if (rerunExplicitlyAllowed(input)) return null;
+  const currentInputs = input?.inputs ?? input?.inputDigests ?? input;
+  if (!hasCompleteInputKey(currentInputs)) return null;
+  const currentGateId = batchString(input?.gateId ?? input?.id ?? input?.workId);
+  const requestedReason = requestedFailureReason(input);
+  const runs = [...batchArray(input?.previousRuns ?? input?.priorRuns ?? input?.batchRuns ?? input?.runs), ...batchArray(input?.previousResults ?? input?.priorResults ?? input?.previousEvidence)];
+  for (const run of runs) {
+    if (!run || typeof run !== "object") continue;
+    const runKey = batchString(run.idempotencyKey ?? run.batchKey);
+    const runGateId = batchString(run.gateId ?? run.gate ?? run.rootId ?? run.id);
+    if (runKey !== initial.idempotencyKey && (currentGateId === null || runGateId !== currentGateId)) continue;
+    const failure = terminalFailure(run.result ?? run);
+    if (failure === null) continue;
+    const priorInputs = run.inputs ?? run.inputDigests ?? run.result?.inputs ?? run.terminalInputs;
+    if (!hasCompleteInputKey(priorInputs) || JSON.stringify(completeInputKey(priorInputs)) !== JSON.stringify(completeInputKey(currentInputs))) continue;
+    if (requestedReason !== null && failure.reasonCode !== requestedReason) continue;
+    return {
+      reasonCode: "BATCH_PRIOR_FAILURE_UNCHANGED",
+      gateId: currentGateId ?? runGateId,
+      idempotencyKey: initial.idempotencyKey,
+      priorRunId: batchString(run.id ?? run.evidenceId ?? run.receiptId),
+      failure,
+      inputs: completeInputKey(currentInputs),
+      nextAction: "inspect retained stdout/stderr/exit/signal before requesting an explicit rerun",
+      rerunAllowed: false,
+    };
+  }
+  return null;
+}
+
 function scopedBudgetBatchBinding(input) {
   const validation = validateProofBudgetScopeBinding(input?.proofBudgetScopeBinding);
   if (!validation.ok) return { ok: false, reasonCode: "BATCH_PROOF_BUDGET_SCOPE_BINDING_INVALID" };
@@ -2086,6 +2195,8 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     if (refreshed.eligible !== true || refreshed.formalGateAllowed !== true || !["eligible", "qualified"].includes(refreshed.status)) return { ...initial, status: "rejected", reasonCode: "BATCH_RECHECK_NOT_ELIGIBLE", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: [refreshed.reasons?.join("; ") || "full qualification vetoed the formal run before execution"] };
     if (refreshed.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "rejected", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["batch binding, queue, candidate, or stage changed before formal execution"] };
   }
+  const priorFailure = unchangedFailureDiagnostic(input, initial);
+  if (priorFailure !== null) return { ...initial, status: "failed", reasonCode: priorFailure.reasonCode, formalGateAllowed: false, executed: [], formalGateExecutions: 0, diagnostic: priorFailure, reasons: [priorFailure.nextAction] };
   if (typeof runner !== "function") return { ...initial, status: "not-verifiable", reasonCode: "BATCH_FORMAL_RUNNER_REQUIRED", formalGateAllowed: false, executed: [], formalGateExecutions: 0, reasons: ["formal batch execution requires the registered runner"] };
   let result;
   try { result = await runner(initial); } catch (error) {
@@ -2097,11 +2208,12 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     ...(result?.warning === undefined || result?.warning === null ? [] : [result.warning]),
   ];
   const disallowedNotices = notices.filter((notice) => !proofBudgetNoticeAllowed(notice, input));
-  const ok = (result?.ok === true || result?.status === "completed" || result?.status === "passed") && disallowedNotices.length === 0;
-  if (!ok) return { ...initial, status: "failed", reasonCode: result?.reasonCode ?? "BATCH_FORMAL_GATE_FAILED", formalGateAllowed: false, executed: [], formalGateExecutions: 1, result: result ?? null, reasons: [
-    ...(result?.ok === true || result?.status === "completed" || result?.status === "passed" ? [] : ["formal batch runner did not report success"]),
+  const terminalReplay = replayProductionTerminal(result ?? {});
+  const ok = terminalReplay.ok === true && disallowedNotices.length === 0;
+  if (!ok) return { ...initial, status: "failed", reasonCode: result?.reasonCode ?? (disallowedNotices.length > 0 ? "BATCH_FORMAL_GATE_FAILED" : terminalReplay.reasonCode ?? "BATCH_FORMAL_GATE_FAILED"), formalGateAllowed: false, executed: [], formalGateExecutions: 1, result: result ?? null, reasons: [
+    ...(terminalReplay.ok === true ? [] : [terminalReplay.reasonCode === "GATE_PLAN_TERMINAL_EVIDENCE_INVALID" ? "retained production terminal output contradicted the outer runner result" : "formal batch runner did not report success"]),
     ...(disallowedNotices.length > 0 ? ["a non-budget warning is blocking formal batch aggregation"] : []),
-  ] };
+  ], terminalReplay };
   if (typeof recheck === "function") {
     let after;
     try { after = await recheck(input); } catch { after = null; }
