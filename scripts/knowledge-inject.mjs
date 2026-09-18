@@ -347,7 +347,10 @@ function observationSourceIdentity(record, channel) {
   if (!source.startsWith(OBSERVATION_BOUNDARY_PREFIX)) return null;
   const session = safeObservationPart(record.session, "unknown-session");
   const suffix = `:${session}:${channel}`;
-  if (source.endsWith(suffix) && source.length > OBSERVATION_BOUNDARY_PREFIX.length + suffix.length) return `${source.slice(0, -suffix.length)}:${channel}`;
+  if (source.endsWith(suffix) && source.length > OBSERVATION_BOUNDARY_PREFIX.length + suffix.length) {
+    const day = /^(\d{8})\./u.exec(session)?.[1];
+    return day === undefined ? `${source.slice(0, -suffix.length)}:${channel}` : `${source.slice(0, -suffix.length)}:${day}.${channel}`;
+  }
   return source.endsWith(`:${channel}`) ? source : null;
 }
 
@@ -410,6 +413,93 @@ async function telemetryRootForState(core, partition, containerRoot, suppliedSta
   return state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
 }
 
+const MAX_BOUNDARY_DAYS_PER_STOP = 3;
+
+function observationDay(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+}
+
+function observationSessionKey(day, sessionId) {
+  return safeObservationPart(`${day.replace(/-/gu, "")}.${safeObservationPart(sessionId, "unknown-session")}`, "unknown-session");
+}
+
+function observationSourceForDay(host, sessionId, day, channel) {
+  const hostPart = safeObservationPart(host, "unknown-host");
+  const sessionKey = observationSessionKey(day, sessionId);
+  return {
+    source: `${OBSERVATION_BOUNDARY_PREFIX}${hostPart}:${sessionKey}:${channel}`,
+    sessionKey,
+  };
+}
+
+function observationSessionKeyDay(session) {
+  if (typeof session !== "string" || !/^\d{8}\./u.test(session)) return null;
+  return `${session.slice(0, 4)}-${session.slice(4, 6)}-${session.slice(6, 8)}`;
+}
+
+function observationBoundaryRows(records, host, sessionId, channel) {
+  const hostPart = safeObservationPart(host, "unknown-host");
+  const sessionPart = safeObservationPart(sessionId, "unknown-session");
+  const maximumSessionPart = sessionPart.slice(0, 23);
+  const prefix = `${OBSERVATION_BOUNDARY_PREFIX}${hostPart}:`;
+  return records.filter((record) => {
+    const session = record.session;
+    const source = record.payload?.source;
+    return String(source).startsWith(prefix)
+      && String(source).endsWith(`:${channel}`)
+      && typeof session === "string"
+      && /^\d{8}\./u.test(session)
+      && session.slice(9) === maximumSessionPart
+      && String(source).endsWith(`:${session}:${channel}`);
+  });
+}
+
+function observationLastBoundaryRow(rows) {
+  return [...rows].sort((left, right) => Number(left.payload.sequence) - Number(right.payload.sequence) || left.at.localeCompare(right.at) || left.id.localeCompare(right.id)).at(-1) ?? null;
+}
+
+function observationLatestStop(rows) {
+  return rows.filter((record) => record.payload.phase === "stop")
+    .sort((left, right) => left.at.localeCompare(right.at) || Number(left.payload.sequence) - Number(right.payload.sequence) || left.id.localeCompare(right.id))
+    .at(-1) ?? null;
+}
+
+function observationDaysBetween(from, until) {
+  const fromValue = Date.parse(`${from}T00:00:00.000Z`);
+  const untilValue = Date.parse(`${until}T00:00:00.000Z`);
+  if (!Number.isFinite(fromValue) || !Number.isFinite(untilValue)) return [];
+  if (fromValue > untilValue) return [from];
+  const days = [];
+  for (let cursor = fromValue; cursor <= untilValue && days.length <= MAX_BOUNDARY_DAYS_PER_STOP; cursor += 86_400_000) {
+    days.push(new Date(cursor).toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+function observationActualForDay(records, channel, day, through) {
+  const throughValue = Date.parse(through);
+  return records.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel
+    && !String(record.payload?.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)
+    && observationDay(record.at) === day
+    && (!Number.isFinite(throughValue) || Date.parse(record.at) <= throughValue))
+    .sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+}
+
+function observationHighWaterPayload(records, channel, day, at, source, phase, sequence, through) {
+  const actual = observationActualForDay(records, channel, day, through);
+  return {
+    source,
+    availability: "available",
+    phase,
+    sequence,
+    highWaterDay: day,
+    highWaterCount: actual.length,
+    highWaterDigest: canonicalSha256(actual),
+    highWaterAt: actual.at(-1)?.at ?? null,
+  };
+}
+
 /** Record the real host-session boundaries used by the daily coverage proof. */
 export async function recordObservationBoundary({
   partition = DEFAULT_PARTITION,
@@ -426,27 +516,67 @@ export async function recordObservationBoundary({
   try {
     const root = await telemetryRootForState(core, partition, containerRoot, workspaceState);
     if (root === null) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE" };
-    const sourceBase = `${OBSERVATION_BOUNDARY_PREFIX}${safeObservationPart(host, "unknown-host")}:${safeObservationPart(sessionId, "unknown-session")}`;
+    const atDay = observationDay(at);
+    if (atDay === null) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_INVALID" };
     const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
-    const boundaryDate = new Date(at);
-    if (phase === "stop" && boundaryDate.getUTCHours() === 0) boundaryDate.setUTCDate(boundaryDate.getUTCDate() - 1);
-    const boundaryDay = boundaryDate.toISOString().slice(0, 10);
-    const records = [];
+    const records = [...read.records];
+    const created = [];
     for (const channel of OBSERVATION_CHANNELS) {
-      const source = `${sourceBase}:${channel}`;
-      const rows = read.records.filter((record) => record.payload.source === source).map((record) => record.payload.sequence).filter((sequence) => Number.isSafeInteger(sequence) && sequence >= 1);
-      const sequence = Math.max(0, ...rows) + 1;
-      const actual = read.records.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX) && new Date(record.at).toISOString().slice(0, 10) === boundaryDay).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-      records.push(core.createTelemetryRecord({
-        at,
-        kind: channel,
-        session: String(sessionId),
-        payload: { source, availability: "available", phase, sequence, highWaterDay: boundaryDay, highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual), highWaterAt: actual.at(-1)?.at ?? null },
-      }));
+      if (phase === "start") {
+        const target = observationSourceForDay(host, sessionId, atDay, channel);
+        const rows = records.filter((record) => record.payload?.source === target.source);
+        const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
+        created.push(core.createTelemetryRecord({
+          at,
+          kind: channel,
+          session: target.sessionKey,
+          payload: observationHighWaterPayload(records, channel, atDay, at, target.source, "start", sequence, at),
+        }));
+        continue;
+      }
+
+      const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
+      const open = sessionRows
+        .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
+        .filter(({ record, day }) => day !== null && record.payload.phase === "start")
+        .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
+        .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
+        .at(-1) ?? null;
+      const previousStop = observationLatestStop(sessionRows);
+      const startAt = open?.record.at ?? previousStop?.at ?? at;
+      const startDay = open?.day ?? observationDay(startAt) ?? atDay;
+      const days = observationDaysBetween(startDay, atDay);
+      if (days.length === 0 || days.length > MAX_BOUNDARY_DAYS_PER_STOP) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", unknown: true, from: startDay, until: atDay };
+      for (const day of days) {
+        const target = observationSourceForDay(host, sessionId, day, channel);
+        const rows = records.filter((record) => record.payload?.source === target.source);
+        const last = observationLastBoundaryRow(rows);
+        let sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
+        if (last?.payload.phase !== "start") {
+          created.push(core.createTelemetryRecord({
+            at: startAt,
+            kind: channel,
+            session: target.sessionKey,
+            payload: observationHighWaterPayload(records, channel, day, startAt, target.source, "start", sequence, startAt),
+          }));
+          sequence += 1;
+        }
+        created.push(core.createTelemetryRecord({
+          at,
+          kind: channel,
+          session: target.sessionKey,
+          payload: observationHighWaterPayload(records, channel, day, at, target.source, "stop", sequence, at),
+        }));
+      }
     }
     const receipts = [];
-    for (const record of records) receipts.push(await core.appendTelemetryRecord(root, record));
-    return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.filter((receipt) => receipt.duplicate).length > 0 };
+    for (const record of created) {
+      const receipt = await core.appendTelemetryRecord(root, record);
+      receipts.push(receipt);
+      if (!receipt.duplicate) records.push(record);
+    }
+    const coverage = phase === "stop" ? await sealObservationDay(root, { at }) : null;
+    return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.some((receipt) => receipt.duplicate), ...(coverage === null ? {} : { coverage }) };
   } catch (error) {
     return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", error: String(error?.reasonCode ?? error?.message ?? error) };
   }
@@ -731,11 +861,11 @@ async function workspaceStateForInjection(partition, containerRoot) {
   return null;
 }
 
-// STORY-387: a SessionStart is the only bounded production opportunity to close the
+// STORY-387: SessionStart and Stop are bounded production opportunities to close the
 // previous UTC day. The collector seals actual channel records; no empty file or
 // missing host input is converted into zero activity.
 async function sessionObservationCoverage(event, partition, containerRoot, suppliedState = null) {
-  if (event !== "SessionStart") return null;
+  if (event !== "SessionStart" && event !== "Stop") return null;
   const core = await languageModule();
   if (typeof core?.activeBinding !== "function") return null;
   try {

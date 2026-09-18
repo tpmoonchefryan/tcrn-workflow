@@ -285,7 +285,36 @@ test("STORY-393: a host session boundary reconciles four real channel high-water
   assert.equal(sealed.ok, true, JSON.stringify(sealed));
   assert.equal((await readTelemetryObservationWindow(fixture.transient, "2026-09-11T12:00:00.000Z", 1)).complete, true);
   const records = await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER });
-  assert.equal(records.records.filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX)).length, 8);
+  assert.equal(records.records.filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX)).length, 16);
+});
+
+test("STORY-393 B1: Stop closes the not-yet-sealed UTC day and keeps the date first in the source key", async (t) => {
+  const fixture = await workspaceFixture(t);
+  const start = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "host-session", host: "claude", phase: "start", at: "2026-09-10T00:00:00.000Z", workspaceState: fixture.state });
+  assert.equal(start.ok, true);
+  for (const channel of OBSERVATION_CHANNELS) {
+    const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+    await appendTelemetryRecord(fixture.transient, createTelemetryRecord({ at: "2026-09-10T12:00:00.000Z", kind, session: `host-session-${channel}`, payload: { source: `host-session:actual:${channel}`, availability: "available" } }));
+  }
+  const stop = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "host-session", host: "claude", phase: "stop", at: "2026-09-11T02:00:00.000Z", workspaceState: fixture.state });
+  assert.equal(stop.ok, true, JSON.stringify(stop));
+  assert.equal(stop.coverage.reasonCode, "TELEMETRY_COVERAGE_RECORDED", JSON.stringify(stop.coverage));
+  assert.equal((await readTelemetryObservationWindow(fixture.transient, "2026-09-11T12:00:00.000Z", 1)).complete, true);
+  const boundaries = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records.filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  assert.ok(boundaries.some((record) => record.payload.source.includes(":20260910.host-session:")), "the UTC date is retained before the bounded session segment");
+  assert.ok(boundaries.every((record) => record.session.startsWith("20260910.") || record.session.startsWith("20260911.")));
+});
+
+test("STORY-393 B1: repeated Stop events extend the prior attested endpoint without stop-stop rows", async (t) => {
+  const fixture = await workspaceFixture(t);
+  await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "multi-turn", host: "claude", phase: "start", at: "2026-09-10T09:00:00.000Z", workspaceState: fixture.state });
+  await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "multi-turn", host: "claude", phase: "stop", at: "2026-09-10T10:00:00.000Z", workspaceState: fixture.state });
+  await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "multi-turn", host: "claude", phase: "stop", at: "2026-09-10T11:00:00.000Z", workspaceState: fixture.state });
+  const rows = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records
+    .filter((record) => record.kind === "retrieval" && record.payload.source.includes(":20260910.multi-turn:"))
+    .sort((left, right) => Number(left.payload.sequence) - Number(right.payload.sequence));
+  assert.deepEqual(rows.map((record) => [record.payload.phase, record.payload.sequence]), [["start", 1], ["stop", 2], ["start", 3], ["stop", 4]]);
+  assert.equal(rows[2].at, "2026-09-10T10:00:00.000Z", "the synthetic start is the previous real stop");
 });
 
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
@@ -424,7 +453,7 @@ test("STORY-393: gaps and incompatible host sources never combine into a full da
     t.after(() => rm(root, { recursive: true, force: true }));
     await unionCheckpoints(root, [
       ["session-a", "2026-09-09T23:59:59.000Z", "2026-09-10T12:00:00.000Z"],
-      ["session-b", name === "gap" ? "2026-09-10T12:00:01.000Z" : "2026-09-10T12:00:00.000Z", "2026-09-11T00:00:00.000Z"],
+      ["session-b", name === "gap" ? "2026-09-10T12:00:00.001Z" : "2026-09-10T12:00:00.000Z", "2026-09-11T00:00:00.000Z"],
     ], hosts);
     const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
     assert.equal(sealed.ok, false, name);

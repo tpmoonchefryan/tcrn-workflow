@@ -23,6 +23,7 @@ import {
   knowledgeConflictHits,
   knowledgeRelevanceScore,
   listKnowledgeMetadata,
+  readTelemetryRecords,
 } from "../dist/build/packages/core/src/index.js";
 import { canonicalJson } from "../dist/build/packages/protocol/src/index.js";
 import {
@@ -30,6 +31,7 @@ import {
   captureArguments,
   cardFor,
   extractLessons,
+  hostFromArgv,
   runCaptureHook,
 } from "../scripts/knowledge-capture-hook.mjs";
 
@@ -147,6 +149,30 @@ test("STORY-365 correction 1: the Codex Stop payload carries no transcript_path,
     const card = listed.records.find((record) => record.subject.includes("Codex"));
     assert.ok(card, `default recall must find the captured card: ${JSON.stringify(listed.records.map((r) => r.subject))}`);
     assert.equal(card.promotionState, "promoted", "the Codex host path is retrievable exactly like the Claude Code path");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("STORY-393 B2/U6: host argv wins and replayed Stop payloads do not write another boundary", async () => {
+  assert.equal(hostFromArgv(["--host", "codex"], { host: "claude" }, {}), "codex");
+  assert.equal(hostFromArgv([], {}, { TCRN_HOST: "codex" }), "codex");
+  assert.equal(hostFromArgv([], {}, {}), "unknown-host");
+  const fixture = await containerFixture("FIXTURE-CAPTURE-REPLAY");
+  try {
+    const input = { hook_event_name: "Stop", session_id: "capture-session", host: "codex" };
+    const first = runCaptureHook(input, { containerRoot: fixture.container, now: () => instant(2) });
+    assert.equal(first.observationBoundary.ok, true, JSON.stringify(first));
+    const telemetryRoot = join(fixture.container, ".tcrn-workspace", "cross-project", "transient");
+    const before = await readTelemetryRecords(telemetryRoot, { limit: Number.MAX_SAFE_INTEGER });
+    assert.equal(before.records.filter((record) => record.payload.source.includes(":codex:")).length, 8);
+
+    const snake = runCaptureHook({ ...input, stop_hook_active: true }, { containerRoot: fixture.container, now: () => instant(2, 1) });
+    const camel = runCaptureHook({ ...input, stopHookActive: true }, { containerRoot: fixture.container, now: () => instant(2, 2) });
+    assert.deepEqual(snake.observationBoundary, { ok: true, reasonCode: "TELEMETRY_BOUNDARY_SKIPPED_REPLAY", skipped: true });
+    assert.deepEqual(camel.observationBoundary, { ok: true, reasonCode: "TELEMETRY_BOUNDARY_SKIPPED_REPLAY", skipped: true });
+    const after = await readTelemetryRecords(telemetryRoot, { limit: Number.MAX_SAFE_INTEGER });
+    assert.equal(after.records.length, before.records.length, "replayed Stop payloads do not add a second boundary");
   } finally {
     await fixture.close();
   }

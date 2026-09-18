@@ -98,7 +98,7 @@ function hookGroupIdentity(host, event, group) {
 }
 
 function legacyGroupFor(host, event, group) {
-  if (event !== "SubagentStart" && event !== "SubagentStop") return null;
+  if (!["SubagentStart", "SubagentStop", "Stop", "UserPromptSubmit"].includes(event)) return null;
   const hostName = host === "claude-code" ? "claude" : "codex";
   const suffix = ` --host ${hostName}`;
   const legacy = structuredClone(group);
@@ -108,9 +108,34 @@ function legacyGroupFor(host, event, group) {
     if (hook && typeof hook === "object" && typeof hook.command === "string" && hook.command.endsWith(suffix)) {
       hook.command = hook.command.slice(0, -suffix.length);
       changed += 1;
+    } else if (hook && typeof hook === "object" && typeof hook.command === "string" && hook.command.endsWith(`${suffix}; fi`)) {
+      hook.command = `${hook.command.slice(0, -`${suffix}; fi`.length)}; fi`;
+      changed += 1;
     }
   }
   return changed === 0 ? null : legacy;
+}
+
+function managedCommandKey(command) {
+  if (typeof command !== "string") return null;
+  let value = command.trim();
+  const guarded = /^if \[ (?:-f "[^"]+"|"\$CLAUDE_PROJECT_DIR" = "[^"]+") \]; then (.+); fi$/u.exec(value);
+  if (guarded) value = guarded[1];
+  const node = /^node "([^"]+)"(?:\s+--host (?:claude|codex))?$/u.exec(value);
+  if (!node) return null;
+  const normalized = node[1].replaceAll("\\", "/");
+  return normalized.match(/(?:^|\/)((?:scripts|tools)\/[^"'\s]+?\.mjs)$/u)?.[1] ?? null;
+}
+
+function semanticGroupIdentity(host, event, group) {
+  if (!Array.isArray(group?.hooks)) return null;
+  const normalized = structuredClone(group);
+  for (const hook of normalized.hooks) {
+    const key = managedCommandKey(hook?.command);
+    if (key === null) return null;
+    hook.command = `__tcrn-managed-hook__:${key}`;
+  }
+  return hookGroupIdentity(host, event, normalized);
 }
 
 function managedGroupSlots(host, generated, event) {
@@ -136,10 +161,12 @@ function classifyManagedGroups(host, event, actualGroups, generatedGroups) {
   const usedOccurrences = new Map();
   for (const slot of slots) {
     const matches = [];
+    const semantic = semanticGroupIdentity(host, event, slot.current);
     for (let index = 0; index < actual.length; index += 1) {
       const identity = hookGroupIdentity(host, event, actual[index]);
       if (identity === slot.currentIdentity) matches.push({ index, kind: "current" });
       else if (slot.legacyIdentity !== null && identity === slot.legacyIdentity) matches.push({ index, kind: "legacy" });
+      else if (semantic !== null && semanticGroupIdentity(host, event, actual[index]) === semantic) matches.push({ index, kind: "legacy" });
     }
     if (matches.length > 1) {
       failure("HOST_RENDER_MANAGED_IDENTITY_AMBIGUOUS", "multiple complete hook groups match one managed identity", {

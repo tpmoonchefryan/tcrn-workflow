@@ -144,9 +144,19 @@ function runEngine(argv) {
   }
 }
 
+export function hostFromArgv(argv = process.argv.slice(2), input = {}, env = process.env) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--host" && typeof argv[index + 1] === "string" && !argv[index + 1].startsWith("--") && argv[index + 1].length > 0) return argv[index + 1];
+    if (typeof token === "string" && token.startsWith("--host=")) return token.slice("--host=".length) || "unknown-host";
+  }
+  const supplied = input?.host ?? input?.host_name ?? env?.TCRN_HOST;
+  return typeof supplied === "string" && supplied.length > 0 ? supplied : "unknown-host";
+}
+
 function observationBoundaryArguments(input, { containerRoot, partition, at }) {
   const sessionId = boundedUtf8(String(input?.session_id ?? input?.sessionId ?? "anonymous"), 256);
-  const host = boundedUtf8(String(input?.host ?? input?.host_name ?? process.env.TCRN_HOST ?? "claude"), 64);
+  const host = boundedUtf8(hostFromArgv([], input), 64);
   return [INJECT_SCRIPT, "--observation-boundary", "stop", "--partition", partition, "--session-id", sessionId, "--host", host, "--at", at, "--container-root", containerRoot];
 }
 
@@ -177,7 +187,10 @@ export function runCaptureHook(input, {
   const attempts = [];
   try {
     const at = now();
-    const observationBoundary = recordStopObservationBoundary(input, { containerRoot, partition, at });
+    const replayed = input?.stop_hook_active === true || input?.stopHookActive === true;
+    const observationBoundary = replayed
+      ? { ok: true, reasonCode: "TELEMETRY_BOUNDARY_SKIPPED_REPLAY", skipped: true }
+      : recordStopObservationBoundary(input, { containerRoot, partition, at });
     // TCRN-CROSS-STORY-365: Codex's real Stop payload carries the assistant text inline as
     // last_assistant_message and no transcript_path at all (tools/stop-pact/codex-response-style-hook.mjs,
     // confirmed against the real-payload fixture). Reading only the path makes this hook a silent
@@ -218,6 +231,9 @@ function readStdin() {
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   // No stdout, no decision: a Stop hook that says nothing lets the turn end. The whole
   // body is already fail-open, and this last catch is the belt on top of the braces.
-  try { runCaptureHook(readStdin()); } catch { /* fail-open: a lesson is never worth a stuck session */ }
+  try {
+    const input = readStdin();
+    runCaptureHook({ ...input, host: hostFromArgv(process.argv.slice(2), input) });
+  } catch { /* fail-open: a lesson is never worth a stuck session */ }
   process.exit(0);
 }

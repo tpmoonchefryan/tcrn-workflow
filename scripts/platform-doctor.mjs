@@ -1799,7 +1799,7 @@ async function inspectHookExecutability(platformRoot, manifest) {
   for (const hook of commands) {
     if (!hook.command.includes("${CLAUDE_PROJECT_DIR}")) continue;
     checked += 1;
-    const match = /^node\s+"([^"]+)"(?:\s+--host\s+claude)?$/u.exec(hook.command.trim());
+    const match = /^(?:if \[ -f "[^"]+" \]; then )?node\s+"([^"]+)"(?:\s+--host\s+claude)?(?:; fi)?$/u.exec(hook.command.trim());
     if (!match) {
       failures.push({ event: hook.event, command: hook.command, reasonCode: "PLATFORM_HOOK_COMMAND_UNSUPPORTED" });
       continue;

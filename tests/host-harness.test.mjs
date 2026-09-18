@@ -107,6 +107,8 @@ test("INC-220 the Codex document is shaped the way the host documents it", () =>
   }
   const injection = document.hooks.SessionStart[0].hooks[0].command;
   assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host codex$/u);
+  const capture = document.hooks.Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
+  assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --host codex$/u);
   const telemetry = document.hooks.SubagentStart[0].hooks[0].command;
   assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host codex$/u);
 });
@@ -116,13 +118,16 @@ test("INC-220 the Claude rendering keeps the project-dir form that host resolves
     for (const group of groups) {
       for (const hook of group.hooks) {
         assert.ok(hook.command.includes("${CLAUDE_PROJECT_DIR}"));
+        assert.match(hook.command, /^if \[ -f "\$\{CLAUDE_PROJECT_DIR\}\/TCRN Platform\/tcrn-workflow\//u, "Claude hooks are inert outside the platform tree");
       }
     }
   }
   const injection = claudeHookSettings().SessionStart[0].hooks[0].command;
-  assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host claude$/u);
+  assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host claude; fi$/u);
+  const capture = claudeHookSettings().Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
+  assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --host claude; fi$/u);
   const telemetry = claudeHookSettings().SubagentStart[0].hooks[0].command;
-  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host claude$/u);
+  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host claude; fi$/u);
 });
 
 test("INC-220 harness drift is reported when a live Claude hook is gone", () => {

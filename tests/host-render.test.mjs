@@ -55,6 +55,7 @@ function withoutHostSuffix(group, host) {
   const suffix = ` --host ${host === "codex" ? "codex" : "claude"}`;
   for (const hook of copy.hooks ?? []) {
     if (typeof hook?.command === "string" && hook.command.endsWith(suffix)) hook.command = hook.command.slice(0, -suffix.length);
+    else if (typeof hook?.command === "string" && hook.command.endsWith(`${suffix}; fi`)) hook.command = `${hook.command.slice(0, -`${suffix}; fi`.length)}; fi`;
   }
   return copy;
 }
@@ -169,6 +170,34 @@ test("TCRN-CROSS-STORY-417: exact legacy telemetry groups migrate in place on bo
     assert.equal(actualHooks.SubagentStart[0].hooks[0].command.endsWith(` --host ${host === "codex" ? "codex" : "claude"}`), false, "actual projection records the legacy before state");
     assert.equal(file.drift, true);
   }
+});
+
+test("TCRN-CROSS-STORY-393 R2: absolute guarded Claude hooks replace in place and stay project-scoped", async (t) => {
+  const root = await scratch("tcrn-host-render-r2-legacy-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const guarded = (handler, host = false) => `if [ "$CLAUDE_PROJECT_DIR" = "${resolve(repoRoot, "..", "..")}" ]; then node "${resolve(repoRoot, handler)}"${host ? " --host claude" : ""}; fi`;
+  const existingHooks = {
+    Stop: [
+      { hooks: [{ type: "command", command: guarded("tools/stop-pact/hook.mjs"), timeout: 10 }] },
+      { hooks: [{ type: "command", command: guarded("scripts/knowledge-capture-hook.mjs"), timeout: 30 }] },
+    ],
+    UserPromptSubmit: [{ hooks: [{ type: "command", command: guarded("scripts/agents-zero-hook.mjs"), timeout: 10 }] }],
+  };
+  const existing = new Map([[".claude/settings.json", JSON.stringify({ hooks: existingHooks })]]);
+  const plan = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: settings("claude-code"), root, repoRoot, existing });
+  const file = plan.files[0];
+  const document = JSON.parse(file.content);
+  const generated = claudeHookSettings();
+  assert.equal(document.hooks.Stop.length, generated.Stop.length, "Stop groups are upgraded in place instead of appended");
+  assert.equal(document.hooks.UserPromptSubmit.length, generated.UserPromptSubmit.length, "UserPromptSubmit groups are upgraded in place instead of appended");
+  assert.equal(document.hooks.Stop.filter((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).length, 1);
+  assert.equal(document.hooks.UserPromptSubmit.filter((group) => group.hooks[0].command.includes("agents-zero-hook.mjs")).length, 1);
+  assert.ok(document.hooks.Stop.every((group) => group.hooks[0].command.startsWith("if [ -f \"${CLAUDE_PROJECT_DIR}/")), "the generated projection is guarded");
+  const otherProject = await scratch("tcrn-host-render-other-project-");
+  t.after(() => rm(otherProject, { recursive: true, force: true }));
+  const captureCommand = document.hooks.Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
+  const result = execFileSync("sh", ["-c", captureCommand], { env: { ...process.env, CLAUDE_PROJECT_DIR: otherProject }, encoding: "utf8" });
+  assert.equal(result, "", "an unrelated project does not invoke a missing platform hook");
 });
 
 test("TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved", async (t) => {
