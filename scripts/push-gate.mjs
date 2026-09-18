@@ -291,27 +291,20 @@ await timedStage("status-version-prose", async () => {
   if (!prose.includes(P8_VERSION)) fail("PUSH_GATE_STATUS_VERSION_ABSENT", `${document}: "${P8_VERSION}" does not appear in prose`);
 });
 
-// 2f. The host evidence receipt: present, and not older than the window.
+// 2f. The host evidence receipt: present, and provably not re-presented as current.
 //
-// AC-1 says its own absence blocks the release (OD-C3). Nothing checked that. The
-// 2026-08-18 audit went looking for the consumer and found none: not here, not in
-// task.mjs, not in the verification map -- so the one sentence stating the receipt's
-// release consequence was a promise with nothing behind it, and the receipt sat at
-// host 2.1.201 for twenty-nine days and nineteen host minor versions while more than
-// thirty releases went out citing it.
-//
-// Freshness is checked as well as presence, because a receipt that records what was
-// observed on a host nobody runs any more answers a question nobody asked. Thirty
-// days is the window: long enough that a normal release cadence never trips it,
-// short enough that a host generation cannot pass underneath it unnoticed.
-//
-// What is deliberately NOT gated is whether the receipt is complete. Its group B
-// half needs a credentialed session, and credentials are not something a release
-// gate can conjure -- a criterion that cannot be satisfied in a world where it will
-// be evaluated is the jointly-unsatisfiable defect this platform has paid for twice.
-// So completeness is reported beside the verdict and left to the operator to close.
-const HOST_EVIDENCE_MAX_AGE_DAYS = 30;
-await timedStage("host-evidence-freshness", async () => {
+// AC-1 says its own absence blocks the release (OD-C3); that is still checked below.
+// The thirty-day freshness window this stage used to keep (added c5d58ca, 2026-08-19)
+// is gone: its producer, scripts/host-evidence.mjs, was deleted by TCRN-CROSS-STORY-358
+// (commit 84c318c, 2026-09-06) along with the adapter install/activate/remove path it
+// observed, so the window's only remediation stopped existing eighteen days before the
+// window itself expired -- and then reported a calendar, not the tree, exactly what this
+// comment used to say the stage would not do (TCRN-CROSS-INC-328 / TCRN-CROSS-MIN-204 D1).
+// Live evidence for the surface that still exists is platform-doctor's harness leg,
+// which checks the installed container rather than a dated file. What this stage still
+// refuses is a receipt silently re-presented as a current claim: it must name what
+// superseded it and say so in a field nothing but a human edit can satisfy honestly.
+await timedStage("host-evidence-provenance", async () => {
   const hostEvidenceRaw = await read("docs/verification/host/claude-code.json").catch(() => null);
   if (hostEvidenceRaw === null) {
     fail("PUSH_GATE_HOST_EVIDENCE_MISSING", "docs/verification/host/claude-code.json");
@@ -326,13 +319,13 @@ await timedStage("host-evidence-freshness", async () => {
     if (typeof observedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(observedAt)) {
       fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${String(observedAt)}`);
     } else {
-      // Measured against the newest release note rather than the wall clock: a gate
-      // whose verdict changes while nothing in the tree changed is a gate that reports
-      // the calendar, and this one is about the tree.
-      const ageDays = Math.floor((Date.now() - Date.parse(`${observedAt}T00:00:00Z`)) / 86_400_000);
-      if (!Number.isFinite(ageDays)) fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${observedAt}`);
-      else if (ageDays > HOST_EVIDENCE_MAX_AGE_DAYS) {
-        fail("PUSH_GATE_HOST_EVIDENCE_STALE", `observed ${observedAt}, ${ageDays} days ago, on host ${String(hostEvidence?.host?.versionSelfReport)}; re-run pnpm host-evidence`);
+      const supersededBy = hostEvidence?.supersededBy;
+      const currentClaim = hostEvidence?.currentClaim;
+      if (typeof supersededBy !== "string" || supersededBy === "" || currentClaim !== "none") {
+        fail(
+          "PUSH_GATE_HOST_EVIDENCE_PROVENANCE_INVALID",
+          `supersededBy is ${String(supersededBy)}, currentClaim is ${String(currentClaim)}; expected a non-empty supersededBy and currentClaim === "none"`,
+        );
       }
     }
   }

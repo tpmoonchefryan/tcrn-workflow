@@ -2,6 +2,9 @@
   "schema": "tcrn.host-evidence.v1",
   "status": "GROUP A COMPLETE — group B absent",
   "observedAt": "2026-08-18",
+  "supersededBy": "TCRN-CROSS-STORY-358",
+  "currentClaim": "none",
+  "retirementNote": "The subject observed here (claude adapter payload install/activate/remove) was retired by TCRN-CROSS-STORY-358 (work:e67bcdeabf6760a7a7c847f7, commit 84c318c26b788b81b7acd74adfe26d3cd3ca328e, 2026-09-06), which deleted the producer scripts/host-evidence.mjs along with the surface it observed. This receipt is historical: observedAt, host, method, groupA and groupB below are preserved verbatim and no current live claim is made. See TCRN-CROSS-INC-328 and TCRN-CROSS-MIN-204 D1 (minutes:f61ef107a645e502f3fbe412).",
   "host": {
     "product": "Claude Code",
     "versionSelfReport": "2.1.220",

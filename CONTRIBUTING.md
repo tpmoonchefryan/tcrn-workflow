@@ -198,62 +198,38 @@ needs it lands, in the same commit, and add an `exceptions` entry naming the wor
 that raises it and citing the authorising decision (the convention MIN-144 D8 records);
 lowering a cap needs no exception.
 
-## Evidence is not a gate — `pnpm host-evidence` (OD-C3, 2026-07-20)
+## Host evidence is retired — `docs/verification/host/claude-code.json` (OD-C3, 2026-07-20; window retired 2026-09-18)
 
-`scripts/host-evidence.mjs` drives the real Claude Code binary against a real
-installation of the adapter payload and writes
-`docs/verification/host/claude-code.json`. It is **release evidence, not a
-verification gate**, and the distinction decides three things about it:
+`scripts/host-evidence.mjs` used to drive the real Claude Code binary against a
+real installation of the adapter payload and write
+`docs/verification/host/claude-code.json`. TCRN-CROSS-STORY-358 (commit
+`84c318c26b788b81b7acd74adfe26d3cd3ca328e`, 2026-09-06) deleted that script along
+with the adapter install/activate/remove surface it observed. There is no
+producer left to run and no `host-evidence` script in `package.json` any more.
+If a failure message or an older document tells you to re-run it, that
+instruction is itself the defect — do not follow it.
 
-- It is **not** in the `verify:*` namespace, **not** in the verification map,
-  and **no** gate or CI job depends on it. The budget rule's ban on new gates is
-  therefore not engaged and no exception was needed.
-- It cannot run where Claude Code is absent. A check nobody can reproduce becomes
-  a check everybody learns to skip, which is how a gate starts lying.
-- Its **absence blocks a release**; its exit code blocks nothing. Those are
-  different mechanisms and are deliberately not expressed by the same one.
+The receipt file was not deleted. It is still release evidence, not a
+verification gate, in one sense that holds and one that no longer does:
 
-The receipt is written in two groups because they need different runners. Group A
-is observable without credentials — hooks fire before authentication, so a
-sandboxed session that dies at 401 has still run them. Group B needs a
-credentialed session and is the Owner's to run. **When group B has not been run
-the receipt must show it as absent rather than omit it**: a receipt that lists
-only what was checked reads as complete, and group A going green is exactly the
-result that would otherwise be mistaken for the whole thing.
+- Its **absence still blocks a release**. `scripts/push-gate.mjs`'s
+  `host-evidence-provenance` stage requires the file to exist, parse, and
+  declare `supersededBy` (a non-empty string) and `currentClaim: "none"`, so it
+  can never be silently re-presented as a live claim. This is the one condition
+  OD-C3 actually stated, and it is the only one still satisfiable.
+- Its **freshness is no longer checked**. The stage carried a thirty-day window
+  from 2026-08-19 (`c5d58ca`) until TCRN-CROSS-INC-328 / TCRN-CROSS-MIN-204 D1
+  (2026-09-18) retired it: with the producer gone, the window's only
+  remediation, `pnpm host-evidence`, did not exist either, and the window kept
+  expiring against a tree that had not changed.
 
-Group B is two commands, not a procedure to reconstruct:
-
-```sh
-pnpm host-evidence --prepare-group-b     # installs a probe, prints what to run
-# run the printed `claude -p …` in the probe, then:
-pnpm host-evidence --record-group-b --observed "<the answer>" --runner "<who>"
-```
-
-The printed command pipes its prompt in on stdin. `--tools` is variadic, so a
-prompt written after it is consumed as another tool name and the CLI refuses with
-"Input must be provided" — the first version of this shipped that way, because the
-flag was checked in `--help` and the composed command was never actually run.
-
-The question asks the model which workspace id its session context mentions, and
-the answer is the observation — which is why `--record-group-b` checks it against
-the installed id rather than accepting a verdict. A reply that does not name it
-is recorded as `CONTRADICTED`, not quietly dropped, and the runner's name goes in
-the receipt beside the result.
-
-**Two properties make that answer evidence rather than a coincidence, and both
-are required.** The workspace id is a nonce minted per preparation, so it cannot
-be guessed from the probe's path or from anything the model saw before. And the
-printed command passes `--tools ""`, so the id cannot be read out of
-`project.json` — which is sitting right there and cannot be removed, because the
-handler reads it. Drop either one and a correct answer becomes compatible with
-the summary never having reached the model at all, which is the single thing this
-observation exists to establish.
-
-A group-A run rewrites the receipt, but **it carries a recorded group B forward
-rather than resetting it**, marking it as taken against earlier bytes. Group B
-costs a human a session; regenerating group A must never be able to silently
-spend that. Stale provenance stated is recoverable — a blank where an observation
-used to be is not.
+Live evidence for the host surface that still exists is `platform-doctor.mjs`'s
+harness leg (`claudeHarnessDrift` and the Codex equivalent), which checks the
+installed container against the current capability roster rather than a dated
+JSON file — see `docs/verification/host/capability-manifest.json` for what is
+and is not claimed today. Nothing in any gate group observes hooks actually
+firing on a real host; that gap is named here rather than implied away by
+either the retired window or the harness leg that replaces it.
 
 ## Documentation
 
