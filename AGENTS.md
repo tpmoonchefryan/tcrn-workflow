@@ -170,10 +170,13 @@ configuration rather than the entire chain head.
 The old brief validator, pre-call receipt/task-name wrapper, structured handoff,
 and mirrored stage-completion store are retired. They are not required inputs,
 exports, hooks, or helper steps. Native role/provider fields that a host does not
-expose remain `unknown`; they never become authority by prompt self-claim. Fresh
-task-pack, rework, decision, and acceptance rounds still require an explicit new
-instance and `forkTurns: "none"`, while native call/turn telemetry records facts
-without authenticating the host or provider.
+expose remain `unknown`; they never become authority by prompt self-claim. For
+Codex native dispatch, fresh task-pack, rework, decision, and acceptance rounds
+still require an explicit new instance and `forkTurns: "none"`; these are
+Codex-host constraints. Claude Code follows its prompt for host details, so
+whether its Agent tool starts a fresh instance or `SendMessage` continues one is
+prompt-defined. Native call/turn telemetry records facts without authenticating
+the host or provider.
 
 ## Platform conventions
 

@@ -272,9 +272,9 @@
     {
       "id": "DISPATCH-LIFECYCLE-001",
       "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
-      "semantics": "fresh task-pack, rework, decision, and acceptance rounds require a new bound instance with forkTurns none",
+      "semantics": "For Codex native dispatch, fresh task-pack, rework, decision, and acceptance rounds require a new bound instance with forkTurns none; Claude Code follows its prompt for host details",
       "landing": "scripts/dispatch-adapter.mjs lifecycle declaration and scripts/dispatch-telemetry-hook.mjs factual telemetry",
-      "enforcementHost": "dispatch caller and helper",
+      "enforcementHost": "Codex dispatch caller and helper; Claude Code host behavior is prompt-defined",
       "positiveLeg": "tests/dispatch-native.test.mjs lifecycle and missing native role/provider observation",
       "redLeg": "newInstance=false or forkTurns=all returns a lifecycle refusal",
       "disposition": "retained"
@@ -282,9 +282,9 @@
     {
       "id": "DISPATCH-LIFECYCLE-002",
       "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
-      "semantics": "same-task clarification is the only same-instance exception and requires an explicitly running bounded task",
+      "semantics": "For Codex native dispatch, same-task clarification is the only same-instance exception and requires an explicitly running bounded task; Claude Code follows its prompt for host details",
       "landing": "scripts/dispatch-adapter.mjs lifecycle declaration and scripts/dispatch-telemetry-hook.mjs factual telemetry",
-      "enforcementHost": "dispatch caller and helper",
+      "enforcementHost": "Codex dispatch caller and helper; Claude Code host behavior is prompt-defined",
       "positiveLeg": "tests/dispatch-native.test.mjs lifecycle and missing native role/provider observation",
       "redLeg": "missing sameTaskRunning or a restart in clarification returns a lifecycle refusal",
       "disposition": "retained"
@@ -292,9 +292,9 @@
     {
       "id": "DISPATCH-LIFECYCLE-003",
       "source": "docs/dispatch-readiness-convention.md#任务轮次与子代理生命周期",
-      "semantics": "role/Pack/evidence bindings are explicit; terminal agent reuse and prompt self-claims are rejected while evidence digests may be reused",
+      "semantics": "For Codex native dispatch, role/Pack/evidence bindings are explicit; terminal agent reuse and prompt self-claims are rejected while evidence digests may be reused; Claude Code follows its prompt for host details",
       "landing": "scripts/dispatch-adapter.mjs lifecycle declaration and scripts/dispatch-telemetry-hook.mjs factual telemetry",
-      "enforcementHost": "dispatch caller and helper",
+      "enforcementHost": "Codex dispatch caller and helper; Claude Code host behavior is prompt-defined",
       "positiveLeg": "tests/dispatch-native.test.mjs lifecycle and missing native role/provider observation",
       "redLeg": "prompt claim, same predecessor id, or running predecessor returns a lifecycle refusal",
       "disposition": "retained"
