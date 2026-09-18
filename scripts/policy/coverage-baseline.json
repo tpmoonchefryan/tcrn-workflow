@@ -2061,6 +2061,24 @@
         "wrong work, scope, model, or effort still refuses the native call",
         "missing native model/effort facts are a refusal, not an inferred fallback"
       ]
+    },
+    "tests/final-gate-plan-batch-verify.test.mjs": {
+      "testCount": 4,
+      "assertionCount": 18,
+      "testNames": [
+        "successful qualified batch writes one real verify telemetry record",
+        "failed formal runner does not write verify telemetry",
+        "post-execution recheck failure does not write verify telemetry",
+        "missing or unusable workspace leaves the qualified batch result unchanged"
+      ]
+    },
+    "tests/final-gate-plan.test.mjs": {
+      "testCount": 2,
+      "assertionCount": 10,
+      "testNames": [
+        "433 replays retained production terminal output and rejects an inner failure behind exit 0",
+        "433 does not blindly rerun the same failed batch, but an explicit rerun marker does"
+      ]
     }
   }
 }
