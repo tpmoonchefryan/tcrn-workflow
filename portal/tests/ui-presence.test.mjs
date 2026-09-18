@@ -1099,6 +1099,58 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
+  test("TCRN-CROSS-SUB-123 execution.subagentPolicy is a governed portal select with complete lifecycle coverage", async () => {
+    const page = await preparePage();
+    try {
+      const key = "execution.subagentPolicy";
+      const allowedValues = ["allowed", "review-only", "forbidden"];
+      const controlFor = () => page.document.querySelector(`[data-setting-control="${key}"]`);
+      const rowFor = () => page.document.querySelector(`[data-setting-row="${key}"]`);
+      const readback = async () => (await cli(["settings-catalog", "--workspace", page.workspace])).settings.find((entry) => entry.key === key);
+
+      const initial = controlFor();
+      assert.equal(initial?.tagName, "SELECT", "execution.subagentPolicy must render as a select");
+      assert.deepEqual([...initial.options].map((option) => option.value), allowedValues, "the select options must be the closed engine enum");
+      assert.equal(initial.closest("[data-setting-choice-component]")?.getAttribute("data-setting-choice-control"), "select");
+      assert.equal(initial.value, "allowed", "the portal select must show the catalog default");
+
+      const selected = "review-only";
+      const beforeWrite = receiptText(page.document);
+      initial.value = selected;
+      initial.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitFor(() => receiptAdvanced(page.document, beforeWrite)(), "the subagent-policy write receipt");
+      await waitFor(() => rowFor()?.dataset.modified === "true" && controlFor()?.value === selected, "the subagent-policy write readback");
+      assert.ok(page.document.querySelector("#receipt-body")?.textContent.includes(key), "the write receipt must name execution.subagentPolicy");
+      assert.equal((await readback()).currentValue, selected, "the engine readback must carry the selected policy value");
+
+      page.document.querySelector('[data-page-target="dashboard"]')?.click();
+      page.document.querySelector('[data-page-target="settings"]')?.click();
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await waitFor(() => controlFor()?.value === selected, "the selected policy to survive a page switch");
+      assert.equal(rowFor()?.dataset.modified, "true");
+
+      const reset = rowFor()?.querySelector(`[data-reset-setting="${key}"]`);
+      assert.ok(reset, "a modified policy must expose reset");
+      const beforeReset = receiptText(page.document);
+      reset.click();
+      await waitFor(() => receiptAdvanced(page.document, beforeReset)(), "the subagent-policy reset receipt");
+      await waitFor(() => rowFor()?.dataset.modified === "false" && controlFor()?.value === "allowed", "the policy reset readback");
+      assert.equal((await readback()).currentValue, "allowed", "reset must restore the allowed default");
+
+      const invalid = page.document.createElement("option");
+      invalid.value = "not-a-policy";
+      invalid.textContent = invalid.value;
+      const afterReset = controlFor();
+      afterReset.append(invalid);
+      afterReset.value = invalid.value;
+      afterReset.dispatchEvent(new page.window.Event("change", { bubbles: true }));
+      await waitFor(() => (page.document.querySelector("#receipt-body")?.textContent ?? "").includes("SETTINGS_VALUE_INVALID"), "the CLI-layer invalid policy refusal");
+      assert.match(page.document.querySelector("#receipt-body")?.textContent ?? "", /SETTINGS_VALUE_INVALID/u, "the CLI must reject an out-of-range policy");
+      assert.equal(rowFor()?.dataset.modified, "false", "a rejected policy must not mark the row modified");
+      assert.equal((await readback()).currentValue, "allowed", "the rejected policy must not change the engine value");
+    } finally { await page.cleanup(); }
+  });
+
   test("INC-193 the design authority is declared, and what cannot be checked here is yellow", async () => {
     const page = await preparePage();
     try {
