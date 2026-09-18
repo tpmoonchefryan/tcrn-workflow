@@ -15,6 +15,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { lstat as lstatAsync, readdir as readdirAsync, readFile as readFileAsync } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
@@ -25,6 +26,11 @@ export const DEFAULT_PER_PROMPT_BYTES = 1_600;
 export const MAX_INJECTION_ROWS = 8;
 export const MAX_INJECTION_ROW_BYTES = 200;
 export const DEFAULT_STATE_DIRECTORY = join(homedir(), ".tcrn-injection");
+export const DEFAULT_SEARCH_TIMEOUT_MS = 60_000;
+export const DEFAULT_SEARCH_MAX_FILES = 256;
+export const DEFAULT_SEARCH_MAX_MATCHES = 100;
+export const DEFAULT_SEARCH_MAX_DEPTH = 3;
+export const DEFAULT_SEARCH_MAX_FILE_BYTES = 1_048_576;
 
 // TCRN-CROSS-STORY-418: a hook payload is not a work assignment.  The three
 // values below are the minimum binding an injection is allowed to trust.  They
@@ -81,6 +87,175 @@ export function recordIdentity(record) {
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function searchManifestScope(manifest) {
+  if (Array.isArray(manifest)) return { files: manifest, directories: [] };
+  if (!isObject(manifest)) return { files: [], directories: [] };
+  return {
+    files: manifest.files ?? manifest.paths ?? manifest.knownFiles ?? [],
+    directories: manifest.directories ?? manifest.roots ?? manifest.knownDirectories ?? [],
+  };
+}
+
+function searchPaths(values) {
+  return [...new Set((Array.isArray(values) ? values : []).filter((value) => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()))];
+}
+
+function searchNextScope(queue, current = null) {
+  const pending = current === null ? queue : [current, ...queue];
+  return {
+    files: [...new Set(pending.filter((entry) => entry.kind === "file").map((entry) => entry.path))],
+    directories: [...new Set(pending.filter((entry) => entry.kind === "directory").map((entry) => entry.path))],
+  };
+}
+
+function searchResult({ query, matches = [], scannedFiles = 0, partial = false, reasonCode = "SEARCH_COMPLETED", partialReason = null, nextScope = null, ...extra }) {
+  return {
+    ok: reasonCode !== "SEARCH_SCOPE_REQUIRED" && reasonCode !== "SEARCH_SCOPE_OUT_OF_BOUNDS",
+    reasonCode,
+    query,
+    matches,
+    scannedFiles,
+    partial,
+    ...(partialReason === null ? {} : { partialReason }),
+    nextScope,
+    ...extra,
+  };
+}
+
+/**
+ * Search only an explicit file/manifest/directory scope. An empty scope never
+ * falls back to home or a repository-wide walk, and every incomplete result
+ * carries the work that remains for a later, explicitly widened call.
+ */
+export async function boundedSearch({
+  query,
+  files = [],
+  directories = [],
+  manifest = null,
+  timeoutMs = DEFAULT_SEARCH_TIMEOUT_MS,
+  maxFiles = DEFAULT_SEARCH_MAX_FILES,
+  maxMatches = DEFAULT_SEARCH_MAX_MATCHES,
+  maxDepth = DEFAULT_SEARCH_MAX_DEPTH,
+  maxFileBytes = DEFAULT_SEARCH_MAX_FILE_BYTES,
+} = {}) {
+  const text = typeof query === "string" ? query : String(query ?? "");
+  if (text.trim().length === 0) return searchResult({ query: text, partial: true, reasonCode: "SEARCH_QUERY_REQUIRED", nextScope: null });
+  const manifestScope = searchManifestScope(manifest);
+  const scopedFiles = searchPaths([...manifestScope.files, ...(Array.isArray(files) ? files : [])]);
+  const scopedDirectories = searchPaths([...manifestScope.directories, ...(Array.isArray(directories) ? directories : [])]);
+  const nextScope = { files: scopedFiles, directories: scopedDirectories };
+  if (scopedFiles.length === 0 && scopedDirectories.length === 0) {
+    return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_REQUIRED", nextScope });
+  }
+  if ([...scopedFiles, ...scopedDirectories].some((path) => !isAbsolute(path))) {
+    return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope });
+  }
+  const forbiddenRoots = [resolve(homedir()), resolve(homedir(), "Code")];
+  const forbidden = scopedDirectories.find((path) => path === "/" || forbiddenRoots.some((root) => path === root));
+  if (forbidden !== undefined) {
+    return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope: { files: scopedFiles, directories: [forbidden] }, rejectedPath: forbidden });
+  }
+  const numeric = (value, fallback, minimum) => Number.isSafeInteger(value) && value >= minimum ? value : fallback;
+  const timeout = numeric(timeoutMs, DEFAULT_SEARCH_TIMEOUT_MS, 0);
+  const fileLimit = numeric(maxFiles, DEFAULT_SEARCH_MAX_FILES, 1);
+  const matchLimit = numeric(maxMatches, DEFAULT_SEARCH_MAX_MATCHES, 1);
+  const depthLimit = numeric(maxDepth, DEFAULT_SEARCH_MAX_DEPTH, 0);
+  const byteLimit = numeric(maxFileBytes, DEFAULT_SEARCH_MAX_FILE_BYTES, 1);
+  const queue = [
+    ...scopedFiles.map((path) => ({ kind: "file", path, depth: 0 })),
+    ...scopedDirectories.map((path) => ({ kind: "directory", path, depth: 0 })),
+  ];
+  const matches = [];
+  const lowerQuery = text.toLocaleLowerCase();
+  const started = Date.now();
+  const deadline = started + timeout;
+  let scannedFiles = 0;
+  let partial = false;
+  let partialReason = null;
+  const markPartial = (reason) => {
+    partial = true;
+    if (partialReason === null) partialReason = reason;
+  };
+  while (queue.length > 0) {
+    if (Date.now() >= deadline) {
+      markPartial("SEARCH_TIMEOUT");
+      break;
+    }
+    const current = queue.shift();
+    if (current.kind === "directory") {
+      if (current.depth >= depthLimit) {
+        markPartial("SEARCH_DEPTH_LIMIT");
+        queue.unshift(current);
+        break;
+      }
+      let entries;
+      try {
+        entries = (await readdirAsync(current.path, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name));
+      } catch {
+        markPartial("SEARCH_SCOPE_UNREADABLE");
+        queue.unshift(current);
+        break;
+      }
+      for (const entry of entries) {
+        const child = join(current.path, entry.name);
+        if (entry.isSymbolicLink()) {
+          markPartial("SEARCH_SYMLINK_SKIPPED");
+          continue;
+        }
+        queue.push({ kind: entry.isDirectory() ? "directory" : "file", path: child, depth: current.depth + 1 });
+      }
+      continue;
+    }
+    if (scannedFiles >= fileLimit) {
+      markPartial("SEARCH_FILE_LIMIT");
+      queue.unshift(current);
+      break;
+    }
+    let info;
+    try { info = await lstatAsync(current.path); } catch {
+      markPartial("SEARCH_FILE_UNREADABLE");
+      queue.unshift(current);
+      break;
+    }
+    if (info.isSymbolicLink() || !info.isFile()) {
+      markPartial("SEARCH_FILE_UNREADABLE");
+      continue;
+    }
+    if (info.size > byteLimit) {
+      markPartial("SEARCH_FILE_SIZE_LIMIT");
+      queue.unshift(current);
+      break;
+    }
+    let content;
+    try { content = await readFileAsync(current.path, "utf8"); } catch {
+      markPartial("SEARCH_FILE_UNREADABLE");
+      queue.unshift(current);
+      break;
+    }
+    scannedFiles += 1;
+    const lines = content.split("\n");
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!lines[index].toLocaleLowerCase().includes(lowerQuery)) continue;
+      matches.push({ path: current.path, line: index + 1, text: boundedUtf8(lines[index], MAX_INJECTION_ROW_BYTES) });
+      if (matches.length >= matchLimit) {
+        markPartial("SEARCH_MATCH_LIMIT");
+        queue.unshift(current);
+        break;
+      }
+    }
+    if (partial) break;
+  }
+  return searchResult({
+    query: text,
+    matches,
+    scannedFiles,
+    partial,
+    reasonCode: partial ? "SEARCH_PARTIAL" : "SEARCH_COMPLETED",
+    partialReason,
+    nextScope: partial ? searchNextScope(queue) : null,
+  });
 }
 
 function boundedContextText(value, maximumBytes) {

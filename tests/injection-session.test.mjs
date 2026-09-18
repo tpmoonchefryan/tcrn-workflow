@@ -3,13 +3,14 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { EventEmitter, once } from "node:events";
-import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import {
   acknowledgeInjection,
+  boundedSearch,
   buildBoundedTaskContext,
   DEFAULT_PER_PROMPT_BYTES,
   InjectionSessionStore,
@@ -399,6 +400,64 @@ test("top-level SessionStart with a production hook payload keeps legacy L0 inje
   assert.equal(result.decision, "L0_CHANGED");
   assert.equal(result.reasonCode, undefined);
   assert.equal(result.dispatchContext, undefined);
+});
+
+test("R1 boundedSearch returns hits from an explicitly bounded directory", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "tcrn-bounded-search-hit-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const nested = join(root, "known");
+  await mkdir(nested);
+  const file = join(nested, "record.txt");
+  await writeFile(file, "outside\nneedle is here\n");
+
+  const result = await boundedSearch({ query: "needle", directories: [root], maxDepth: 2 });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.reasonCode, "SEARCH_COMPLETED");
+  assert.equal(result.partial, false);
+  assert.equal(result.nextScope, null);
+  assert.deepEqual(result.matches, [{ path: file, line: 2, text: "needle is here" }]);
+});
+
+test("R1 boundedSearch refuses home scans and exposes timeout continuation", async (context) => {
+  const denied = await boundedSearch({ query: "needle", directories: [homedir()] });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
+  assert.equal(denied.partial, true);
+  assert.deepEqual(denied.nextScope.directories, [homedir()]);
+
+  const root = await mkdtemp(join(tmpdir(), "tcrn-bounded-search-timeout-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, "record.txt"), "needle\n");
+  const timed = await boundedSearch({ query: "needle", directories: [root], timeoutMs: 0 });
+  assert.equal(timed.ok, true);
+  assert.equal(timed.reasonCode, "SEARCH_PARTIAL");
+  assert.equal(timed.partial, true);
+  assert.equal(timed.partialReason, "SEARCH_TIMEOUT");
+  assert.deepEqual(timed.nextScope.directories, [root]);
+});
+
+test("knowledge recall receives the caller's bounded search scope", async (context) => {
+  const root = await mkdtemp(join(tmpdir(), "tcrn-bounded-search-recall-"));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const file = join(root, "known.txt");
+  await writeFile(file, "bounded recall needle\n");
+  let scoped;
+
+  const result = await runInjection({
+    prompt: "needle",
+    partition: "cross-project",
+    budget: 24_576,
+    searchScope: { directories: [root], maxDepth: 1 },
+    recall: async (query, options) => {
+      scoped = await options.boundedSearch({ query });
+      return { ok: true, result: { records: [] } };
+    },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(scoped.reasonCode, "SEARCH_COMPLETED");
+  assert.deepEqual(scoped.matches, [{ path: file, line: 1, text: "bounded recall needle" }]);
 });
 
 test("the placement manifest is fixture-shaped and the two model wrappers are independent", async () => {

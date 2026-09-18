@@ -43,6 +43,7 @@ import {
   DEFAULT_SESSION_BUDGET,
   InjectionSessionStore,
   UninjectedModelCall,
+  boundedSearch,
   buildBoundedCandidateContext,
   buildBoundedTaskContext,
   buildL0Injection,
@@ -703,6 +704,7 @@ export async function runInjection({
   telemetry = null,
   dispatchContext = null,
   context = null,
+  searchScope = null,
 } = {}) {
   void triggerKeywords;
   const suppliedContext = dispatchContext ?? context;
@@ -729,9 +731,22 @@ export async function runInjection({
     at: new Date().toISOString().replace(/\.\d+Z$/u, "Z")
   }, { containerRoot, withPartitionFlag: true });
   const invokeRecall = async (query) => {
+    const baseScope = Array.isArray(searchScope)
+      ? { manifest: searchScope }
+      : searchScope !== null && typeof searchScope === "object" ? searchScope : {};
+    const boundedRecallSearch = (options = {}) => {
+      const requested = options !== null && typeof options === "object" && !Array.isArray(options) ? options : {};
+      return boundedSearch({
+        ...baseScope,
+        ...requested,
+        query: typeof requested.query === "string" ? requested.query : query,
+      });
+    };
     try {
       return typeof recall === "function" ? await recall(query, {
         limit: recallLimit,
+        searchScope,
+        boundedSearch: boundedRecallSearch,
         ...(boundContext?.bound === true ? { role: boundContext.role, workId: boundContext.workId, pack: boundContext.pack } : {}),
       }) : await askRecall(query);
     } catch (error) {
@@ -960,6 +975,7 @@ export async function runSessionInjection({
   judgeEnabled = true,
   host = process.env.TCRN_HOST ?? "claude",
   recall = null,
+  searchScope = null,
   dispatchContext = null,
   context = null,
   role = undefined,
@@ -1072,6 +1088,7 @@ export async function runSessionInjection({
             settings: effectiveSettings,
             translate: subagent ? null : calls.translate,
             recall,
+            searchScope,
             telemetry,
             host,
             dispatchContext: dispatch.bound === true ? dispatch : null,
