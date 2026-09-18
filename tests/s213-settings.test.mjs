@@ -11,12 +11,17 @@ import {
   SETTINGS_CATALOG,
   SETTINGS_LAYER_KIND,
   acquireWorkspaceLease,
+  appendEvents,
   initializeWorkspace,
   materializeWorkspace,
   setWorkspaceSetting,
   validateSettingValue,
   validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
+import {
+  isRetiredSettingKey,
+  settingsCatalogEntry,
+} from "../dist/build/packages/core/src/settings.js";
 
 const instant = (second) => `2026-08-11T00:00:${String(second).padStart(2, "0")}Z`;
 
@@ -42,6 +47,28 @@ async function runRaw(args) {
 
 function errorReason(args) {
   return runCli(args, { write() {} }).then(() => null, (error) => error?.reasonCode);
+}
+
+async function appendRetiredHistory(workspace, lease) {
+  const record = {
+    schemaVersion: "tcrn.workspace-setting.v1",
+    key: "execution.personalessDispatch",
+    layerKind: "workspace_configuration",
+    value: "legacy-value",
+    revision: 1,
+    updatedAt: instant(2),
+    tombstone: false,
+  };
+  // Use appendEvents with a hand-built delta so the real createEvent hash path
+  // constructs the synthetic history while createWorkspaceSettingRecord is bypassed.
+  return appendEvents(workspace, lease, [
+    (state) => ({
+      payload: { operation: "settings.updated", record },
+      projects: state.projects,
+      work: state.work,
+      settings: state.settings,
+    }),
+  ], { expectedVersion: 0, occurredAt: instant(2) });
 }
 
 test("INIT-022 S213: catalog exposes every engine-consumed workspace setting", async (t) => {
@@ -105,4 +132,47 @@ test("STORY-366: article directories are workspace-relative by default and canno
   assert.throws(() => validateSettingValue("knowledge.articlesPath", "../outside", workspace), (error) => error?.reasonCode === "SETTINGS_VALUE_INVALID");
   assert.throws(() => validateSettingValue("knowledge.articlesPath", ".tcrn-workflow/articles", workspace), (error) => error?.reasonCode === "SETTINGS_VALUE_INVALID");
   assert.throws(() => validateSettingValue("knowledge.articlesPath", `${workspace}/.tcrn-workflow/articles`, workspace), (error) => error?.reasonCode === "SETTINGS_VALUE_INVALID");
+});
+
+test("INC-321 S3: a retired settings.updated event replays from genesis and stays out of current settings", async (t) => {
+  const { workspace } = await fixture(t, "retired-replay");
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(1) });
+  try {
+    await appendRetiredHistory(workspace, lease);
+    const state = await materializeWorkspace(workspace);
+    assert.equal(state.version, 1);
+    assert.equal(state.events.length, 1);
+    assert.equal(state.settings.length, 0, "retired values are not materialized as current settings");
+    assert.equal(isRetiredSettingKey("execution.personalessDispatch"), true);
+    assert.equal(isRetiredSettingKey("backup.cadence"), false);
+    assert.equal(isRetiredSettingKey("settings.random"), false);
+  } finally {
+    await lease.release();
+  }
+});
+
+test("INC-321 S3: the normal settings write path still rejects the retired key", async (t) => {
+  const { workspace } = await fixture(t, "retired-write");
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(1) });
+  try {
+    await appendRetiredHistory(workspace, lease);
+    await assert.rejects(
+      setWorkspaceSetting(workspace, lease, {
+        key: "execution.personalessDispatch",
+        value: "new-value",
+        expectedVersion: 1,
+        occurredAt: instant(3),
+      }),
+      (error) => error?.reasonCode === "SETTINGS_KEY_UNREGISTERED",
+    );
+    assert.throws(
+      () => settingsCatalogEntry("execution.personalessDispatch"),
+      (error) => error?.reasonCode === "SETTINGS_KEY_UNREGISTERED",
+    );
+    const state = await materializeWorkspace(workspace);
+    assert.equal(state.version, 1, "the rejected write does not append an event");
+    assert.equal(state.settings.length, 0);
+  } finally {
+    await lease.release();
+  }
 });

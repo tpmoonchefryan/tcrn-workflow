@@ -21,6 +21,13 @@ export const SETTINGS_REASON_CODES = Object.freeze([
   "SETTINGS_VALUE_INVALID",
 ] as const);
 
+// A catalog deletion must leave a replay-compatibility marker behind. Keep this
+// list separate from the live catalog: old events may be read, but the setting
+// is not a valid target for any new write.
+export const RETIRED_SETTING_KEYS: readonly string[] = Object.freeze([
+  "execution.personalessDispatch",
+]);
+
 export type SettingsReasonCode = typeof SETTINGS_REASON_CODES[number];
 export type SettingValueType = "enum" | "path" | "string" | "url";
 export type SettingControlType = "enum" | "boolean" | "number" | "text";
@@ -178,6 +185,8 @@ function assertAbsoluteArtifactsSettingPath(value: string, label: string, worksp
   }
 }
 
+// When a key is removed from this catalog, add it to RETIRED_SETTING_KEYS in the
+// same change so historical events remain legible without reopening new writes.
 const catalogEntries: readonly SettingsCatalogEntry[] = [
   {
     // TCRN-CROSS-STORY-364: the language this workspace writes its knowledge cards in.
@@ -479,6 +488,10 @@ export const SETTINGS_CATALOG: readonly SettingsCatalogEntry[] = Object.freeze(
 const catalogByKey = new Map<SettingKey, SettingsCatalogEntry>(
   SETTINGS_CATALOG.map((entry) => [entry.key, entry]),
 );
+
+export function isRetiredSettingKey(key: unknown): boolean {
+  return typeof key === "string" && RETIRED_SETTING_KEYS.some((retiredKey) => retiredKey === key);
+}
 
 const engineVersionPattern = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/u;
 

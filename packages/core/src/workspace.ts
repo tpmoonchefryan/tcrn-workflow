@@ -125,6 +125,7 @@ import {
   SettingsError,
   compareEngineVersions,
   createWorkspaceSettingRecord,
+  isRetiredSettingKey,
   settingsCatalogEntry,
   sortWorkspaceSettings,
   validateWorkspaceSettingRecord,
@@ -2526,6 +2527,17 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         settings.delete(body.key);
         continue;
       }
+      if (isRetiredSettingKey(body.key)) {
+        // Historical settings.updated records for retired keys remain readable,
+        // but their values must never become current state or pass the live
+        // catalog/value validator. Preserve only the common event-bound envelope
+        // checks needed to distinguish a valid legacy record from corruption.
+        exactFields(body, ["key", "layerKind", "revision", "schemaVersion", "tombstone", "updatedAt", "value"], "WORKSPACE_EVENT_CORRUPT", "retired setting record");
+        if (typeof body.updatedAt !== "string") fail("WORKSPACE_EVENT_CORRUPT", "retired setting timestamp is invalid");
+        try { assertStrictInstant(body.updatedAt); } catch { fail("WORKSPACE_EVENT_CORRUPT", "retired setting timestamp is invalid"); }
+        requireEventBoundTimestamp(body.updatedAt, event, `setting ${body.key}`);
+        continue;
+      }
       const record = extensionRecordOrCorrupt(() => validateWorkspaceSettingRecord(
         body,
         workspaceRoot,
@@ -3929,6 +3941,11 @@ async function resolveWorkspace(workspaceRootInput: string): Promise<{ readonly 
 export async function materializeWorkspace(workspaceRootInput: string): Promise<WorkspaceState> {
   const workspace = await resolveWorkspace(workspaceRootInput);
   return materializeResolvedWorkspace(workspace);
+}
+
+export async function materializeWorkspaceFromGenesis(workspaceRootInput: string): Promise<WorkspaceState> {
+  const workspace = await resolveWorkspace(workspaceRootInput);
+  return materialize(workspace.metadata, await readSegmentEvents(workspace.root, workspace.metadata));
 }
 
 async function materializeResolvedWorkspace(workspace: { readonly root: string; readonly metadata: WorkspaceMetadata }): Promise<WorkspaceState> {
