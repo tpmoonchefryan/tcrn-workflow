@@ -79,7 +79,7 @@
           "assertionCount": 27
         },
         "current": {
-          "testCount": 3,
+          "testCount": 5,
           "assertionCount": 0
         },
         "removedTests": [],
@@ -119,6 +119,8 @@
 第二十五次重录（2026-09-09，TCRN-CROSS-STORY-369）：本单保留覆盖基线的 128 个文件，改写九个既有测试文件的 AST 计数；被 Requirement 推翻的旧测试名通过带 `replacement` 的 coverage waiver 逐条承接，未删除测试文件或基线成员。
 
 第二十六次重录（2026-09-12，TCRN-CROSS-STORY-402/403）：本次保留覆盖基线的 137 个文件与所有测试名称；s244 当前测试实现有 5 条测试、20 条断言，s213 的空断言负腿仍保持断言守恒判据。
+
+第二十七次重录（2026-09-18，TCRN-CROSS-INC-325）：TCRN-CROSS-INC-321（引擎提交 90118c89）为 `tests/s213-settings.test.mjs` 新增测试，该文件当前测试数由3变5，块内第三个用例("empty assertions while keeping test names")的current.testCount随之由3变5（baseline.testCount仍为3，current.assertionCount仍为该用例人为清空的0）；engine-suite本身为绿（COVERAGE_CONSERVATION_VERIFIED），故这不是覆盖回归，只是逐字块随之整体重录。
 
 ## 边界
 
