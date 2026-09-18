@@ -32,8 +32,9 @@ A classification folder may organize repositories at the repository layer. It
   partition.
 - The governed chain stays in `.tcrn-workspace`; this filesystem layout task
   does not copy, rewrite, or relocate chain bytes.
-- The `.tcrn-artifacts` directory is the platform archive area. Its contents
-  are inventory and recovery material, not a second chain authority.
+- The `.tcrn-artifacts` directory is owned by the platform container and governed
+  with the cross-project partition. Its contents are inventory and recovery
+  material, not a second chain authority.
 - The platform-to-project mapping is recorded in the platform `AGENTS.md`, not
   inferred from a classification folder or from directory casing.
 - A change of chain host or binding is a separate governed operation. It is
@@ -46,22 +47,18 @@ document. It must contain:
 
 - the platform identity and a pointer to this public source of truth;
 - a section headed exactly `## 三、分区拓扑`;
-- one row for each platform partition and for the release-trust root, naming
-  the project location in container-relative terms and a runnable recheck
-  command for that row;
+- the platform-to-project mapping and any local recheck details supplied by the
+  platform-level instance, without requiring this public document to enumerate
+  every partition or trust root;
 - the cross-repository convention pointers and the short stop/publish/privacy
   discipline summary.
 
-The topology rows are closed and case-sensitive:
+The topology table below is illustrative and non-exhaustive:
 
-| Entry | Meaning | Required mapping detail |
+| Illustrative entry | Meaning | Local-instance detail |
 | --- | --- | --- |
-| `cross-project` | Cross-project workflow chain | Project location and a status/validate recheck command |
-| `TCRN-AOS` | AOS project partition | Project location and a status/validate recheck command |
-| `TCRN-Design-System` | Design-system project partition | Project location and a status/validate recheck command |
-| `TCRN-TMS` | TMS project partition | Project location and a status/validate recheck command |
-| `Joi-Button` | Joi Button project partition | The directory spelling is exactly `joi-button` |
-| `release-trust` | Shared trust root, not a project partition | Trust-root recheck command; never count it as a project |
+| `partition-id` | One platform partition | The local instance may supply its location and a runnable recheck command |
+| `release-trust-root` | A shared trust root, not a project partition | The local instance keeps its trust-root check distinct from project checks |
 
 The local instance may include exact paths and command output. Those details
 must stay in the local instance and must not be copied into this public
@@ -115,5 +112,6 @@ The repository ships `scripts/platform-doctor.mjs`. It accepts the platform
 root through the required `--platform-root` argument and checks the local
 instance for the four invariants: a non-empty platform `AGENTS.md` with the
 topology marker, a chain container with at least one partition workspace, a
-container outside Git ancestry, and the `CLAUDE.md` bridge. Its test suite uses
-synthetic temporary fixtures so CI never depends on a developer's machine.
+minimal whitelist Git container boundary that does not claim governed
+repositories, and the `CLAUDE.md` bridge. Its test suite uses synthetic
+temporary fixtures so CI never depends on a developer's machine.
