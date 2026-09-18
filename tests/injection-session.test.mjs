@@ -375,6 +375,32 @@ test("PostCompact re-emits retained L0 and pull correlation ignores failures, un
   assert.equal(pullCorrelation(good, [emitted], [emitted]), null);
 });
 
+test("top-level SessionStart with a production hook payload keeps legacy L0 injection", async (context) => {
+  const directory = await stateDirectory(context, "legacy-top-level");
+  const workspaceState = {
+    work: [{ id: "work:one", externalKey: "ONE", kind: "Story", status: "active", parentId: null, title: "One", summary: "", tombstone: false }],
+    events: [{ sequence: 1, payload: { operation: "work.created", record: { id: "work:one", status: "active" } } }],
+    conferences: [],
+    conferenceMinutes: [],
+  };
+  const result = await runSessionInjection({
+    prompt: "",
+    sessionId: "legacy-top-level",
+    event: "SessionStart",
+    hookInput: { hook_event_name: "SessionStart", session_id: "legacy-top-level", cwd: "/repo" },
+    stateDirectory: directory,
+    workspaceState,
+    budget: 24_576,
+    perPromptBytes: 1_600,
+    judgeEnabled: false,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.injected, true);
+  assert.equal(result.decision, "L0_CHANGED");
+  assert.equal(result.reasonCode, undefined);
+  assert.equal(result.dispatchContext, undefined);
+});
+
 test("the placement manifest is fixture-shaped and the two model wrappers are independent", async () => {
   assert.equal(validateInjectionPlacementManifest(InjectionPlacementManifest), true);
   const fixture = JSON.parse(await readFile(new URL("../fixtures/injection-placement-manifest.json", import.meta.url), "utf8"));
