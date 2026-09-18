@@ -993,7 +993,7 @@ export async function runSessionInjection({
     ...(dispatchId === undefined ? {} : { dispatchId }),
     ...(parentSession === undefined ? {} : { parentSession }),
   };
-  const bindingRequested = enforceBinding || dispatchContext !== null || context !== null || role !== undefined || workId !== undefined || pack !== undefined || dependencies !== undefined || dispatchId !== undefined || parentSession !== undefined || event === "SubagentStart" || (event !== "PostToolUse" && Object.keys(hookInput ?? {}).length > 0);
+  const bindingRequested = enforceBinding || dispatchContext !== null || context !== null || role !== undefined || workId !== undefined || pack !== undefined || dependencies !== undefined || dispatchId !== undefined || parentSession !== undefined || event === "SubagentStart";
   const dispatch = normalizeDispatchContext(explicitBinding, { requireBinding: bindingRequested });
   const pendingMode = deliveryMode === "pending";
   try {
