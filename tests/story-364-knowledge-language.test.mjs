@@ -58,6 +58,7 @@ import { planCommand, migrateCommand } from "../scripts/knowledge-language.mjs";
 const instant = (second) => `2026-09-08T00:00:${String(second).padStart(2, "0")}Z`;
 const OWNER = deriveStableId("owner", "STORY-364-OWNER");
 const ECONOMY_MODEL = "claude-sonnet-5";
+const RETIRED_ECONOMY_SETTING_KEY = "model.economyTier";
 const DISPATCH_TIERS_VALUE = JSON.stringify({ "claude-code": { economy: { model: ECONOMY_MODEL, effort: "medium" } } });
 
 // The stand-in for the economy-tier model. The engine never calls a model, so what a test
@@ -376,7 +377,11 @@ test("STORY-364: the settings catalog admits the language keys and refuses a tag
   assert.throws(() => validateSettingValue("artifact.language", "de-DE"), (error) => error.reasonCode === "SETTINGS_VALUE_INVALID");
   assert.equal(validateSettingValue("retrieval.promptLanguages", "en,zh-CN"), "en,zh-CN");
   assert.throws(() => validateSettingValue("retrieval.promptLanguages", "en,de-DE"), (error) => error.reasonCode === "SETTINGS_VALUE_INVALID");
-  assert.equal(validateSettingValue("model.economyTier", ECONOMY_MODEL), ECONOMY_MODEL);
+  assert.throws(
+    () => validateSettingValue(RETIRED_ECONOMY_SETTING_KEY, ECONOMY_MODEL),
+    (error) => error.reasonCode === "SETTINGS_KEY_UNREGISTERED",
+    "the retired economy-tier key is no longer an active catalog setting",
+  );
   assert.deepEqual([...parsePromptLanguages("zh-CN,en")], ["en", "zh-CN"], "the list is read canonically sorted");
   assert.deepEqual([...parsePromptLanguages(null)], []);
 });

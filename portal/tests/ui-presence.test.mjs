@@ -199,7 +199,7 @@ async function loadExecutedDom(fixture, env = {}) {
     "the page's initial fetches to settle",
     20_000,
   );
-  return { child, document, window };
+  return { child, document, source, window };
 }
 
 function missingComponents(document) {
@@ -897,6 +897,22 @@ if (process.argv[2] === "status" && actual.status === 0) {
     const page = await preparePage();
     try {
       page.document.querySelector('[data-page-target="settings"]')?.click();
+      const retiredEconomySettingKey = "model.economyTier";
+      const catalogForGroups = await cli(["settings-catalog", "--workspace", page.workspace]);
+      const settingGroupSource = page.source.match(/const SETTING_GROUPS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/u)?.[1];
+      assert.ok(settingGroupSource, "the portal must declare its settings group coverage");
+      const settingGroups = [...settingGroupSource.matchAll(/^ {4}"([^"]+)": "([^"]+)",$/gmu)].map(([, key]) => key);
+      const legacyModelSource = page.source.match(/const LEGACY_MODEL_SETTING_KEYS = new Set\(\[([^\]]*)\]\);/u)?.[1] ?? "";
+      const legacyModelKeys = [...legacyModelSource.matchAll(/"([^"]+)"/gu)].map(([, key]) => key);
+      const catalogKeys = new Set(catalogForGroups.settings.map((entry) => entry.key));
+      const groupedKeys = new Set([...settingGroups, ...legacyModelKeys]);
+      const missingFromGroups = [...catalogKeys].filter((key) => !groupedKeys.has(key)).sort();
+      const staleGroups = [...groupedKeys].filter((key) => !catalogKeys.has(key)).sort();
+      assert.deepEqual(
+        { missingFromGroups, staleGroups },
+        { missingFromGroups: [], staleGroups: [] },
+        `settings catalog/group coverage differs (missing: ${missingFromGroups.join(", ") || "none"}; stale: ${staleGroups.join(", ") || "none"})`,
+      );
       const groupFor = (key) => {
         for (const group of ["workspace", "backup", "execution", "machine"]) {
           page.document.querySelector(`[data-setting-group="${group}"]`)?.click();
@@ -905,13 +921,13 @@ if (process.argv[2] === "status" && actual.status === 0) {
         }
         return null;
       };
-      assert.equal(groupFor("model.economyTier"), "execution", "model.economyTier belongs to execution, not workspace");
+      assert.equal(groupFor(retiredEconomySettingKey), null, "retired economy-tier model must not appear in any settings group");
       assert.equal(groupFor("retrieval.promptLanguages"), "workspace");
       assert.equal(groupFor("backup.cadence"), "backup");
       assert.equal(groupFor("portal.port"), "machine", "machine settings stay outside the workspace settings groups");
 
       page.document.querySelector('[data-setting-group="workspace"]')?.click();
-      assert.equal(page.document.querySelector('[data-setting-row="model.economyTier"]'), null, "the model field must not leak into workspace");
+      assert.equal(page.document.querySelector(`[data-setting-row="${retiredEconomySettingKey}"]`), null, "the retired model field must not leak into workspace");
       const prompt = page.document.querySelector('[data-setting-control="retrieval.promptLanguages"]');
       assert.ok(prompt, "prompt languages must have a live control");
       assert.equal(prompt.tagName, "SELECT");

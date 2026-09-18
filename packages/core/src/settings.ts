@@ -26,6 +26,7 @@ export const SETTINGS_REASON_CODES = Object.freeze([
 // is not a valid target for any new write.
 export const RETIRED_SETTING_KEYS: readonly string[] = Object.freeze([
   "execution.personalessDispatch",
+  "model.economyTier",
 ]);
 
 export type SettingsReasonCode = typeof SETTINGS_REASON_CODES[number];
@@ -56,7 +57,6 @@ export type SettingKey =
   | "injection.perPromptBytes"
   | "knowledge.aggregateBytes"
   | "knowledge.articlesPath"
-  | "model.economyTier"
   | "retrieval.promptLanguages"
   | "retrieval.scopeExcerptBytes"
   | "retrieval.tau"
@@ -399,18 +399,6 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     controlType: "text",
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "docs/knowledge/articles",
-  },
-  {
-    // TCRN-CROSS-STORY-364 (Owner ruling TCRN-CROSS-MIN-152 D3): this setting is retired.
-    // The write-path hook and query-side fallback read the economy model from the host's
-    // execution.dispatchTiers row; no current reader consults this entry. It remains in the
-    // catalog as a read-only replay-compatibility slot because historical settings events
-    // still validate their key against the catalog.
-    key: "model.economyTier",
-    type: "string",
-    controlType: "text",
-    layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: null,
   },
   {
     // TCRN-CROSS-STORY-364: which prompt languages this workspace expects questions in. A
