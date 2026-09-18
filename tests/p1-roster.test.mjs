@@ -159,6 +159,8 @@ test("STORY-413 final gate planning selects each top-level root once and records
   assert.throws(() => buildContainedExecutionPlan(wrongOrder), (error) => error.reasonCode === "GATE_CONTAINMENT_ROOT_ORDER_INVALID");
   const wrongChild = { ...declaration, groups: declaration.groups.map((group) => group.id === "engine-p8" ? { ...group, command: "pnpm verify:p1" } : group) };
   assert.throws(() => pushGateExecutionPlan(wrongChild), (error) => error.reasonCode === "GATE_CONTAINMENT_PUSH_PLAN_INVALID");
+  const cyclic = { ...declaration, groups: declaration.groups.map((group) => group.id === "engine-p1" ? { ...group, contains: ["engine-p1"] } : group) };
+  assert.throws(() => buildContainedExecutionPlan(cyclic), (error) => error.reasonCode === "GATE_CONTAINMENT_CYCLE");
 });
 
 test("STORY-350 red locator runs every contained child separately and returns each conclusion", async () => {

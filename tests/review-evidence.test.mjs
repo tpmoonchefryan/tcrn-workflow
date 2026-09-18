@@ -228,6 +228,12 @@ test("STORY-413: gate planning and evidence reuse use one positive and negative 
   await assertNoRootExecution(unknownReadinessPlan);
   const missingRequiredSuite = { ...containment, groups: containment.groups.filter((group) => group.id !== "engine-suite").map((group) => group.id === "engine-p1" ? { ...group, contains: [] } : group) };
   assert.throws(() => buildPlan({ containment: missingRequiredSuite }), (error) => error.reasonCode === "GATE_PLAN_REQUIRED_GROUP_MISSING");
+  const missingRequiredEdge = { ...roster, groups: roster.groups.map((group) => group.id === "engine-release" ? { ...group, contains: [...group.contains, "unlisted-child"] } : group) };
+  assert.throws(() => buildPlan({ roster: missingRequiredEdge }), (error) => error.reasonCode === "GATE_PLAN_REQUIRED_EDGE_MISSING");
+  const commandDrift = { ...roster, groups: roster.groups.map((group) => group.id === "engine-release" ? { ...group, command: "node scripts/push-gate-drift.mjs" } : group) };
+  assert.throws(() => buildPlan({ roster: commandDrift }), (error) => error.reasonCode === "GATE_PLAN_COMMAND_DRIFT");
+  const rootOrderDrift = { ...roster, topLevel: [...roster.topLevel].reverse() };
+  assert.throws(() => buildPlan({ roster: rootOrderDrift }), (error) => error.reasonCode === "GATE_PLAN_ROOT_ORDER_DRIFT");
   assert.throws(() => recordExecution(plan, [{ id: "engine-release", ok: true }], { rosterPath: ROSTER_PATH }), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
   assert.throws(() => recordExecution(plan, [...plan.selected.map(({ id }) => ({ id, ok: true })), { id: "engine-p1", ok: true }], { rosterPath: ROSTER_PATH }), (error) => error.reasonCode === "GATE_PLAN_EXECUTION_MISMATCH");
 
