@@ -200,6 +200,33 @@ test("TCRN-CROSS-STORY-393 R2: absolute guarded Claude hooks replace in place an
   assert.equal(result, "", "an unrelated project does not invoke a missing platform hook");
 });
 
+test("TCRN-CROSS-STORY-393 R6: real user guard forms normalize to the generated handlers", async (t) => {
+  const root = await scratch("tcrn-host-render-r6-user-guards-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const projectRoot = resolve(repoRoot, "..", "..");
+  const absolute = (handler) => resolve(repoRoot, handler);
+  const existingHooks = {
+    Stop: [
+      { hooks: [{ type: "command", command: `node "${absolute("tools/stop-pact/hook.mjs")}"`, timeout: 10 }] },
+      { hooks: [{ type: "command", command: `[ "$CLAUDE_PROJECT_DIR" = "${projectRoot}" ] && node "${absolute("scripts/knowledge-capture-hook.mjs")}" || true`, timeout: 30 }] },
+    ],
+    UserPromptSubmit: [{ hooks: [{ type: "command", command: `if [ "$CLAUDE_PROJECT_DIR" = "${projectRoot}" ]; then node "${absolute("scripts/agents-zero-hook.mjs")}"; else cat >/dev/null; fi`, timeout: 10 }] }],
+  };
+  const existing = new Map([[".claude/settings.json", JSON.stringify({ hooks: existingHooks })]]);
+  const plan = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: settings("claude-code"), root, repoRoot, existing });
+  const document = JSON.parse(plan.files[0].content);
+  const generated = claudeHookSettings();
+  const sortByCommand = (groups) => groups.slice().sort((left, right) => left.hooks[0].command.localeCompare(right.hooks[0].command));
+  assert.deepEqual(sortByCommand(document.hooks.Stop), sortByCommand(generated.Stop), "the real && guard replaces Stop in place");
+  assert.deepEqual(sortByCommand(document.hooks.UserPromptSubmit), sortByCommand(generated.UserPromptSubmit), "the real if/then/else guard replaces UserPromptSubmit in place");
+  for (const event of ["Stop", "UserPromptSubmit"]) {
+    const handlers = document.hooks[event].flatMap((group) => group.hooks ?? [])
+      .map((hook) => hook.command.match(/(?:scripts|tools)\/[^"'\s]+?\.mjs/u)?.[0])
+      .filter(Boolean);
+    assert.equal(new Set(handlers).size, handlers.length, `${event} has no duplicate managed handler`);
+  }
+});
+
 test("TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved", async (t) => {
   for (const host of ["claude-code", "codex"]) {
     const root = await scratch(`tcrn-host-render-user-group-${host}-`);

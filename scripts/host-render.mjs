@@ -116,22 +116,36 @@ function legacyGroupFor(host, event, group) {
   return changed === 0 ? null : legacy;
 }
 
-function managedCommandKey(command) {
+function managedNodeInvocation(command) {
   if (typeof command !== "string") return null;
-  let value = command.trim();
-  const guarded = /^if \[ (?:-f "[^"]+"|"\$CLAUDE_PROJECT_DIR" = "[^"]+") \]; then (.+); fi$/u.exec(value);
-  if (guarded) value = guarded[1];
-  const node = /^node "([^"]+)"(?:\s+--host (?:claude|codex))?$/u.exec(value);
-  if (!node) return null;
-  const normalized = node[1].replaceAll("\\", "/");
-  return normalized.match(/(?:^|\/)((?:scripts|tools)\/[^"'\s]+?\.mjs)$/u)?.[1] ?? null;
+  const value = command.trim();
+  const forms = [
+    /^node "([^"]+)"(?:\s+--host (claude|codex))?$/u,
+    /^\[\s*.+?\s*\]\s*&&\s*node "([^"]+)"(?:\s+--host (claude|codex))?(?:\s*\|\|\s*true)?$/u,
+    /^if\s+\[\s*.+?\s*\]\s*;\s*then\s+node "([^"]+)"(?:\s+--host (claude|codex))?\s*;\s*(?:else\s+.+?;\s*)?fi$/u,
+  ];
+  for (const form of forms) {
+    const match = form.exec(value);
+    if (match !== null) return { path: match[1], host: match[2] ?? null };
+  }
+  return null;
+}
+
+function managedCommandKey(host, command) {
+  const invocation = managedNodeInvocation(command);
+  if (invocation === null) return null;
+  const normalized = invocation.path.replaceAll("\\", "/");
+  const handler = normalized.match(/(?:^|\/)((?:scripts|tools)\/[^"'\s]+?\.mjs)$/u)?.[1] ?? null;
+  if (handler === null) return null;
+  const defaultHost = host === "claude-code" ? "claude" : "codex";
+  return `${handler} --host ${invocation.host ?? defaultHost}`;
 }
 
 function semanticGroupIdentity(host, event, group) {
   if (!Array.isArray(group?.hooks)) return null;
   const normalized = structuredClone(group);
   for (const hook of normalized.hooks) {
-    const key = managedCommandKey(hook?.command);
+    const key = managedCommandKey(host, hook?.command);
     if (key === null) return null;
     hook.command = `__tcrn-managed-hook__:${key}`;
   }
