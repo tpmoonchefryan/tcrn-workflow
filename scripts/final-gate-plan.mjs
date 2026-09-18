@@ -2059,6 +2059,24 @@ function scopedBudgetNativeProblems(input, acquired) {
 /** Execute the only formal batch entry point after a fresh qualification. */
 export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}) {
   const initial = qualifyBatch(qualificationRequest(input));
+  async function emitBatchVerifyTelemetry(input, qualification, result) {
+    if (typeof input?.workspace !== "string" || input.workspace.trim().length === 0) return;
+    try {
+      const core = await import("../dist/build/packages/core/src/index.js");
+      const state = await core.materializeWorkspace(input.workspace);
+      const transient = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient");
+      if (transient === undefined) return;
+      const record = core.createTelemetryRecord({
+        at: new Date().toISOString(),
+        kind: "verify",
+        session: typeof input.sessionId === "string" && input.sessionId.length > 0 ? input.sessionId : "unknown-batch-session",
+        payload: { source: "final-gate-plan:batch-verify", availability: "available", passed: true },
+      });
+      await core.appendTelemetryRecord(transient.path, record);
+    } catch {
+      return;
+    }
+  }
   if (initial.formalGateAllowed !== true || initial.eligible !== true || initial.status === "idempotent") return { ...initial, executed: [], formalGateExecutions: 0 };
   if (typeof recheck === "function") {
     let refreshed;
@@ -2092,6 +2110,7 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     if (after.eligible !== true || after.formalGateAllowed !== true) return { ...initial, status: "failed", reasonCode: "BATCH_RECHECK_NOT_ELIGIBLE", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: [after.reasons?.join("; ") || "full qualification vetoed the result after execution"] };
     if (after.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "failed", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["batch qualification drifted during formal execution"] };
   }
+  await emitBatchVerifyTelemetry(input, initial, result);
   return { ...initial, status: "completed", reasonCode: "BATCH_FORMAL_GATE_COMPLETED", formalGateAllowed: false, executed: [result ?? { ok: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["formal batch runner completed once"] };
 }
 
