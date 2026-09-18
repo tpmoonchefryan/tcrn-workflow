@@ -82,6 +82,7 @@ test("STORY-371: Claude rendering preserves user fields, writes tier fields, and
   assert.equal(renderedSettings.custom, "keep");
   assert.equal(renderedSettings.hooks.Other[0].hooks[0].command, "user-hook");
   assert.equal(renderedSettings.hooks.Stop.length, 3);
+  assert.deepEqual(renderedSettings.hooks.PostToolUse, [{ hooks: [{ type: "command", command: `if [ -f "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs" ]; then node "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs" --host claude; fi`, timeout: 30 }] }]);
   const agent = await readFile(join(root, ".claude", "agents", "implement.md"), "utf8");
   assert.match(agent, /description: user-owned/u);
   assert.match(agent, /model: claude-code-economy/u);
@@ -121,6 +122,7 @@ test("STORY-371: Codex rendering changes only root model keys and generated hook
   assert.equal(hooks.hooks.User[0].hooks[0].command, "user-hook");
   assert.deepEqual(hooks.hooks.PreToolUse, codexHookDocument(repoRoot).hooks.PreToolUse);
   assert.deepEqual(hooks.hooks.SessionStart, codexHookDocument(repoRoot).hooks.SessionStart);
+  assert.deepEqual(hooks.hooks.PostToolUse, [{ hooks: [{ type: "command", command: `node ${JSON.stringify(join(repoRoot, "scripts/knowledge-inject-hook.mjs"))} --host codex`, timeout: 30 }] }]);
   assert.deepEqual(hooks.hooks.Stop, codexHookDocument(repoRoot).hooks.Stop);
   assert.deepEqual(hooks.hooks.SubagentStart, codexHookDocument(repoRoot).hooks.SubagentStart);
   assert.deepEqual(hooks.hooks.SubagentStop, codexHookDocument(repoRoot).hooks.SubagentStop);

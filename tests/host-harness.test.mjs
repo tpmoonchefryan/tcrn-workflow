@@ -77,6 +77,19 @@ test("STORY-418 both hosts register the bound subagent context path separately f
   }
 });
 
+test("TCRN-CROSS-STORY-393 both hosts register the PostToolUse reference path", () => {
+  for (const host of HOSTS) {
+    const entries = hookEntriesFor(host).filter((entry) => entry.id === "post-tool-reference");
+    assert.deepEqual(entries.map((entry) => ({ event: entry.event, handler: entry.handler, timeout: entry.timeout })), [
+      { event: "PostToolUse", handler: "scripts/knowledge-inject-hook.mjs", timeout: 30 },
+    ]);
+  }
+  assert.equal(claudeHookSettings().PostToolUse.length, 1);
+  assert.equal(codexHookDocument("/repo").hooks.PostToolUse.length, 1);
+  assert.match(claudeHookSettings().PostToolUse[0].hooks[0].command, /scripts\/knowledge-inject-hook\.mjs" --host claude; fi$/u);
+  assert.match(codexHookDocument("/repo").hooks.PostToolUse[0].hooks[0].command, /scripts\/knowledge-inject-hook\.mjs" --host codex$/u);
+});
+
 test("INC-220 the two renderings carry the same handlers for the same capabilities", () => {
   // Rendering differences are legitimate — file shape, command form, one host-specific
   // Stop handler. A capability present on one host and absent on the other is not.

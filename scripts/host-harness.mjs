@@ -83,6 +83,12 @@ export const HARNESS_CAPABILITIES = Object.freeze([
     codex: { mechanism: "hook", event: "UserPromptSubmit", matcher: null, handler: "scripts/knowledge-inject-hook.mjs", timeout: 30 },
   },
   {
+    id: "post-tool-reference",
+    purpose: "each completed tool use can feed the governed reference channel",
+    claude: { mechanism: "hook", event: "PostToolUse", matcher: null, handler: "scripts/knowledge-inject-hook.mjs", timeout: 30 },
+    codex: { mechanism: "hook", event: "PostToolUse", matcher: null, handler: "scripts/knowledge-inject-hook.mjs", timeout: 30 },
+  },
+  {
     id: "stop-pact",
     purpose: "a turn cannot end while an active pact says the work is unfinished",
     claude: { mechanism: "hook", event: "Stop", matcher: null, handler: "tools/stop-pact/hook.mjs", timeout: 10 },
