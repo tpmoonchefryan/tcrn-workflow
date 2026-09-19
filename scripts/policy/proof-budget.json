@@ -5,7 +5,7 @@
   "recordedAt": "2026-08-19",
   "rationale": "Frozen at the ratio measured when the ratchet was installed, not at the rule's 1.0 threshold. 1.0 is unreachable from here without retiring roughly a third of the proof mass, and a line nothing can satisfy is a line nobody reads. This one binds today: any change that raises the ratio must retire equivalent proof mass or record an exception below.",
   "warningRatio": 2.4,
-  "hardRatio": 2.5087,
+  "hardRatio": 2.5093,
   "ratioPolicy": {
     "schemaVersion": "tcrn.proof-budget-ratio-policy.v2",
     "scope": "repository-wide hard line with one explicit, finite-work-authorized nonblocking disposition",
@@ -471,6 +471,12 @@
       "recordedAt": "2026-09-19",
       "ratio": 2.5087,
       "rationale": "Owner minutes:39ea684728c4e836a8f6754c D3 pre-authorize this INIT-051 batch to move a touched proof/product hard line to the exact measured value, with no reserve and a cited rationale. After the real R6 D3-D5 and D2 edits through commit 294ec077, reportBudget measured proofLines=69612 and productLines=27748, ratio=2.5087. The change touched only proof/test surfaces; verifyScriptCount=14/cap=14, claimCount=9/cap=9, and coreSourceLines=23804/cap=23815 remain unchanged. This exact ratio-only exception is the single permitted budget action for SUB-156; no tests, assertions, denominator, roster, waiver, timeout, cap, or formatting was removed or padded. The exception carries no reserve and does not sign acceptance or publication."
+    },
+    {
+      "id": "TCRN-CROSS-SUB-158-D7-post-p1-r6-measured-ratio-20260919",
+      "recordedAt": "2026-09-19",
+      "ratio": 2.5093,
+      "rationale": "The first D1 actual-impact P1 run exposed only proof-conservation compatibility updates required by the already landed R6 tests and exact budget line: the historical replay fixture now writes through the test-only workspace reducer under the child-controller boundary, the budget boundary test follows the exact measured hard line, and the sibling gate retains its baseline test identity. Under Owner minutes:39ea684728c4e836a8f6754c D3, move the touched proof/product hard line to the new exact measured value with no reserve. After commit 2368cd7, reportBudget measured proofLines=69628 and productLines=27748, ratio=2.5093; verifyScriptCount=14/cap=14, claimCount=9/cap=9, coreSourceLines=23804/cap=23815 remain unchanged. This is a ratio-only exact-line update; no tests/assertions, denominator, roster, waiver, timeout, or unrelated cap was weakened or padded."
     }
   ],
   "surfaceCaps": {
