@@ -92,14 +92,15 @@ test("STORY-301: reading the budget policy does not change it", async () => {
 test("EPIC135: the approved budget thresholds classify every real boundary", async () => {
   const policy = await readPolicy();
   assert.equal(policy.warningRatio, 2.4);
-  assert.equal(policy.hardRatio, 2.5);
-  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-EPIC-135-owner-proof-budget-20260914");
+  assert.equal(policy.hardRatio, 2.5087);
+  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-SUB-156-D7-r6-measured-ratio-20260919");
   const cases = [
     [2.3728, true, "verified"],
     [2.4, true, "verified"],
     [2.4001, true, "warning"],
     [2.5, true, "warning"],
-    [2.5001, false, "rejected"],
+    [2.5087, true, "warning"],
+    [2.5088, false, "rejected"],
   ];
   for (const [ratio, ok, status] of cases) {
     const proofLines = Math.round(ratio * 10_000);
@@ -124,6 +125,8 @@ test("EPIC135: the approved budget thresholds classify every real boundary", asy
   legacyPolicy.ratioPolicy.schemaVersion = "tcrn.proof-budget-ratio-policy.v1";
   legacyPolicy.ratioPolicy.scope = "repository-wide persistent global max";
   delete legacyPolicy.ratioPolicy.scopedDisposition;
+  legacyPolicy.hardRatio = 2.5;
+  legacyPolicy.exceptions = legacyPolicy.exceptions.filter((entry) => entry.ratio <= legacyPolicy.hardRatio);
   const legacyExceeded = evaluateProofBudget({ proofLines: 25_001, productLines: 10_000, policy: legacyPolicy });
   assert.equal(legacyExceeded.reasonCode, "PROOF_BUDGET_EXCEEDED");
   assert.equal(legacyExceeded.ok, false);
@@ -168,12 +171,14 @@ test("TCRN-CROSS-STORY-435/436: finite ratio authorization includes current work
 });
 
 test("EPIC135: push-gate budget exemption requires one terminal receipt and no other diagnostics", () => {
-  const boundary = evaluateProofBudget({ proofLines: 24_001, productLines: 10_000, policy: {
+  const fixturePolicy = {
     frozenRatio: 1.5888,
     warningRatio: 2.4,
     hardRatio: 2.5,
     exceptions: [{ id: "fixture", recordedAt: "2026-09-14", ratio: 2.5, rationale: "A bounded fixture threshold for parser coverage." }],
-  } });
+  };
+  const budgetOptions = { policy: fixturePolicy };
+  const boundary = evaluateProofBudget({ proofLines: 24_001, productLines: 10_000, policy: fixturePolicy });
   const budget = { command: "budget", ...boundary };
   const reasonCodes = Object.fromEntries([
     ["format-check", "FORMAT_VERIFIED"], ["lint", "LINT_VERIFIED"], ["typecheck", "TYPECHECK_VERIFIED"],
@@ -194,13 +199,13 @@ test("EPIC135: push-gate budget exemption requires one terminal receipt and no o
     ...overrides,
   });
   const budgetOnly = receipt([budget]);
-  assert.equal(budgetWarningNotices(budgetOnly, "verify:p1").length, 1);
-  assert.equal(onlyBudgetWarning(budgetOnly, "verify:p1"), true);
-  assert.equal(hasWarningOrError(budgetOnly, "verify:p1"), false);
+  assert.equal(budgetWarningNotices(budgetOnly, "verify:p1", budgetOptions).length, 1);
+  assert.equal(onlyBudgetWarning(budgetOnly, "verify:p1", budgetOptions), true);
+  assert.equal(hasWarningOrError(budgetOnly, "verify:p1", budgetOptions), false);
 
   const sameReceipt = receipt([budget, { command: "typecheck", severity: "warning", reasonCode: "OTHER_WARNING", blocking: true }]);
-  assert.equal(onlyBudgetWarning(sameReceipt, "verify:p1"), false);
-  assert.equal(hasWarningOrError(sameReceipt, "verify:p1"), true);
+  assert.equal(onlyBudgetWarning(sameReceipt, "verify:p1", budgetOptions), false);
+  assert.equal(hasWarningOrError(sameReceipt, "verify:p1", budgetOptions), true);
 
   const independentLine = `OTHER_WARNING: compiler notice\n${budgetOnly}`;
   assert.equal(onlyBudgetWarning(independentLine, "verify:p1"), false);
@@ -209,8 +214,8 @@ test("EPIC135: push-gate budget exemption requires one terminal receipt and no o
   const otherFirst = `${receipt([{ command: "typecheck", severity: "warning", reasonCode: "OTHER_WARNING" }])}\n${budgetOnly}`;
   const otherLast = `${budgetOnly}\n${receipt([{ command: "typecheck", severity: "warning", reasonCode: "OTHER_WARNING" }])}`;
   for (const output of [otherFirst, otherLast]) {
-    assert.deepEqual(budgetWarningNotices(output, "verify:p1"), []);
-    assert.equal(onlyBudgetWarning(output, "verify:p1"), false);
+    assert.deepEqual(budgetWarningNotices(output, "verify:p1", budgetOptions), []);
+    assert.equal(onlyBudgetWarning(output, "verify:p1", budgetOptions), false);
     assert.equal(hasWarningOrError(output, "verify:p1"), true);
   }
 });

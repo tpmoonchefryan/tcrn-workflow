@@ -9,7 +9,7 @@ import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { initializeWorkspace, validateWorkspace } from "../dist/build/packages/core/src/index.js";
-import { historicalModelPlan } from "./helpers/model-plan-history.mjs";
+import { acquireWorkspaceLease, setModelPlanInWorkspace } from "../dist/build/packages/core/src/workspace.js";
 
 const instant = (second) => new Date(Date.UTC(2026, 0, 1) + second * 1000).toISOString().replace(/\.\d+Z$/u, "Z");
 
@@ -170,9 +170,20 @@ test("S369: retired model-plan CLI names refuse while historical records remain 
   // The write verbs are retired, but old model-plan envelopes remain part of the
   // replay contract. Construct one through the test-only historical fixture path and
   // prove that materialization still returns the exact record after a fresh replay.
-  const historical = await historicalModelPlan(workspace, "set", {
-    host: "claude-code", name: "legacy-budget", defaultModel: "claude-sonnet-4-5",
-  }, instant(2));
+  const lease = await acquireWorkspaceLease(workspace, { now: instant(2) });
+  let historical;
+  try {
+    historical = await setModelPlanInWorkspace(workspace, lease, {
+      expectedVersion: 0,
+      occurredAt: instant(2),
+      actorId: "agent:test",
+      host: "claude-code",
+      name: "legacy-budget",
+      defaultModel: "claude-sonnet-4-5",
+    });
+  } finally {
+    await lease.release();
+  }
   const replayed = await validateWorkspace(workspace);
   assert.deepEqual(replayed.executionConfig.modelPlans, historical.executionConfig.modelPlans);
   assert.deepEqual(replayed.executionConfig.modelPlans[0], {
