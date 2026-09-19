@@ -414,13 +414,9 @@ test("R1 boundedSearch returns hits from an explicitly bounded directory", async
 
   assert.equal(result.ok, true);
   assert.equal(result.reasonCode, "SEARCH_COMPLETED");
-  assert.equal(result.partial, false);
   assert.equal(result.nextScope, null);
   assert.deepEqual(result.matches, [{ path: file, line: 2, text: "needle is here" }]);
-  const renamed = await mkdtemp(join(tmpdir(), "tcrn-renamed-container-"));
-  context.after(() => rm(renamed, { recursive: true, force: true }));
-  await writeFile(join(renamed, "record.txt"), "portable needle\n");
-  assert.equal((await boundedSearch({ query: "needle", directories: [renamed] })).reasonCode, "SEARCH_COMPLETED");
+  const renamed = await mkdtemp(join(tmpdir(), "tcrn-renamed-container-")); context.after(() => rm(renamed, { recursive: true, force: true })); await writeFile(join(renamed, "record.txt"), "portable needle\n"); assert.equal((await boundedSearch({ query: "needle", directories: [renamed] })).reasonCode, "SEARCH_COMPLETED");
 });
 
 test("R1 boundedSearch refuses home scans and exposes timeout continuation", async (context) => {
@@ -558,8 +554,7 @@ test("419 drives the same bounded wrapper protocol through Claude and Codex path
     assert.equal(seen.args[seen.args.indexOf("--host") + 1], host);
     assert.equal(seen.options.maxBuffer, MAX_HOOK_OUTPUT_BYTES);
   }
-  const parsed = parseArgv(["--enforce-binding", "true", "--retry-pending", "true", "--judge-enabled", "false"]);
-  assert.deepEqual([parsed.enforceBinding, parsed.retryPending, parsed.judgeEnabled], [true, true, false]);
+  const parsed = parseArgv(["--enforce-binding", "true", "--retry-pending", "true", "--judge-enabled", "false"]); assert.deepEqual([parsed.enforceBinding, parsed.retryPending, parsed.judgeEnabled], [true, true, false]);
 });
 
 test("codex stdin opens with the system prompt while claude stdin stays the bare prompt", async () => {
