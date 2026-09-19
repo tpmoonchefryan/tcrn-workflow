@@ -5,8 +5,9 @@ import { spawn } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   acknowledgeInjection,
@@ -33,7 +34,11 @@ import {
 
 const emptyWorkspace = { work: [], events: [], conferences: [], conferenceMinutes: [] };
 const dispatchTiers = (model) => JSON.stringify({ "claude-code": { economy: { model, effort: "medium" } } });
-const sessionDefaults = Object.freeze({ budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false, workspaceState: emptyWorkspace });
+const sessionDefaults = Object.freeze({ budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false, settings: Object.freeze([]), workspaceState: emptyWorkspace });
+const bareRegressionChild = process.env.TCRN_INJECTION_BARE_REGRESSION_CHILD === "1";
+const bareRegressionTimeoutMs = 120_000;
+const injectionSessionTestPath = fileURLToPath(import.meta.url);
+const engineRepositoryRoot = resolve(dirname(injectionSessionTestPath), "..");
 
 function sessionOptions(overrides = {}) {
   return { ...sessionDefaults, ...overrides };
@@ -239,6 +244,14 @@ test("419 keeps generated ids pending until wrapper acknowledgement, then dedupl
 
 test("a sixty-prompt session stays under the cumulative budget and records every decision", async (context) => {
   const directory = await stateDirectory(context, "sixty");
+  // This loop is deliberately self-contained.  Supplying both the settings catalog
+  // and workspace snapshot prevents the production fallbacks from reading the live
+  // chain once per prompt; production callers still retain those fallbacks.
+  const deterministicSettings = Object.freeze([
+    { key: "injection.budgetBytes", currentValue: "24576" },
+    { key: "injection.perPromptBytes", currentValue: "1600" },
+  ]);
+  const deterministicWorkspaceState = Object.freeze({ work: [], events: [], conferences: [], conferenceMinutes: [] });
   const outputs = [];
   for (let index = 0; index < 60; index += 1) {
     const records = Array.from({ length: 8 }, (_, row) => candidate(`knowledge:${index.toString(16).padStart(24, "0")}${row.toString(16)}`, index * 8 + row));
@@ -248,6 +261,8 @@ test("a sixty-prompt session stays under the cumulative budget and records every
       event: "UserPromptSubmit",
       stateDirectory: directory,
       perPromptBytes: DEFAULT_PER_PROMPT_BYTES,
+      settings: deterministicSettings,
+      workspaceState: deterministicWorkspaceState,
       recall: recallFor(records),
     }));
     outputs.push({ injectedBytes: result.injectedBytes, cumulativeBytes: result.cumulativeBytes });
@@ -261,12 +276,92 @@ test("a sixty-prompt session stays under the cumulative budget and records every
   if (process.env.TCRN_INJECTION_LEDGER) await writeFile(process.env.TCRN_INJECTION_LEDGER, `${JSON.stringify(outputs, null, 2)}\n`);
 });
 
+function processGroupAlive(processGroup) {
+  try {
+    process.kill(-processGroup, 0);
+    return true;
+  } catch (error) {
+    return error?.code !== "ESRCH";
+  }
+}
+
+async function runOwnedBareInjectionCommand() {
+  const environment = { ...process.env, TCRN_INJECTION_BARE_REGRESSION_CHILD: "1" };
+  // A controlled `pnpm test` may preload the child-policy module through
+  // NODE_OPTIONS.  The regression is specifically the bare command, so remove
+  // that runner-only preload and test-context marker while retaining the exact
+  // node/test arguments.  NODE_TEST_CONTEXT makes Node treat the child as a
+  // recursive test-runner invocation and skip the very command this regression
+  // is meant to exercise.
+  delete environment.NODE_OPTIONS;
+  delete environment.NODE_TEST_CONTEXT;
+  const child = spawn(process.execPath, ["--test", "tests/injection-session.test.mjs"], {
+    cwd: engineRepositoryRoot,
+    env: environment,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const stdout = [];
+  const stderr = [];
+  child.stdout.on("data", (chunk) => stdout.push(chunk));
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+  const startedAt = Date.now();
+  let timer;
+  let timedOut = false;
+  const result = await new Promise((resolveResult) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolveResult(value);
+    };
+    child.once("error", (error) => finish({ error: String(error?.message ?? error), exitCode: null, signal: null }));
+    child.once("close", (exitCode, signal) => finish({ exitCode, signal }));
+    timer = setTimeout(() => {
+      timedOut = true;
+      try { process.kill(-child.pid, "SIGKILL"); } catch { /* the group may have exited at the deadline */ }
+      finish({ exitCode: null, signal: "SIGKILL" });
+    }, bareRegressionTimeoutMs);
+  });
+  if (timedOut || result.exitCode === null) {
+    try { process.kill(-child.pid, "SIGKILL"); } catch { /* cleanup is already complete */ }
+  }
+  const output = {
+    command: [process.execPath, "--test", "tests/injection-session.test.mjs"],
+    cwd: engineRepositoryRoot,
+    timeoutMs: bareRegressionTimeoutMs,
+    elapsedMs: Date.now() - startedAt,
+    timedOut,
+    exitCode: result.exitCode,
+    signal: result.signal,
+    processGroup: child.pid,
+    processGroupAliveAfterReclaim: processGroupAlive(child.pid),
+    stdout: Buffer.concat(stdout).toString("utf8"),
+    stderr: Buffer.concat(stderr).toString("utf8"),
+    ...(result.error === undefined ? {} : { error: result.error }),
+  };
+  if (process.env.TCRN_INJECTION_BARE_REGRESSION_EVIDENCE) {
+    await writeFile(process.env.TCRN_INJECTION_BARE_REGRESSION_EVIDENCE, `${JSON.stringify(output, null, 2)}\n`);
+  }
+  return output;
+}
+
+test("the exact bare injection-session command is green or a stable fast failure", { skip: bareRegressionChild }, async () => {
+  const result = await runOwnedBareInjectionCommand();
+  assert.equal(result.timedOut, false, `bare command exceeded ${bareRegressionTimeoutMs} ms\n${result.stderr}\n${result.stdout.slice(-4_096)}`);
+  assert.equal(result.processGroupAliveAfterReclaim, false, "owned bare-test process group must be gone");
+  if (result.exitCode !== 0) {
+    assert.match(`${result.stdout}\n${result.stderr}`, /(?:TEST_CONTROLLER_[A-Z_]+|reasonCode|ERR_[A-Z_]+)/u, "a fast failure must retain a stable readable reason");
+  }
+});
+
 test("a repeated card is explicitly skipped, while another session and a restart retain their own state", async (context) => {
   const directory = await stateDirectory(context, "dedupe");
   const repeated = [candidate("knowledge:000000000000000000000001")];
-  const first = await runSessionInjection({ prompt: "repeat-one", sessionId: "one", event: "UserPromptSubmit", stateDirectory: directory, workspaceState: emptyWorkspace, budget: 24_576, perPromptBytes: 1_600, recall: recallFor(repeated), judgeEnabled: false });
-  const second = await runSessionInjection({ prompt: "repeat-two", sessionId: "one", event: "UserPromptSubmit", stateDirectory: directory, workspaceState: emptyWorkspace, budget: 24_576, perPromptBytes: 1_600, recall: recallFor(repeated), judgeEnabled: false });
-  const other = await runSessionInjection({ prompt: "repeat-three", sessionId: "two", event: "UserPromptSubmit", stateDirectory: directory, workspaceState: emptyWorkspace, budget: 24_576, perPromptBytes: 1_600, recall: recallFor(repeated), judgeEnabled: false });
+  const first = await runSessionInjection({ prompt: "repeat-one", sessionId: "one", event: "UserPromptSubmit", stateDirectory: directory, workspaceState: emptyWorkspace, settings: [], budget: 24_576, perPromptBytes: 1_600, recall: recallFor(repeated), judgeEnabled: false });
+  const second = await runSessionInjection({ prompt: "repeat-two", sessionId: "one", event: "UserPromptSubmit", stateDirectory: directory, workspaceState: emptyWorkspace, settings: [], budget: 24_576, perPromptBytes: 1_600, recall: recallFor(repeated), judgeEnabled: false });
+  const other = await runSessionInjection({ prompt: "repeat-three", sessionId: "two", event: "UserPromptSubmit", stateDirectory: directory, workspaceState: emptyWorkspace, settings: [], budget: 24_576, perPromptBytes: 1_600, recall: recallFor(repeated), judgeEnabled: false });
   assert.equal(first.decision, "INJECTION_EMITTED");
   assert.equal(second.decision, "ALREADY_INJECTED_SKIPPED");
   assert.equal(other.decision, "INJECTION_EMITTED");
@@ -320,7 +415,7 @@ test("thirty judge observations are binary telemetry and cannot change injected 
   const disabled = [];
   for (let index = 0; index < 30; index += 1) {
     const records = [candidate(`knowledge:${(index + 100).toString(16).padStart(24, "0")}`, index)];
-    const common = { prompt: `judge-${index}`, sessionId: "judge-session", event: "UserPromptSubmit", workspaceState: emptyWorkspace, budget: 24_576, perPromptBytes: 1_600, recall: recallFor(records) };
+    const common = { prompt: `judge-${index}`, sessionId: "judge-session", event: "UserPromptSubmit", workspaceState: emptyWorkspace, settings: [], budget: 24_576, perPromptBytes: 1_600, recall: recallFor(records) };
     enabled.push((await runSessionInjection({ ...common, stateDirectory: enabledDirectory, judge })).injection);
     disabled.push((await runSessionInjection({ ...common, stateDirectory: disabledDirectory, judgeEnabled: false })).injection);
   }
