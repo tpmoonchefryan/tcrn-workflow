@@ -47,7 +47,7 @@ test("the real repository carries no reaching line", () => {
   assert.deepEqual(gateTestFindings, [], "gate test file should be excluded from scanning");
 });
 
-test("the validated install-manifest supplies a canonical roster and Helper identity", () => {
+test("siblings are discovered, not typed", () => {
   const roster = canonicalSiblingRoster({ repoRoot: REPO_ROOT, manifest: INSTALL_MANIFEST });
   assert.deepEqual(roster.siblings, ["TCRN-AOS", "TCRN-Design-System", "TCRN-TMS", "joi-button", "tcrn-workflow-helper"]);
   assert.equal(roster.self, "tcrn-workflow");
