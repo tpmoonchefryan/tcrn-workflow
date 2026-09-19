@@ -901,7 +901,8 @@ if (process.argv[2] === "status" && actual.status === 0) {
       const catalogForGroups = await cli(["settings-catalog", "--workspace", page.workspace]);
       const settingGroupSource = page.source.match(/const SETTING_GROUPS = Object\.freeze\(\{([\s\S]*?)\n  \}\);/u)?.[1];
       assert.ok(settingGroupSource, "the portal must declare its settings group coverage");
-      const settingGroups = [...settingGroupSource.matchAll(/^ {4}"([^"]+)": "([^"]+)",$/gmu)].map(([, key]) => key);
+      const settingGroupEntries = [...settingGroupSource.matchAll(/^ {4}"([^"]+)": "([^"]+)",$/gmu)].map(([, key, group]) => [key, group]);
+      const settingGroups = settingGroupEntries.map(([key]) => key);
       const legacyModelSource = page.source.match(/const LEGACY_MODEL_SETTING_KEYS = new Set\(\[([^\]]*)\]\);/u)?.[1] ?? "";
       const legacyModelKeys = [...legacyModelSource.matchAll(/"([^"]+)"/gu)].map(([, key]) => key);
       const catalogKeys = new Set(catalogForGroups.settings.map((entry) => entry.key));
@@ -938,6 +939,26 @@ if (process.argv[2] === "status" && actual.status === 0) {
         globalSearch.dispatchEvent(new page.window.Event("input", { bubbles: true }));
         await new Promise((resolve) => setTimeout(resolve, 40));
         assert.equal(page.document.querySelectorAll("#search-results [data-search-index]").length, 0, `${key} must stay absent from global search`);
+      }
+
+      // The actual delta is locale-independent: all five localized routes keep the
+      // same neighboring execution-control identities and order while the retired
+      // economy-tier field stays absent from the rendered surface.
+      const dispatchKeys = new Set(["execution.dispatchClasses", "execution.dispatchMode", "execution.dispatchModes", "execution.dispatchTiers"]);
+      const legacyKeys = new Set(["execution.claudeCodeSubagentPlan", "execution.codexSubagentPlan"]);
+      const expectedExecutionRows = [...catalogForGroups.settings]
+        .filter((entry) => settingGroupEntries.some(([key, group]) => key === entry.key && group === "execution"))
+        .map((entry) => entry.key)
+        .filter((key) => !dispatchKeys.has(key) && !legacyKeys.has(key));
+      for (const locale of ["zh-CN", "en", "ja", "ko", "fr"]) {
+        page.document.querySelector(`[data-locale-option="${locale}"]`)?.click();
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        assert.deepEqual(
+          [...page.document.querySelectorAll("[data-setting-row]")].map((row) => row.dataset.settingRow),
+          expectedExecutionRows,
+          `${locale} must keep the neighboring execution controls in order`,
+        );
+        assert.equal(page.document.querySelector(`[data-setting-row="${retiredEconomySettingKey}"]`), null, `${locale} must omit retired economy-tier`);
       }
 
       page.document.querySelector('[data-setting-group="workspace"]')?.click();
