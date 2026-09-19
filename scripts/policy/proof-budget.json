@@ -5,7 +5,7 @@
   "recordedAt": "2026-08-19",
   "rationale": "Frozen at the ratio measured when the ratchet was installed, not at the rule's 1.0 threshold. 1.0 is unreachable from here without retiring roughly a third of the proof mass, and a line nothing can satisfy is a line nobody reads. This one binds today: any change that raises the ratio must retire equivalent proof mass or record an exception below.",
   "warningRatio": 2.4,
-  "hardRatio": 2.5,
+  "hardRatio": 2.5087,
   "ratioPolicy": {
     "schemaVersion": "tcrn.proof-budget-ratio-policy.v2",
     "scope": "repository-wide hard line with one explicit, finite-work-authorized nonblocking disposition",
@@ -465,6 +465,12 @@
       "recordedAt": "2026-09-14",
       "ratio": 2.5,
       "rationale": "Owner authorization recorded by event:a6c358858b9c38503062dac1 and eventHash 5907f4c0350758c00f8b0fb361a7500aeb15999323abd15e06027c4d9650f548 for TCRN-CROSS-EPIC-135, with Owner artifact SHA 364744865c515ae39df6dfd1e30ceb0c62b3200156dc24de729462520511cfb2. This repository-wide persistent global maximum intentionally permits the measured baseline ratio 2.3728 to remain below the 2.50 hard line and gives 2.40 a structured non-blocking governance warning; ratios above 2.50 reject the corresponding candidate's formal release, while exactly 2.50 is allowed. Measurement is unified at the bounded batch/stage boundary, with no development-time per-Story stop; the intentional 3524-line headroom is retained for the batch measurement. The current complete series will review runtime logic, tests, and verification-infrastructure maintenance cost. This Owner decision supersedes the earlier 2.3728 exact zero-headroom proposal without changing raw LF/four-decimal counting, frozenRatio 1.5888, surface caps, safety, or permission semantics."
+    },
+    {
+      "id": "TCRN-CROSS-SUB-156-D7-r6-measured-ratio-20260919",
+      "recordedAt": "2026-09-19",
+      "ratio": 2.5087,
+      "rationale": "Owner minutes:39ea684728c4e836a8f6754c D3 pre-authorize this INIT-051 batch to move a touched proof/product hard line to the exact measured value, with no reserve and a cited rationale. After the real R6 D3-D5 and D2 edits through commit 294ec077, reportBudget measured proofLines=69612 and productLines=27748, ratio=2.5087. The change touched only proof/test surfaces; verifyScriptCount=14/cap=14, claimCount=9/cap=9, and coreSourceLines=23804/cap=23815 remain unchanged. This exact ratio-only exception is the single permitted budget action for SUB-156; no tests, assertions, denominator, roster, waiver, timeout, cap, or formatting was removed or padded. The exception carries no reserve and does not sign acceptance or publication."
     }
   ],
   "surfaceCaps": {
