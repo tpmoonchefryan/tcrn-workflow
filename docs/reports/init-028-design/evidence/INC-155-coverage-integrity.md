@@ -60,8 +60,8 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 135,
-        "currentFiles": 136,
+        "expectedFiles": 137,
+        "currentFiles": 138,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
@@ -98,8 +98,8 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 136,
-        "currentFiles": 136,
+        "expectedFiles": 138,
+        "currentFiles": 138,
         "missingFiles": [],
         "staleFiles": []
       }
@@ -121,6 +121,8 @@
 第二十六次重录（2026-09-12，TCRN-CROSS-STORY-402/403）：本次保留覆盖基线的 137 个文件与所有测试名称；s244 当前测试实现有 5 条测试、20 条断言，s213 的空断言负腿仍保持断言守恒判据。
 
 第二十七次重录（2026-09-18，TCRN-CROSS-INC-325）：TCRN-CROSS-INC-321（引擎提交 90118c89）为 `tests/s213-settings.test.mjs` 新增测试，该文件当前测试数由3变5，块内第三个用例("empty assertions while keeping test names")的current.testCount随之由3变5（baseline.testCount仍为3，current.assertionCount仍为该用例人为清空的0）；engine-suite本身为绿（COVERAGE_CONSERVATION_VERIFIED），故这不是覆盖回归，只是逐字块随之整体重录。
+
+第二十八次重录（2026-09-19，TCRN-CROSS-INC-325）：本批新增两个测试文件，经 TCRN-CROSS-INC-343（引擎提交 29b50fad）登记进覆盖基线，coverage-baseline.json 条目数由 136 变 138；块内第二个用例("new test file without baseline entry")与第四个用例("restore all mutations")的 baselineCompleteness 均为基线条目总数的派生值，随之整体重录：前者 expectedFiles 由 135 变 137、currentFiles 由 136 变 138，后者 expectedFiles 与 currentFiles 均由 136 变 138。train 第 6/7 腿（真实 coverage-conservation.mjs 及其测试）本身为绿，这不是覆盖回归，只是逐字块随基线增长整体重录。
 
 ## 边界
 
