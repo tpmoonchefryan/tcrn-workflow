@@ -68,6 +68,14 @@ async function stateDirectory(context, name) {
   return directory;
 }
 
+async function temporaryTextFile(context, name, filename, body) {
+  const root = await mkdtemp(join(tmpdir(), `tcrn-${name}-`));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const file = join(root, filename);
+  await writeFile(file, body);
+  return { root, file };
+}
+
 function candidate(id, index = 0) {
   return {
     id,
@@ -434,9 +442,7 @@ test("R1 boundedSearch refuses home scans and exposes timeout continuation", asy
   assert.equal((await boundedSearch({ query: "needle" })).reasonCode, "SEARCH_SCOPE_REQUIRED");
   for (const directory of ["relative", "/"]) assert.equal((await boundedSearch({ query: "needle", directories: [directory] })).reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
 
-  const root = await mkdtemp(join(tmpdir(), "tcrn-bounded-search-timeout-"));
-  context.after(() => rm(root, { recursive: true, force: true }));
-  await writeFile(join(root, "record.txt"), "needle\n");
+  const { root } = await temporaryTextFile(context, "bounded-search-timeout", "record.txt", "needle\n");
   const timed = await boundedSearch({ query: "needle", directories: [root], timeoutMs: 0 });
   assert.equal(timed.ok, true);
   assert.equal(timed.reasonCode, "SEARCH_PARTIAL");
@@ -446,10 +452,7 @@ test("R1 boundedSearch refuses home scans and exposes timeout continuation", asy
 });
 
 test("knowledge recall receives the caller's bounded search scope", async (context) => {
-  const root = await mkdtemp(join(tmpdir(), "tcrn-bounded-search-recall-"));
-  context.after(() => rm(root, { recursive: true, force: true }));
-  const file = join(root, "known.txt");
-  await writeFile(file, "bounded recall needle\n");
+  const { root, file } = await temporaryTextFile(context, "bounded-search-recall", "known.txt", "bounded recall needle\n");
   let scoped;
 
   const result = await runInjection({
