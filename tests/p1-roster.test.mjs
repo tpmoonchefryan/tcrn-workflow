@@ -17,8 +17,9 @@ import { fileURLToPath } from "node:url";
 
 import { P1_SEQUENCE, P1_TASKS, P1_GATE_SPECS } from "../scripts/p1-sequence.mjs";
 import { P1_GATE_SPECS as PREFLIGHT_SPECS } from "../scripts/preflight.mjs";
-import { buildRedLocatorPlan, locateContainedGates } from "../scripts/gate-red-locator.mjs";
+import { buildRedLocatorPlan, containedGroupIds, locateContainedGates } from "../scripts/gate-red-locator.mjs";
 import { buildContainedExecutionPlan, ENGINE_PUSH_GATE_CHILDREN, pushGateExecutionPlan } from "../scripts/lib/push-gate-children.mjs";
+import { validateHostEvidenceProvenance } from "../scripts/lib/push-gate-output.mjs";
 import { P8_VERSION } from "../scripts/lib/p8-workflow-rc.mjs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -161,6 +162,7 @@ test("STORY-413 final gate planning selects each top-level root once and records
   assert.throws(() => pushGateExecutionPlan(wrongChild), (error) => error.reasonCode === "GATE_CONTAINMENT_PUSH_PLAN_INVALID");
   const cyclic = { ...declaration, groups: declaration.groups.map((group) => group.id === "engine-p1" ? { ...group, contains: ["engine-p1"] } : group) };
   assert.throws(() => buildContainedExecutionPlan(cyclic), (error) => error.reasonCode === "GATE_CONTAINMENT_CYCLE");
+  assert.throws(() => containedGroupIds({ schemaVersion: "tcrn.gate-containment.v1", groups: [{ id: "root", contains: ["child"] }, { id: "child", contains: ["root"] }] }, "root"), (error) => error.reasonCode === "GATE_CONTAINMENT_CYCLE");
 });
 
 test("STORY-350 red locator runs every contained child separately and returns each conclusion", async () => {
@@ -182,6 +184,8 @@ test("STORY-350 red locator runs every contained child separately and returns ea
     { id: "engine-p8", ok: true },
     { id: "engine-guards", ok: true },
   ]);
+  for (const [value, code] of [[null, "PUSH_GATE_HOST_EVIDENCE_INVALID"], [{ observedAt: "bad" }, "PUSH_GATE_HOST_EVIDENCE_INVALID"], [{ observedAt: "2026-09-19", supersededBy: "x", currentClaim: "active" }, "PUSH_GATE_HOST_EVIDENCE_PROVENANCE_INVALID"]]) assert.equal(validateHostEvidenceProvenance(value).reasonCode, code);
+  assert.equal(validateHostEvidenceProvenance({ observedAt: "2026-09-19", supersededBy: "x", currentClaim: "none" }).ok, true);
 });
 
 const timingPath = resolve(REPO_ROOT, "dist/evidence/p1/push-gate-timing.json");

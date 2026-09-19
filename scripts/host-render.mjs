@@ -122,7 +122,7 @@ function managedNodeInvocation(command) {
   const forms = [
     /^node "([^"]+)"(?:\s+--host (claude|codex))?$/u,
     /^\[\s*.+?\s*\]\s*&&\s*node "([^"]+)"(?:\s+--host (claude|codex))?(?:\s*\|\|\s*true)?$/u,
-    /^if\s+\[\s*.+?\s*\]\s*;\s*then\s+node "([^"]+)"(?:\s+--host (claude|codex))?\s*;\s*(?:else\s+.+?;\s*)?fi$/u,
+    /^if\s+\[\s*.+?\s*\]\s*;\s*then\s+node "([^"]+)"(?:\s+--host (claude|codex))?\s*;\s*(?:else\s+cat\s*>\s*\/dev\/null\s*;\s*)?fi$/u,
   ];
   for (const form of forms) {
     const match = form.exec(value);

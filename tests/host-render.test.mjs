@@ -225,8 +225,12 @@ test("TCRN-CROSS-STORY-393 R6: real user guard forms normalize to the generated 
     const handlers = document.hooks[event].flatMap((group) => group.hooks ?? [])
       .map((hook) => hook.command.match(/(?:scripts|tools)\/[^"'\s]+?\.mjs/u)?.[0])
       .filter(Boolean);
-    assert.equal(new Set(handlers).size, handlers.length, `${event} has no duplicate managed handler`);
+  assert.equal(new Set(handlers).size, handlers.length, `${event} has no duplicate managed handler`);
   }
+  const unsafeHooks = structuredClone(existingHooks);
+  unsafeHooks.UserPromptSubmit[0].hooks[0].command = unsafeHooks.UserPromptSubmit[0].hooks[0].command.replace("cat >/dev/null", "echo keep-user-command");
+  const unsafePlan = renderHostPlan({ host: "claude-code", scope: "hooks-only", settings: settings("claude-code"), root, repoRoot, existing: new Map([[".claude/settings.json", JSON.stringify({ hooks: unsafeHooks })]]) });
+  assert.equal(JSON.parse(unsafePlan.files[0].content).hooks.UserPromptSubmit[0].hooks[0].command, unsafeHooks.UserPromptSubmit[0].hooks[0].command);
 });
 
 test("TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order are preserved", async (t) => {

@@ -20,7 +20,7 @@ import {
   pullCorrelation,
   statusChangeSequences,
 } from "../scripts/injection-session.mjs";
-import { parseInjectionProtocol, runInjection, runSessionInjection, serializeInjectionProtocol } from "../scripts/knowledge-inject.mjs";
+import { parseArgv, parseInjectionProtocol, runInjection, runSessionInjection, serializeInjectionProtocol } from "../scripts/knowledge-inject.mjs";
 import {
   InjectionPlacementManifest,
   MAX_HOOK_INPUT_BYTES,
@@ -417,6 +417,10 @@ test("R1 boundedSearch returns hits from an explicitly bounded directory", async
   assert.equal(result.partial, false);
   assert.equal(result.nextScope, null);
   assert.deepEqual(result.matches, [{ path: file, line: 2, text: "needle is here" }]);
+  const renamed = await mkdtemp(join(tmpdir(), "tcrn-renamed-container-"));
+  context.after(() => rm(renamed, { recursive: true, force: true }));
+  await writeFile(join(renamed, "record.txt"), "portable needle\n");
+  assert.equal((await boundedSearch({ query: "needle", directories: [renamed] })).reasonCode, "SEARCH_COMPLETED");
 });
 
 test("R1 boundedSearch refuses home scans and exposes timeout continuation", async (context) => {
@@ -425,6 +429,9 @@ test("R1 boundedSearch refuses home scans and exposes timeout continuation", asy
   assert.equal(denied.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
   assert.equal(denied.partial, true);
   assert.deepEqual(denied.nextScope.directories, [homedir()]);
+
+  assert.equal((await boundedSearch({ query: "needle" })).reasonCode, "SEARCH_SCOPE_REQUIRED");
+  for (const directory of ["relative", "/"]) assert.equal((await boundedSearch({ query: "needle", directories: [directory] })).reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
 
   const root = await mkdtemp(join(tmpdir(), "tcrn-bounded-search-timeout-"));
   context.after(() => rm(root, { recursive: true, force: true }));
@@ -551,6 +558,8 @@ test("419 drives the same bounded wrapper protocol through Claude and Codex path
     assert.equal(seen.args[seen.args.indexOf("--host") + 1], host);
     assert.equal(seen.options.maxBuffer, MAX_HOOK_OUTPUT_BYTES);
   }
+  const parsed = parseArgv(["--enforce-binding", "true", "--retry-pending", "true", "--judge-enabled", "false"]);
+  assert.deepEqual([parsed.enforceBinding, parsed.retryPending, parsed.judgeEnabled], [true, true, false]);
 });
 
 test("codex stdin opens with the system prompt while claude stdin stays the bare prompt", async () => {

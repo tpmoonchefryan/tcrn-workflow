@@ -146,7 +146,7 @@ const STOPWORDS = new Set([
 ]);
 
 
-function parseFlags(argv) {
+export function parseFlags(argv) {
   const flags = {};
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -158,6 +158,8 @@ function parseFlags(argv) {
   }
   return flags;
 }
+
+export const parseBooleanFlag = (value) => value === true || value === "true" ? true : value === false || value === "false" ? false : null;
 
 function protocolObject(value) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, reasonCode: "INJECT_OUTPUT_INVALID" };
@@ -1223,7 +1225,7 @@ export function registeredHookCommands() {
   return out;
 }
 
-function parseArgv(argv) {
+export function parseArgv(argv) {
   const flags = parseFlags(argv);
   let hookInput = {};
   if (typeof flags["hook-input"] === "string") {
@@ -1246,7 +1248,7 @@ function parseArgv(argv) {
     stateDirectory: typeof flags["state-dir"] === "string" ? flags["state-dir"] : undefined,
     hookInput,
     context,
-    judgeEnabled: flags["judge-enabled"] !== "false",
+    judgeEnabled: parseBooleanFlag(flags["judge-enabled"]) !== false,
     host: typeof flags.host === "string" ? flags.host : (process.env.TCRN_HOST ?? "claude"),
     selfTest: flags["self-test"] === true,
     verifyChannel: flags["verify-channel"] === true,
@@ -1258,9 +1260,9 @@ function parseArgv(argv) {
     pack: typeof flags.pack === "string" ? flags.pack : undefined,
     dispatchId: typeof flags["dispatch-id"] === "string" ? flags["dispatch-id"] : undefined,
     parentSession: typeof flags["parent-session"] === "string" ? flags["parent-session"] : undefined,
-    enforceBinding: flags["enforce-binding"] === true,
+    enforceBinding: parseBooleanFlag(flags["enforce-binding"]) === true,
     deliveryMode: flags["delivery-mode"] === "pending" ? "pending" : "immediate",
-    retryPending: flags["retry-pending"] === true,
+    retryPending: parseBooleanFlag(flags["retry-pending"]) === true,
   };
 }
 

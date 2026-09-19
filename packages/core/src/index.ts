@@ -189,6 +189,7 @@ export {
   exportWorkspace,
   initializeWorkspace,
   materializeWorkspace,
+  materializeWorkspaceFromGenesis,
   openConferenceInWorkspace,
   planWorkspaceMigration,
   hasWorkspaceStorageMigration,

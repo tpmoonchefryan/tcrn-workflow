@@ -162,7 +162,7 @@ function runInjectAttempt(input, { stateDirectory, host, retryPending = false, s
     "--event", event,
     "--session-id", String(sessionId),
     "--hook-input", boundedHookInput(input),
-    "--enforce-binding", "true",
+    ...(input?.hook_event_name === "SubagentStart" || binding.role !== undefined || binding.workId !== undefined || binding.pack !== undefined ? ["--enforce-binding", "true"] : []),
     "--delivery-mode", "pending",
   ];
   if (binding.role !== undefined) argv.push("--role", String(binding.role));

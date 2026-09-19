@@ -152,7 +152,7 @@ export async function boundedSearch({
   if ([...scopedFiles, ...scopedDirectories].some((path) => !isAbsolute(path))) {
     return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope });
   }
-  const forbiddenRoots = [resolve(homedir()), resolve(homedir(), "Code")];
+  const forbiddenRoots = [resolve(homedir())];
   const forbidden = scopedDirectories.find((path) => path === "/" || forbiddenRoots.some((root) => path === root));
   if (forbidden !== undefined) {
     return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope: { files: scopedFiles, directories: [forbidden] }, rejectedPath: forbidden });

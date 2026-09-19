@@ -41,7 +41,7 @@ import { fileURLToPath } from "node:url";
 import { P8_VERSION } from "./lib/p8-workflow-rc.mjs";
 import { pushGateExecutionPlan, ENGINE_PUSH_GATE_CHILDREN } from "./lib/push-gate-children.mjs";
 import { requiredFailurePatternProblems } from "./preflight.mjs";
-import { budgetWarningNotices, hasWarningOrError, inspectStructuredChildOutput, onlyBudgetWarning, validateStructuredChildExpectations } from "./lib/push-gate-output.mjs";
+import { budgetWarningNotices, hasWarningOrError, inspectStructuredChildOutput, onlyBudgetWarning, validateHostEvidenceProvenance, validateStructuredChildExpectations } from "./lib/push-gate-output.mjs";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const failures = [];
@@ -315,19 +315,8 @@ await timedStage("host-evidence-provenance", async () => {
     } catch {
       fail("PUSH_GATE_HOST_EVIDENCE_INVALID", "receipt is not JSON");
     }
-    const observedAt = hostEvidence?.observedAt;
-    if (typeof observedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(observedAt)) {
-      fail("PUSH_GATE_HOST_EVIDENCE_INVALID", `observedAt is ${String(observedAt)}`);
-    } else {
-      const supersededBy = hostEvidence?.supersededBy;
-      const currentClaim = hostEvidence?.currentClaim;
-      if (typeof supersededBy !== "string" || supersededBy === "" || currentClaim !== "none") {
-        fail(
-          "PUSH_GATE_HOST_EVIDENCE_PROVENANCE_INVALID",
-          `supersededBy is ${String(supersededBy)}, currentClaim is ${String(currentClaim)}; expected a non-empty supersededBy and currentClaim === "none"`,
-        );
-      }
-    }
+    const validation = validateHostEvidenceProvenance(hostEvidence);
+    if (!validation.ok) fail(validation.reasonCode, validation.detail);
   }
 });
 

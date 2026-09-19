@@ -53,6 +53,13 @@ const SUCCESS_RULES = Object.freeze({
   },
 });
 
+export function validateHostEvidenceProvenance(value) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return { ok: false, reasonCode: "PUSH_GATE_HOST_EVIDENCE_INVALID", detail: "receipt is not an object" };
+  if (typeof value.observedAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value.observedAt)) return { ok: false, reasonCode: "PUSH_GATE_HOST_EVIDENCE_INVALID", detail: `observedAt is ${String(value.observedAt)}` };
+  if (typeof value.supersededBy !== "string" || value.supersededBy.length === 0 || value.currentClaim !== "none") return { ok: false, reasonCode: "PUSH_GATE_HOST_EVIDENCE_PROVENANCE_INVALID", detail: `supersededBy is ${String(value.supersededBy)}, currentClaim is ${String(value.currentClaim)}` };
+  return { ok: true, reasonCode: "PUSH_GATE_HOST_EVIDENCE_VALID" };
+}
+
 /** Validate the real policy inputs needed before non-P1 children may start. */
 export function validateStructuredChildExpectations({ sourceFiles, guardIds, p8BasisCommit } = {}) {
   const findings = [];

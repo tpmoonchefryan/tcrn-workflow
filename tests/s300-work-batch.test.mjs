@@ -23,6 +23,7 @@ import {
   createProject,
   initializeWorkspace,
   materializeWorkspace,
+  materializeWorkspaceFromGenesis,
 } from "../dist/build/packages/core/src/index.js";
 import { deriveStableId } from "../dist/build/packages/protocol/src/index.js";
 
@@ -102,6 +103,7 @@ test("STORY-300: heterogeneous members act on what earlier members created, by e
     assert.equal(story.status, "ready", "the transition saw the record its predecessor created");
     assert.equal(story.revision, 3, "created, transitioned and annotated within the batch");
     assert.equal(story.parentId, deriveStableId("work", "B-EPIC-1"), "and the parent reference resolved by key");
+    assert.deepEqual(await materializeWorkspaceFromGenesis(fixture.root), state, "the public genesis replay matches the live materialization");
   } finally {
     await rm(fixture.base, { recursive: true, force: true });
   }
