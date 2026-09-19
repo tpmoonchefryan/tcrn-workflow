@@ -9,6 +9,7 @@ import test from "node:test";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { initializeWorkspace, validateWorkspace } from "../dist/build/packages/core/src/index.js";
+import { historicalModelPlan } from "./helpers/model-plan-history.mjs";
 
 const instant = (second) => new Date(Date.UTC(2026, 0, 1) + second * 1000).toISOString().replace(/\.\d+Z$/u, "Z");
 
@@ -165,6 +166,25 @@ test("S369: retired model-plan CLI names refuse while historical records remain 
   const retiredPersonaList = await refusal(["persona-list", "--workspace", workspace]);
   assert.equal(retiredPersonaList.reasonCode, "CLI_COMMAND_UNKNOWN");
   assert.equal(await version(), 0);
+
+  // The write verbs are retired, but old model-plan envelopes remain part of the
+  // replay contract. Construct one through the test-only historical fixture path and
+  // prove that materialization still returns the exact record after a fresh replay.
+  const historical = await historicalModelPlan(workspace, "set", {
+    host: "claude-code", name: "legacy-budget", defaultModel: "claude-sonnet-4-5",
+  }, instant(2));
+  const replayed = await validateWorkspace(workspace);
+  assert.deepEqual(replayed.executionConfig.modelPlans, historical.executionConfig.modelPlans);
+  assert.deepEqual(replayed.executionConfig.modelPlans[0], {
+    schemaVersion: "tcrn.model-plan.v1",
+    host: "claude-code",
+    name: "legacy-budget",
+    defaultModel: "claude-sonnet-4-5",
+    assignments: {},
+    revision: 1,
+    updatedAt: instant(2),
+    tombstone: false,
+  });
 });
 
 test("S369: selected dispatch mode resets through ordinary settings removal", async (t) => {

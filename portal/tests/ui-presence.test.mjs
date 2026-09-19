@@ -926,6 +926,20 @@ if (process.argv[2] === "status" && actual.status === 0) {
       assert.equal(groupFor("backup.cadence"), "backup");
       assert.equal(groupFor("portal.port"), "machine", "machine settings stay outside the workspace settings groups");
 
+      // Retirement is a user-visible contract, not only a grouping detail: neither
+      // legacy subagent-plan key may produce a settings row in the rendered execution
+      // surface, and neither may be discoverable through the global search index.
+      page.document.querySelector('[data-setting-group="execution"]')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      for (const key of ["execution.claudeCodeSubagentPlan", "execution.codexSubagentPlan"]) {
+        assert.equal(page.document.querySelector(`[data-setting-row="${key}"]`), null, `${key} must stay absent from rendered settings`);
+        const globalSearch = page.document.querySelector("#global-search");
+        globalSearch.value = key;
+        globalSearch.dispatchEvent(new page.window.Event("input", { bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        assert.equal(page.document.querySelectorAll("#search-results [data-search-index]").length, 0, `${key} must stay absent from global search`);
+      }
+
       page.document.querySelector('[data-setting-group="workspace"]')?.click();
       assert.equal(page.document.querySelector(`[data-setting-row="${retiredEconomySettingKey}"]`), null, "the retired model field must not leak into workspace");
       const prompt = page.document.querySelector('[data-setting-control="retrieval.promptLanguages"]');
