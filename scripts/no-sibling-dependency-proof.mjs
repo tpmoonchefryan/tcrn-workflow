@@ -40,9 +40,11 @@
 // tests/inc258-install-manifest.test.mjs, tests/inc259-storage-migration.test.mjs,
 // tests/inc260-snapshot-read-optimization.test.mjs.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertInstallManifestComplete, readInstallManifest } from "../dist/build/packages/core/src/index.js";
+import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const PLATFORM_ROOT = resolve(REPO_ROOT, "..");
@@ -51,26 +53,77 @@ export const PLATFORM_ROOT = resolve(REPO_ROOT, "..");
 export const SCANNED_ROOTS = Object.freeze(["scripts", "packages", "portal", "tools", "tests"]);
 export const SCANNED_EXTENSIONS = Object.freeze([".mjs", ".js", ".ts", ".tsx"]);
 
+export class SiblingDependencyInputError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "SiblingDependencyInputError";
+    this.reasonCode = "SIBLING_DEPENDENCY_NOT_VERIFIABLE";
+    this.details = details;
+  }
+}
+
+const HELPER_SKILL_PROBE = "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md";
+
+function ownPackageIdentity(repoRoot) {
+  try {
+    const document = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+    if (document === null || typeof document !== "object" || typeof document.name !== "string" || document.name.length === 0) {
+      throw new Error("package name is missing");
+    }
+    return document.name;
+  } catch (error) {
+    throw new SiblingDependencyInputError(`repository identity is not readable: ${String(error?.message ?? error)}`);
+  }
+}
+
 /**
- * Sibling projects, discovered rather than listed.
+ * Resolve the canonical sibling roster from the validated install manifest.
  *
- * A typed roster is a second copy of a fact the filesystem already holds, and it goes
- * stale exactly when it matters — the moment a new sibling is admitted. This is the same
- * defect this platform hit three times in one week with hand-copied partition rosters.
- *
- * `self` is read off the repository root rather than written down (TCRN-CROSS-INC-218).
- * It used to be the constant `"tcrn-workflow"`, which is only this checkout's directory
- * name: `pnpm preflight` clones into `<temp>/checkout`, so inside the one world that
- * proves independence from siblings, this repository counted itself as its own sibling.
- * A constant paired with a name the tree is free to change is exactly the shape the
- * gate-reference-stability convention refuses.
+ * The manifest is the installation-surface authority; no directory beside the checkout
+ * is inspected. The Helper is represented by the three manifest skill entries, whose
+ * identical canonical path suffix is the only accepted Helper identity.
  */
-export function siblingProjects(platformRoot = PLATFORM_ROOT, self = basename(REPO_ROOT)) {
-  return readdirSync(platformRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-    .map((entry) => entry.name)
-    .filter((name) => name !== self && name !== "docs" && name !== "var" && name !== "tmp")
-    .sort();
+export function canonicalSiblingRoster({ repoRoot = REPO_ROOT, manifest, manifestReader = readInstallManifest } = {}) {
+  let resolvedManifest;
+  try {
+    resolvedManifest = manifest ?? manifestReader();
+    assertInstallManifestComplete(resolvedManifest);
+  } catch (error) {
+    if (error?.reasonCode === "SIBLING_DEPENDENCY_NOT_VERIFIABLE") throw error;
+    throw new SiblingDependencyInputError(`validated install-manifest unavailable: ${String(error?.message ?? error)}`);
+  }
+  const projects = resolvedManifest.projects;
+  const projectNames = projects.map((project) => {
+    if (project === null || typeof project !== "object" || typeof project.name !== "string" || project.name.length === 0 || typeof project.pathTemplate !== "string") {
+      throw new SiblingDependencyInputError("install-manifest project roster is incomplete");
+    }
+    if (!project.pathTemplate.includes("<PLATFORM_ROOT>")) throw new SiblingDependencyInputError(`project ${project.name} has no canonical platform-root path`);
+    return project.name;
+  });
+  if (new Set(projectNames).size !== projectNames.length) throw new SiblingDependencyInputError("install-manifest project roster is ambiguous");
+
+  const self = ownPackageIdentity(repoRoot);
+  if (!projectNames.includes(self)) throw new SiblingDependencyInputError(`repository identity ${self} is absent from the install-manifest project roster`);
+
+  const helperItems = resolvedManifest.items.filter((item) => item?.acceptanceProbe === HELPER_SKILL_PROBE);
+  const helperNames = helperItems.map((item) => {
+    const match = /(?:^|\/)tcrn-workflow-helper\/?$/u.exec(item.pathTemplate);
+    return match === null ? null : "tcrn-workflow-helper";
+  });
+  if (helperItems.length !== 3 || helperNames.some((name) => name === null) || new Set(helperNames).size !== 1) {
+    throw new SiblingDependencyInputError("install-manifest Helper identity is missing, invalid, or ambiguous");
+  }
+  const helperIdentity = helperNames[0];
+  if (projectNames.includes(helperIdentity)) throw new SiblingDependencyInputError("install-manifest Helper identity collides with a project identity");
+
+  const siblings = [...projectNames, helperIdentity].filter((name) => name !== self).sort();
+  return {
+    siblings,
+    self,
+    helperIdentity,
+    manifestSource: "validated-install-manifest",
+    manifestDigest: canonicalSha256(resolvedManifest),
+  };
 }
 
 /**
@@ -82,7 +135,7 @@ export function siblingProjects(platformRoot = PLATFORM_ROOT, self = basename(RE
  */
 const REACHING_OPERATIONS = Object.freeze([
   { id: "filesystem-read", pattern: /\b(?:readFileSync|readFile|createReadStream|existsSync|statSync|lstatSync|readdirSync|readdir|import\s*\()/u },
-  { id: "process-spawn", pattern: /\b(?:spawn|spawnSync|exec|execSync|execFile|execFileSync|fork)\b/u },
+  { id: "process-spawn", pattern: /\b(?:spawn|spawnSync|(?<!\.)exec|execSync|execFile|execFileSync|fork)\b/u },
 ]);
 
 /**
@@ -115,11 +168,16 @@ const OUTSIDE_REFERENCES = Object.freeze([
   }
 ]);
 
-function scannableFiles(root) {
+function scannableFiles(root, strict = false) {
   const found = [];
   const walk = (directory) => {
     let entries = [];
-    try { entries = readdirSync(directory, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = readdirSync(directory, { withFileTypes: true });
+    } catch (error) {
+      if (strict) throw new SiblingDependencyInputError(`scan input is unreadable: ${directory}`, { error: String(error?.message ?? error) });
+      return;
+    }
     for (const entry of entries) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
@@ -181,18 +239,22 @@ function hasLocalRoot(code) {
  */
 export function findReachingLines({
   repoRoot = REPO_ROOT,
-  siblings = siblingProjects(),
+  siblings = [],
   read = readFileSync,
   files = null,
+  strict = false,
 } = {}) {
   const findings = [];
   const roots = files === null
-    ? SCANNED_ROOTS.map((rootName) => scannableFiles(join(repoRoot, rootName)))
+    ? SCANNED_ROOTS.map((rootName) => scannableFiles(join(repoRoot, rootName), strict))
     : [files];
   for (const paths of roots) {
     for (const path of paths) {
       let text = "";
-      try { text = read(path, "utf8"); } catch { continue; }
+      try { text = read(path, "utf8"); } catch (error) {
+        if (strict) throw new SiblingDependencyInputError(`scan input is unreadable: ${path}`, { error: String(error?.message ?? error) });
+        continue;
+      }
       text.split("\n").forEach((line, index) => {
         // A comment explaining the rule is not the rule being broken. This gate has to be
         // sayable in its own source, and in the convention that describes it.
@@ -244,13 +306,48 @@ export function findReachingLines({
 }
 
 export function judgeNoSiblingDependency(options = {}) {
-  const siblings = options.siblings ?? siblingProjects();
-  const findings = options.findings ?? findReachingLines({ ...options, siblings });
+  let roster;
+  try {
+    roster = canonicalSiblingRoster(options);
+  } catch (error) {
+    return {
+      schemaVersion: "tcrn.no-sibling-dependency.v1",
+      ok: false,
+      comparable: false,
+      reasonCode: "SIBLING_DEPENDENCY_NOT_VERIFIABLE",
+      error: String(error?.message ?? error),
+      source: "validated-install-manifest",
+      findings: [],
+      scannedRoots: [...SCANNED_ROOTS],
+    };
+  }
+  let findings;
+  try {
+    findings = options.findings ?? findReachingLines({ ...options, siblings: roster.siblings, strict: true });
+  } catch (error) {
+    return {
+      schemaVersion: "tcrn.no-sibling-dependency.v1",
+      ok: false,
+      comparable: false,
+      reasonCode: "SIBLING_DEPENDENCY_NOT_VERIFIABLE",
+      error: String(error?.message ?? error),
+      source: roster.manifestSource,
+      manifestDigest: roster.manifestDigest,
+      siblings: roster.siblings,
+      findings: [],
+      scannedRoots: [...SCANNED_ROOTS],
+    };
+  }
   return {
     schemaVersion: "tcrn.no-sibling-dependency.v1",
     ok: findings.length === 0,
+    comparable: true,
     reasonCode: findings.length === 0 ? "NO_SIBLING_DEPENDENCY" : "SIBLING_DEPENDENCY_PRESENT",
-    siblings,
+    source: roster.manifestSource,
+    manifestDigest: roster.manifestDigest,
+    helperIdentity: roster.helperIdentity,
+    self: roster.self,
+    siblings: roster.siblings,
     scannedRoots: [...SCANNED_ROOTS],
     findings,
     detectionLimitations: "Line-local detection only: the sibling name and reaching operation must appear on the same line. Multi-line patterns (e.g., path assignment on one line, use on another) are not detected. See comments in the source for the list of known multi-line violations being addressed separately.",
