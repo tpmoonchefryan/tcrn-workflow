@@ -47,11 +47,11 @@ async function testWindowRecord(path, value) {
   await writeFile(path, `${JSON.stringify(value)}\n`, { mode: 0o600, flag: "wx" });
 }
 
-function abort() {
+function abort(reasonCode = "TEST_CONTROLLER_INPUT_INVALID") {
   // Returning from an import hook after setting exitCode would still let
   // `node --test` discover tests.  This bootstrap instead exits before it
   // has spawned Node's test controller at all.
-  process.exit(1);
+  process.stderr.write(`${JSON.stringify({ ok: false, reasonCode })}\n`); process.exit(1);
 }
 
 async function waitForDurableGroupBinding() {
@@ -119,7 +119,7 @@ function waitForReaperMessage(reaper, type) {
 }
 
 if (!validAbsolutePath(lockPath) || !Number.isSafeInteger(outerPid) || outerPid <= 0 || testArguments.length === 0) {
-  abort();
+  abort("TEST_CONTROLLER_REQUIRED");
 }
 
 if (!await waitForDurableGroupBinding()) {
