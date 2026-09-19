@@ -360,6 +360,35 @@ test("TCRN-CROSS-SUB-153 D4: an overlong Stop resumes all channels at the real i
   assert.equal(later.coverage?.reasonCode, "TELEMETRY_COVERAGE_UNPROVEN", "a mid-day resumed boundary cannot seal a full UTC day");
 });
 
+test("TCRN-CROSS-SUB-166 D4: a Stop with no prior boundary resumes only four channels at the actual instant", async (t) => {
+  const fixture = await workspaceFixture(t);
+  const at = "2026-09-10T12:00:00.000Z";
+  const resumed = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "empty-session", host: "claude", phase: "stop", at, workspaceState: fixture.state });
+  assert.deepEqual(resumed, {
+    ok: false,
+    reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
+    unknown: true,
+    resumed: true,
+    from: "2026-09-10",
+    until: "2026-09-10",
+    count: 4,
+    duplicate: false,
+  });
+
+  let records = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records;
+  const boundaries = records.filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  assert.equal(boundaries.length, 4);
+  assert.deepEqual(new Set(boundaries.map((record) => record.kind)), new Set(OBSERVATION_CHANNELS));
+  assert.ok(boundaries.every((record) => record.at === at && record.payload.phase === "start"));
+  assert.equal(records.filter((record) => record.payload.phase === "stop").length, 0);
+  assert.equal(records.filter((record) => record.kind === "observation-coverage").length, 0);
+
+  const retry = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "empty-session", host: "claude", phase: "stop", at, workspaceState: fixture.state });
+  assert.deepEqual(retry, { ...resumed, count: 0, duplicate: true });
+  records = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records;
+  assert.equal(records.length, 4, "an identical no-prior-boundary retry appends nothing");
+});
+
 test("TCRN-CROSS-SUB-153 D4: exactly three days remains bounded and invalid time fails closed", async (t) => {
   const fixture = await workspaceFixture(t);
   await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "three-days", host: "claude", phase: "start", at: "2026-09-01T00:00:00.000Z", workspaceState: fixture.state });

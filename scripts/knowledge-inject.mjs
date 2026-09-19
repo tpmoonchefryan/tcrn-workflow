@@ -559,9 +559,15 @@ export async function recordObservationBoundary({
         const previousStop = observationLatestStop(sessionRows);
         const startAt = open?.record.at ?? previousStop?.at ?? at;
         const startDay = open?.day ?? observationDay(startAt) ?? atDay;
-        return { channel, startAt, startDay, days: observationDaysBetween(startDay, atDay) };
+        return {
+          channel,
+          startAt,
+          startDay,
+          days: observationDaysBetween(startDay, atDay),
+          hasPriorBoundary: open !== null || previousStop !== null,
+        };
       });
-      const gap = plans.find(({ days }) => days.length === 0 || days.length > MAX_BOUNDARY_DAYS_PER_STOP) ?? null;
+      const gap = plans.find(({ days, hasPriorBoundary }) => !hasPriorBoundary || days.length === 0 || days.length > MAX_BOUNDARY_DAYS_PER_STOP) ?? null;
       const currentDayResume = plans.every(({ channel }) => {
         const target = observationSourceForDay(host, sessionId, atDay, channel);
         const last = observationLastBoundaryRow(records.filter((record) => record.payload?.source === target.source));
