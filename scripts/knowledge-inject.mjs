@@ -532,8 +532,8 @@ export async function recordObservationBoundary({
     const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
     const records = [...read.records];
     const created = [];
-    for (const channel of OBSERVATION_CHANNELS) {
-      if (phase === "start") {
+    if (phase === "start") {
+      for (const channel of OBSERVATION_CHANNELS) {
         const target = observationSourceForDay(host, sessionId, atDay, channel);
         const rows = records.filter((record) => record.payload?.source === target.source);
         const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
@@ -543,41 +543,94 @@ export async function recordObservationBoundary({
           session: target.sessionKey,
           payload: observationHighWaterPayload(records, channel, atDay, at, target.source, "start", sequence, at),
         }));
-        continue;
       }
-
-      const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
-      const open = sessionRows
-        .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
-        .filter(({ record, day }) => day !== null && record.payload.phase === "start")
-        .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
-        .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
-        .at(-1) ?? null;
-      const previousStop = observationLatestStop(sessionRows);
-      const startAt = open?.record.at ?? previousStop?.at ?? at;
-      const startDay = open?.day ?? observationDay(startAt) ?? atDay;
-      const days = observationDaysBetween(startDay, atDay);
-      if (days.length === 0 || days.length > MAX_BOUNDARY_DAYS_PER_STOP) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", unknown: true, from: startDay, until: atDay };
-      for (const day of days) {
-        const target = observationSourceForDay(host, sessionId, day, channel);
-        const rows = records.filter((record) => record.payload?.source === target.source);
-        const last = observationLastBoundaryRow(rows);
-        let sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
-        if (last?.payload.phase !== "start") {
+    } else {
+      // Inspect every channel before constructing any stop rows. A stale, empty, or
+      // divergent channel invalidates the whole invocation; partial stop coverage is
+      // never evidence of a real boundary.
+      const plans = OBSERVATION_CHANNELS.map((channel) => {
+        const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
+        const open = sessionRows
+          .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
+          .filter(({ record, day }) => day !== null && record.payload.phase === "start")
+          .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
+          .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
+          .at(-1) ?? null;
+        const previousStop = observationLatestStop(sessionRows);
+        const startAt = open?.record.at ?? previousStop?.at ?? at;
+        const startDay = open?.day ?? observationDay(startAt) ?? atDay;
+        return { channel, startAt, startDay, days: observationDaysBetween(startDay, atDay) };
+      });
+      const gap = plans.find(({ days }) => days.length === 0 || days.length > MAX_BOUNDARY_DAYS_PER_STOP) ?? null;
+      const currentDayResume = plans.every(({ channel }) => {
+        const target = observationSourceForDay(host, sessionId, atDay, channel);
+        const last = observationLastBoundaryRow(records.filter((record) => record.payload?.source === target.source));
+        return last?.payload.phase === "start" && last.at === at;
+      });
+      if (gap !== null || currentDayResume) {
+        // On a gap, resume at the actual Stop instant. The new starts are the only
+        // records allowed here: no backdated rows, Stop rows, or coverage receipt.
+        // Repeating the exact invocation sees the same four starts and is a no-op.
+        if (!currentDayResume) {
+          for (const channel of OBSERVATION_CHANNELS) {
+            const target = observationSourceForDay(host, sessionId, atDay, channel);
+            const rows = records.filter((record) => record.payload?.source === target.source);
+            const last = observationLastBoundaryRow(rows);
+            if (last?.payload.phase === "start" && last.at === at) continue;
+            const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
+            created.push(core.createTelemetryRecord({
+              at,
+              kind: channel,
+              session: target.sessionKey,
+              payload: observationHighWaterPayload(records, channel, atDay, at, target.source, "start", sequence, at),
+            }));
+          }
+        }
+        const resumedReceipts = [];
+        for (const record of created) {
+          const receipt = await core.appendTelemetryRecord(root, record);
+          resumedReceipts.push(receipt);
+          if (!receipt.duplicate) records.push(record);
+        }
+        return {
+          ok: false,
+          reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
+          unknown: true,
+          resumed: true,
+          from: gap?.startDay ?? (currentDayResume
+            ? OBSERVATION_CHANNELS.flatMap((channel) => observationBoundaryRows(records, host, sessionId, channel)
+              .map((record) => observationSessionKeyDay(record.session))
+              .filter((day) => day !== null && day !== atDay))
+              .sort()
+              .at(0) ?? atDay
+            : atDay),
+          until: atDay,
+          count: resumedReceipts.length,
+          duplicate: currentDayResume || resumedReceipts.some((receipt) => receipt.duplicate),
+        };
+      }
+      for (const { channel, startAt, startDay, days } of plans) {
+        for (const day of days) {
+          const target = observationSourceForDay(host, sessionId, day, channel);
+          const rows = records.filter((record) => record.payload?.source === target.source);
+          const last = observationLastBoundaryRow(rows);
+          let sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
+          if (last?.payload.phase !== "start") {
+            created.push(core.createTelemetryRecord({
+              at: startAt,
+              kind: channel,
+              session: target.sessionKey,
+              payload: observationHighWaterPayload(records, channel, day, startAt, target.source, "start", sequence, startAt),
+            }));
+            sequence += 1;
+          }
           created.push(core.createTelemetryRecord({
-            at: startAt,
+            at,
             kind: channel,
             session: target.sessionKey,
-            payload: observationHighWaterPayload(records, channel, day, startAt, target.source, "start", sequence, startAt),
+            payload: observationHighWaterPayload(records, channel, day, at, target.source, "stop", sequence, at),
           }));
-          sequence += 1;
         }
-        created.push(core.createTelemetryRecord({
-          at,
-          kind: channel,
-          session: target.sessionKey,
-          payload: observationHighWaterPayload(records, channel, day, at, target.source, "stop", sequence, at),
-        }));
       }
     }
     const receipts = [];

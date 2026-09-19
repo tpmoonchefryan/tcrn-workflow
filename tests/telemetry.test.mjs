@@ -317,6 +317,59 @@ test("STORY-393 B1: repeated Stop events extend the prior attested endpoint with
   assert.equal(rows[2].at, "2026-09-10T10:00:00.000Z", "the synthetic start is the previous real stop");
 });
 
+test("TCRN-CROSS-SUB-153 D4: an overlong Stop resumes all channels at the real instant and stays idempotent", async (t) => {
+  const fixture = await workspaceFixture(t);
+  const start = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "stale-session", host: "claude", phase: "start", at: "2026-09-01T00:00:00.000Z", workspaceState: fixture.state });
+  assert.equal(start.ok, true);
+
+  const gap = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "stale-session", host: "claude", phase: "stop", at: "2026-09-05T12:00:00.000Z", workspaceState: fixture.state });
+  assert.deepEqual(gap, {
+    ok: false,
+    reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
+    unknown: true,
+    resumed: true,
+    from: "2026-09-01",
+    until: "2026-09-05",
+    count: 4,
+    duplicate: false,
+  });
+  let records = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records;
+  const boundaries = records.filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  assert.equal(boundaries.filter((record) => record.payload.phase === "stop").length, 0, "a gap never writes a backdated Stop");
+  assert.equal(records.filter((record) => record.kind === "observation-coverage").length, 0, "a gap never seals coverage");
+  const resumed = boundaries.filter((record) => record.at === "2026-09-05T12:00:00.000Z" && record.payload.phase === "start");
+  assert.deepEqual(new Set(resumed.map((record) => record.kind)), new Set(OBSERVATION_CHANNELS));
+
+  const retry = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "stale-session", host: "claude", phase: "stop", at: "2026-09-05T12:00:00.000Z", workspaceState: fixture.state });
+  assert.deepEqual(retry, { ...gap, count: 0, duplicate: true }, "an identical resume is a deterministic no-op");
+  records = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records;
+  assert.equal(records.length, boundaries.length, "an identical resume appends nothing");
+
+  for (const channel of OBSERVATION_CHANNELS) {
+    const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+    await appendTelemetryRecord(fixture.transient, createTelemetryRecord({
+      at: "2026-09-05T13:00:00.000Z",
+      kind,
+      session: `stale-session-${channel}`,
+      payload: { source: `post-gap:${channel}`, availability: "available" },
+    }));
+  }
+  const later = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "stale-session", host: "claude", phase: "stop", at: "2026-09-06T00:00:01.000Z", workspaceState: fixture.state });
+  assert.equal(later.ok, true, JSON.stringify(later));
+  assert.equal(later.reasonCode, "TELEMETRY_BOUNDARY_RECORDED");
+  assert.equal(later.coverage?.reasonCode, "TELEMETRY_COVERAGE_UNPROVEN", "a mid-day resumed boundary cannot seal a full UTC day");
+});
+
+test("TCRN-CROSS-SUB-153 D4: exactly three days remains bounded and invalid time fails closed", async (t) => {
+  const fixture = await workspaceFixture(t);
+  await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "three-days", host: "claude", phase: "start", at: "2026-09-01T00:00:00.000Z", workspaceState: fixture.state });
+  const bounded = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "three-days", host: "claude", phase: "stop", at: "2026-09-03T23:59:59.000Z", workspaceState: fixture.state });
+  assert.equal(bounded.ok, true, JSON.stringify(bounded));
+  assert.equal(bounded.reasonCode, "TELEMETRY_BOUNDARY_RECORDED");
+  const invalid = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "three-days", host: "claude", phase: "stop", at: "not-a-time", workspaceState: fixture.state });
+  assert.deepEqual(invalid, { ok: false, reasonCode: "TELEMETRY_BOUNDARY_INVALID" });
+});
+
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
   const fixture = await workspaceFixture(t);
   const telemetry = createTelemetryRecord({ at: INSTANT(4), kind: "subagent-stop", session: "session-evidence", payload: payload() });
