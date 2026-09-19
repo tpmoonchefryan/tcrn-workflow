@@ -71,6 +71,14 @@ export function workspaceForPartition(partition, containerRoot = PLATFORM_ROOT) 
 export const ENGINE_CLI = resolve(SCRIPT_DIRECTORY, "tcrn-workflow.mjs");
 const DISPATCH_HOST_ALIASES = Object.freeze({ claude: "claude-code", codex: "codex" });
 
+const CHILD_AGENT_MARKER_FIELDS = Object.freeze(["agent_id", "agentId", "child_agent_id", "childAgentId"]);
+
+export function hasChildAgentMarker(input = {}) {
+  const scopes = [input, input?.payload, input?.context, input?.dispatchContext, input?.dispatch, input?.task, input?.subagent, input?.agent];
+  return scopes.some((scope) => scope !== null && typeof scope === "object" && !Array.isArray(scope)
+    && CHILD_AGENT_MARKER_FIELDS.some((field) => scope[field] !== undefined && scope[field] !== null && scope[field] !== ""));
+}
+
 export function dispatchHostName(host) {
   return DISPATCH_HOST_ALIASES[host] ?? host;
 }
@@ -1011,7 +1019,7 @@ export async function runSessionInjection({
     ...(dispatchId === undefined ? {} : { dispatchId }),
     ...(parentSession === undefined ? {} : { parentSession }),
   };
-  const bindingRequested = enforceBinding || dispatchContext !== null || context !== null || role !== undefined || workId !== undefined || pack !== undefined || dependencies !== undefined || dispatchId !== undefined || parentSession !== undefined || event === "SubagentStart";
+  const bindingRequested = enforceBinding || hasChildAgentMarker(hookInput) || dispatchContext !== null || context !== null || role !== undefined || workId !== undefined || pack !== undefined || dependencies !== undefined || dispatchId !== undefined || parentSession !== undefined || event === "SubagentStart";
   const dispatch = normalizeDispatchContext(explicitBinding, { requireBinding: bindingRequested });
   const pendingMode = deliveryMode === "pending";
   try {

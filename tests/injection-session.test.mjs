@@ -33,6 +33,34 @@ import {
 
 const emptyWorkspace = { work: [], events: [], conferences: [], conferenceMinutes: [] };
 const dispatchTiers = (model) => JSON.stringify({ "claude-code": { economy: { model, effort: "medium" } } });
+const sessionDefaults = Object.freeze({ budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false, workspaceState: emptyWorkspace });
+
+function sessionOptions(overrides = {}) {
+  return { ...sessionDefaults, ...overrides };
+}
+
+function workspaceState(work, events = []) {
+  return { work, events, conferences: [], conferenceMinutes: [] };
+}
+
+function languageSettings(model = "test-economy") {
+  return [
+    { key: "artifact.language", currentValue: "zh-CN" },
+    { key: "retrieval.promptLanguages", currentValue: "zh-CN" },
+    { key: "execution.dispatchTiers", currentValue: dispatchTiers(model) },
+  ];
+}
+
+function mockChild({ output = "reply", onInput = () => {}, close = true, onKill = null } = {}) {
+  const child = new EventEmitter();
+  child.pid = process.pid;
+  child.stdin = { end: onInput };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  if (onKill !== null) child.kill = onKill;
+  if (close) setImmediate(() => { child.stdout.emit("data", output); child.emit("close", 0, null); });
+  return child;
+}
 
 async function stateDirectory(context, name) {
   const directory = await mkdtemp(join(tmpdir(), `tcrn-injection-${name}-`));
@@ -111,27 +139,22 @@ test("inactive parents consume a line without reducing the active/ready omitted 
 
 test("418 rejects an unbound subagent without reading global L0 or calling auxiliary models", async (context) => {
   const directory = await stateDirectory(context, "unbound-subagent");
-  const workspaceState = {
-    work: [{ id: "work:other", externalKey: "OTHER", kind: "Story", status: "active", parentId: null, title: "Other", summary: "unrelated", tombstone: false }],
-    events: [],
-    conferences: [],
-    conferenceMinutes: [],
-  };
+  const state = workspaceState([{ id: "work:other", externalKey: "OTHER", kind: "Story", status: "active", parentId: null, title: "Other", summary: "unrelated", tombstone: false }]);
   let recalls = 0;
   let translates = 0;
   let judgments = 0;
-  const result = await runSessionInjection({
+  const result = await runSessionInjection(sessionOptions({
     prompt: "hook",
     sessionId: "unbound-subagent",
-    event: "SubagentStart",
-    hookInput: { hook_event_name: "SubagentStart", session_id: "unbound-subagent" },
+    event: "UserPromptSubmit",
+    hookInput: { hook_event_name: "UserPromptSubmit", session_id: "unbound-subagent", agent_id: "child-1" },
     stateDirectory: directory,
-    workspaceState,
+    workspaceState: state,
     settings: [{ key: "execution.dispatchTiers", currentValue: dispatchTiers("not-used") }],
     recall: async () => { recalls += 1; return { ok: true, result: { records: [] } }; },
     translate: async () => { translates += 1; return { text: "translated" }; },
     judge: async () => { judgments += 1; return { judgment: true }; },
-  });
+  }));
   assert.equal(result.reasonCode, "DISPATCH_CONTEXT_BINDING_MISSING");
   assert.equal(result.decision, "DISPATCH_CONTEXT_BINDING_MISSING");
   assert.equal(result.injected, false);
@@ -143,35 +166,30 @@ test("418 rejects an unbound subagent without reading global L0 or calling auxil
 
 test("418 binds a subagent to one workId and Pack, keeping unrelated active work out", async (context) => {
   const directory = await stateDirectory(context, "bound-subagent");
-  const workspaceState = {
-    work: [
+  const state = workspaceState([
       { id: "work:target", externalKey: "TARGET", kind: "Story", status: "active", parentId: null, title: "Bound task", summary: "EPIC135 HC1", labels: ["EPIC135/HC1"], tombstone: false },
       { id: "work:other", externalKey: "OTHER", kind: "Story", status: "active", parentId: null, title: "Other task", summary: "EPIC135 HC1", labels: ["other-pack"], tombstone: false },
-    ],
-    events: [],
-    conferences: [],
-    conferenceMinutes: [],
-  };
+  ]);
   const binding = normalizeDispatchContext({ role: "subagent", workId: "work:target", pack: "EPIC135/HC1" }, { env: {} });
   assert.equal(binding.ok, true);
-  const frame = buildBoundedTaskContext(workspaceState, binding, { maxLines: 6, maxBytes: 1_600 });
+  const frame = buildBoundedTaskContext(state, binding, { maxLines: 6, maxBytes: 1_600 });
   assert.equal(frame.ok, true);
   assert.ok(frame.text.includes("TARGET"));
   assert.ok(!frame.text.includes("OTHER"));
   let recalls = 0;
   let auxiliary = 0;
-  const result = await runSessionInjection({
+  const result = await runSessionInjection(sessionOptions({
     prompt: "task details",
     sessionId: "bound-subagent",
     event: "SubagentStart",
-    hookInput: { hook_event_name: "SubagentStart", session_id: "bound-subagent", role: "subagent", workId: "work:target", pack: "EPIC135/HC1" },
+    hookInput: { hook_event_name: "SubagentStart", session_id: "bound-subagent", agent_id: "child-1", role: "subagent", workId: "work:target", pack: "EPIC135/HC1" },
     stateDirectory: directory,
-    workspaceState,
+    workspaceState: state,
     settings: [{ key: "execution.dispatchTiers", currentValue: dispatchTiers("not-used") }],
     recall: async () => { recalls += 1; return { ok: true, result: { records: [] } }; },
     translate: async () => { auxiliary += 1; return { text: "translated" }; },
     judge: async () => { auxiliary += 1; return { judgment: true }; },
-  });
+  }));
   assert.equal(result.decision, "SUBAGENT_TASK_CONTEXT");
   assert.ok(result.injection.includes("TARGET"));
   assert.ok(!result.injection.includes("OTHER"));
@@ -185,19 +203,17 @@ test("418 binds a subagent to one workId and Pack, keeping unrelated active work
 test("419 keeps generated ids pending until wrapper acknowledgement, then deduplicates", async (context) => {
   const directory = await stateDirectory(context, "pending-delivery");
   const target = { id: "knowledge:bound", kind: "card", key: "BOUND", status: "active", title: "Bound card", summary: "task", workId: "work:target", pack: "EPIC135/HC1" };
-  const options = {
+  const options = sessionOptions({
     prompt: "task",
     sessionId: "pending-delivery",
     event: "UserPromptSubmit",
     hookInput: { hook_event_name: "UserPromptSubmit", session_id: "pending-delivery", role: "subagent", workId: "work:target", pack: "EPIC135/HC1" },
     stateDirectory: directory,
     settings: [],
-    budget: 24_576,
-    perPromptBytes: 1_600,
     deliveryMode: "pending",
-    workspaceState: { work: [{ id: "work:target", externalKey: "TARGET", kind: "Story", status: "active", parentId: null, title: "Target", summary: "task", labels: ["EPIC135/HC1"], tombstone: false }], events: [], conferences: [], conferenceMinutes: [] },
+    workspaceState: workspaceState([{ id: "work:target", externalKey: "TARGET", kind: "Story", status: "active", parentId: null, title: "Target", summary: "task", labels: ["EPIC135/HC1"] }]),
     recall: recallFor([target]),
-  };
+  });
   const first = await runSessionInjection(options);
   assert.equal(first.delivery.state, "pending");
   assert.ok(new InjectionSessionStore({ directory }).readSession(options.sessionId).pendingIds.includes(target.id));
@@ -218,17 +234,14 @@ test("a sixty-prompt session stays under the cumulative budget and records every
   const outputs = [];
   for (let index = 0; index < 60; index += 1) {
     const records = Array.from({ length: 8 }, (_, row) => candidate(`knowledge:${index.toString(16).padStart(24, "0")}${row.toString(16)}`, index * 8 + row));
-    const result = await runSessionInjection({
+    const result = await runSessionInjection(sessionOptions({
       prompt: `prompt-${index}`,
       sessionId: "sixty-session",
       event: "UserPromptSubmit",
       stateDirectory: directory,
-      workspaceState: emptyWorkspace,
-      budget: 24_576,
       perPromptBytes: DEFAULT_PER_PROMPT_BYTES,
       recall: recallFor(records),
-      judgeEnabled: false,
-    });
+    }));
     outputs.push({ injectedBytes: result.injectedBytes, cumulativeBytes: result.cumulativeBytes });
   }
   assert.equal(outputs.length, 60);
@@ -317,11 +330,7 @@ test("R6 invokes its independent translator before the recall call", async () =>
     partition: "cross-project",
     host: "claude",
     budget: 24_576,
-    settings: [
-      { key: "artifact.language", currentValue: "zh-CN" },
-      { key: "retrieval.promptLanguages", currentValue: "zh-CN" },
-      { key: "execution.dispatchTiers", currentValue: dispatchTiers("test-economy") },
-    ],
+    settings: languageSettings(),
     translate: async () => { order.push("translate"); return { text: "你好世界", model: "test-economy" }; },
     recall: async (query) => { order.push(`recall:${query}`); return { ok: true, result: { records: [] } }; },
   });
@@ -330,25 +339,17 @@ test("R6 invokes its independent translator before the recall call", async () =>
 
 test("R6 records a translator failure on the last session decision instead of dropping it", async (context) => {
   const directory = await stateDirectory(context, "translation-failure");
-  const settings = [
-    { key: "artifact.language", currentValue: "zh-CN" },
-    { key: "retrieval.promptLanguages", currentValue: "zh-CN" },
-    { key: "execution.dispatchTiers", currentValue: dispatchTiers("test-economy") },
-  ];
-  const result = await runSessionInjection({
+  const settings = languageSettings();
+  const result = await runSessionInjection(sessionOptions({
     prompt: "hello world",
     sessionId: "translation-failure",
     event: "UserPromptSubmit",
     host: "claude",
     stateDirectory: directory,
-    workspaceState: emptyWorkspace,
-    budget: 24_576,
-    perPromptBytes: 1_600,
     settings,
     translate: async () => ({ text: null, model: "economy", reasonCode: "UNINJECTED_MODEL_TIMEOUT" }),
     recall: recallFor([]),
-    judgeEnabled: false,
-  });
+  }));
   const session = new InjectionSessionStore({ directory }).readSession("translation-failure");
   const last = session.decisions.at(-1);
   assert.equal(last.translationFailure.reasonCode, "UNINJECTED_MODEL_TIMEOUT");
@@ -357,14 +358,9 @@ test("R6 records a translator failure on the last session decision instead of dr
 
 test("PostCompact re-emits retained L0 and pull correlation ignores failures, unrelated ids, and replay", async (context) => {
   const directory = await stateDirectory(context, "events");
-  const workspaceState = {
-    work: [{ id: "work:one", externalKey: "ONE", kind: "Story", status: "active", parentId: null, title: "One", summary: "", tombstone: false }],
-    events: [{ sequence: 1, payload: { operation: "work.created", record: { id: "work:one", status: "active" } } }],
-    conferences: [],
-    conferenceMinutes: [],
-  };
-  const start = await runSessionInjection({ prompt: "", sessionId: "compact", event: "SessionStart", stateDirectory: directory, workspaceState, budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false });
-  const compact = await runSessionInjection({ prompt: "", sessionId: "compact", event: "PostCompact", stateDirectory: directory, workspaceState, budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false });
+  const state = workspaceState([{ id: "work:one", externalKey: "ONE", kind: "Story", status: "active", parentId: null, title: "One", summary: "", tombstone: false }], [{ sequence: 1, payload: { operation: "work.created", record: { id: "work:one", status: "active" } } }]);
+  const start = await runSessionInjection(sessionOptions({ prompt: "", sessionId: "compact", event: "SessionStart", stateDirectory: directory, workspaceState: state }));
+  const compact = await runSessionInjection(sessionOptions({ prompt: "", sessionId: "compact", event: "PostCompact", stateDirectory: directory, workspaceState: state }));
   assert.equal(start.injected, true);
   assert.equal(compact.injected, true);
   const emitted = start.l0.ids[0];
@@ -378,23 +374,15 @@ test("PostCompact re-emits retained L0 and pull correlation ignores failures, un
 
 test("top-level SessionStart with a production hook payload keeps legacy L0 injection", async (context) => {
   const directory = await stateDirectory(context, "legacy-top-level");
-  const workspaceState = {
-    work: [{ id: "work:one", externalKey: "ONE", kind: "Story", status: "active", parentId: null, title: "One", summary: "", tombstone: false }],
-    events: [{ sequence: 1, payload: { operation: "work.created", record: { id: "work:one", status: "active" } } }],
-    conferences: [],
-    conferenceMinutes: [],
-  };
-  const result = await runSessionInjection({
+  const state = workspaceState([{ id: "work:one", externalKey: "ONE", kind: "Story", status: "active", parentId: null, title: "One", summary: "", tombstone: false }], [{ sequence: 1, payload: { operation: "work.created", record: { id: "work:one", status: "active" } } }]);
+  const result = await runSessionInjection(sessionOptions({
     prompt: "",
     sessionId: "legacy-top-level",
     event: "SessionStart",
     hookInput: { hook_event_name: "SessionStart", session_id: "legacy-top-level", cwd: "/repo" },
     stateDirectory: directory,
-    workspaceState,
-    budget: 24_576,
-    perPromptBytes: 1_600,
-    judgeEnabled: false,
-  });
+    workspaceState: state,
+  }));
   assert.equal(result.ok, true);
   assert.equal(result.injected, true);
   assert.equal(result.decision, "L0_CHANGED");
@@ -414,9 +402,26 @@ test("R1 boundedSearch returns hits from an explicitly bounded directory", async
 
   assert.equal(result.ok, true);
   assert.equal(result.reasonCode, "SEARCH_COMPLETED");
+  assert.equal(result.partial, false);
   assert.equal(result.nextScope, null);
   assert.deepEqual(result.matches, [{ path: file, line: 2, text: "needle is here" }]);
   const renamed = await mkdtemp(join(tmpdir(), "tcrn-renamed-container-")); context.after(() => rm(renamed, { recursive: true, force: true })); await writeFile(join(renamed, "record.txt"), "portable needle\n"); assert.equal((await boundedSearch({ query: "needle", directories: [renamed] })).reasonCode, "SEARCH_COMPLETED");
+});
+
+test("R2 boundedSearch rejects the platform container and sibling without a directory-name literal", async (context) => {
+  const container = await mkdtemp(join(tmpdir(), "tcrn-platform-arbitrary-"));
+  context.after(() => rm(container, { recursive: true, force: true }));
+  const repository = join(container, "classification", "engine-repo");
+  const sibling = join(container, "classification", "adjacent-repo");
+  await mkdir(sibling, { recursive: true });
+  const boundary = { repositoryRoot: repository };
+
+  for (const rejectedPath of [container, sibling]) {
+    const rejected = await boundedSearch({ query: "needle", directories: [rejectedPath], ...boundary });
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
+    assert.equal(rejected.rejectedPath, rejectedPath);
+  }
 });
 
 test("R1 boundedSearch refuses home scans and exposes timeout continuation", async (context) => {
@@ -472,13 +477,7 @@ test("the placement manifest is fixture-shaped and the two model wrappers are in
   const calls = [];
   const fakeSpawn = (executable, args, options) => {
     calls.push({ executable, args, options });
-    const child = new EventEmitter();
-    child.pid = process.pid;
-    child.stdin = { end() {} };
-    child.stdout = new EventEmitter();
-    child.stderr = new EventEmitter();
-    setImmediate(() => { child.stdout.emit("data", "translated"); child.emit("close", 0, null); });
-    return child;
+    return mockChild({ output: "translated" });
   };
   const translator = new UninjectedModelCall({ host: "claude", model: "economy", cwd: tmpdir(), spawnImpl: fakeSpawn });
   const judge = new UninjectedModelCall({ host: "codex", model: "economy", cwd: tmpdir(), spawnImpl: fakeSpawn });
@@ -554,20 +553,13 @@ test("419 drives the same bounded wrapper protocol through Claude and Codex path
     assert.equal(seen.args[seen.args.indexOf("--host") + 1], host);
     assert.equal(seen.options.maxBuffer, MAX_HOOK_OUTPUT_BYTES);
   }
-  const parsed = parseArgv(["--enforce-binding", "true", "--retry-pending", "true", "--judge-enabled", "false"]); assert.deepEqual([parsed.enforceBinding, parsed.retryPending, parsed.judgeEnabled], [true, true, false]);
+  const parsed = parseArgv(["--enforce-binding", "true", "--retry-pending", "true", "--judge-enabled", "false"]);
+  assert.deepEqual([parsed.enforceBinding, parsed.retryPending, parsed.judgeEnabled], [true, true, false]);
 });
 
 test("codex stdin opens with the system prompt while claude stdin stays the bare prompt", async () => {
   const bodies = [];
-  const captureSpawn = () => {
-    const child = new EventEmitter();
-    child.pid = process.pid;
-    child.stdin = { end(body) { bodies.push(body); } };
-    child.stdout = new EventEmitter();
-    child.stderr = new EventEmitter();
-    setImmediate(() => { child.stdout.emit("data", "reply"); child.emit("close", 0, null); });
-    return child;
-  };
+  const captureSpawn = () => mockChild({ onInput: (body) => bodies.push(body) });
   const codex = new UninjectedModelCall({ host: "codex", model: "economy", cwd: tmpdir(), systemPrompt: "Return only the requested answer.", spawnImpl: captureSpawn });
   const claude = new UninjectedModelCall({ host: "claude", model: "economy", cwd: tmpdir(), systemPrompt: "Return only the requested answer.", spawnImpl: captureSpawn });
   await codex.call("original prompt");
@@ -582,15 +574,7 @@ test("codex stdin opens with the system prompt while claude stdin stays the bare
 test("codex-cli model prefixes use codex for both hosts and preserve the system prompt", async () => {
   const systemPrompt = "Return only the requested answer.";
   const calls = [];
-  const captureSpawn = (executable, args, options) => {
-    const child = new EventEmitter();
-    child.pid = process.pid;
-    child.stdin = { end(body) { calls.push({ executable, args, options, body }); } };
-    child.stdout = new EventEmitter();
-    child.stderr = new EventEmitter();
-    setImmediate(() => { child.stdout.emit("data", "reply"); child.emit("close", 0, null); });
-    return child;
-  };
+  const captureSpawn = (executable, args, options) => mockChild({ onInput: (body) => calls.push({ executable, args, options, body }) });
 
   for (const host of ["claude", "codex"]) {
     const call = new UninjectedModelCall({
@@ -636,15 +620,7 @@ test("an isolated wrapper ignores a forged project hook while a deliberately de-
   try {
     await writeFile(join(project, "AGENTS.md"), "forged");
     await writeFile(join(project, "settings.json"), "forged");
-    const spawnImpl = (_executable, _args, options) => {
-      const child = new EventEmitter();
-      child.pid = process.pid;
-      child.stdin = { end() {} };
-      child.stdout = new EventEmitter();
-      child.stderr = new EventEmitter();
-      setImmediate(() => { child.stdout.emit("data", options.cwd === empty ? "safe" : "forged"); child.emit("close", 0, null); });
-      return child;
-    };
+    const spawnImpl = (_executable, _args, options) => mockChild({ output: options.cwd === empty ? "safe" : "forged" });
     const isolated = new UninjectedModelCall({ model: "economy", cwd: empty, spawnImpl });
     const deisolated = new UninjectedModelCall({ model: "economy", cwd: project, spawnImpl });
     assert.equal((await isolated.translatePrompt("prompt")).text, "safe");
@@ -657,15 +633,7 @@ test("an isolated wrapper ignores a forged project hook while a deliberately de-
 
 test("an uninjected model call fails open at ten seconds and asks only once", async () => {
   let killed = false;
-  const spawnImpl = () => {
-    const child = new EventEmitter();
-    child.pid = process.pid;
-    child.stdin = { end() {} };
-    child.stdout = new EventEmitter();
-    child.stderr = new EventEmitter();
-    child.kill = () => { killed = true; };
-    return child;
-  };
+  const spawnImpl = () => mockChild({ close: false, onKill: () => { killed = true; } });
   const call = new UninjectedModelCall({ model: "economy", cwd: tmpdir(), timeoutMs: 5, spawnImpl });
   const timedOut = await call.translatePrompt("slow");
   assert.equal(timedOut.text, null);

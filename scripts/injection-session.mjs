@@ -18,7 +18,8 @@ import {
 import { lstat as lstatAsync, readdir as readdirAsync, readFile as readFileAsync } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const INJECTION_SESSION_SCHEMA_VERSION = "tcrn.injection-session-state.v1";
 export const DEFAULT_SESSION_BUDGET = 24_576;
@@ -31,6 +32,9 @@ export const DEFAULT_SEARCH_MAX_FILES = 256;
 export const DEFAULT_SEARCH_MAX_MATCHES = 100;
 export const DEFAULT_SEARCH_MAX_DEPTH = 3;
 export const DEFAULT_SEARCH_MAX_FILE_BYTES = 1_048_576;
+
+// The supported repository is allowed; other trees below its two-level parent are not.
+export const DEFAULT_SEARCH_REPOSITORY_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // TCRN-CROSS-STORY-418: a hook payload is not a work assignment.  The three
 // values below are the minimum binding an injection is allowed to trust.  They
@@ -110,6 +114,14 @@ function searchNextScope(queue, current = null) {
   };
 }
 
+function boundaryRejected(path, repositoryRoot) {
+  const platformRoot = resolve(repositoryRoot, "../..");
+  const candidate = relative(platformRoot, resolve(path));
+  const allowed = relative(platformRoot, resolve(repositoryRoot));
+  return candidate !== allowed && !candidate.startsWith(`${allowed}${sep}`)
+    && candidate !== ".." && !candidate.startsWith(`..${sep}`);
+}
+
 function searchResult({ query, matches = [], scannedFiles = 0, partial = false, reasonCode = "SEARCH_COMPLETED", partialReason = null, nextScope = null, ...extra }) {
   return {
     ok: reasonCode !== "SEARCH_SCOPE_REQUIRED" && reasonCode !== "SEARCH_SCOPE_OUT_OF_BOUNDS",
@@ -139,6 +151,7 @@ export async function boundedSearch({
   maxMatches = DEFAULT_SEARCH_MAX_MATCHES,
   maxDepth = DEFAULT_SEARCH_MAX_DEPTH,
   maxFileBytes = DEFAULT_SEARCH_MAX_FILE_BYTES,
+  repositoryRoot = DEFAULT_SEARCH_REPOSITORY_ROOT,
 } = {}) {
   const text = typeof query === "string" ? query : String(query ?? "");
   if (text.trim().length === 0) return searchResult({ query: text, partial: true, reasonCode: "SEARCH_QUERY_REQUIRED", nextScope: null });
@@ -152,10 +165,10 @@ export async function boundedSearch({
   if ([...scopedFiles, ...scopedDirectories].some((path) => !isAbsolute(path))) {
     return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope });
   }
-  const forbiddenRoots = [resolve(homedir())];
-  const forbidden = scopedDirectories.find((path) => path === "/" || forbiddenRoots.some((root) => path === root));
+  const repository = resolve(repositoryRoot);
+  const forbidden = [...scopedFiles, ...scopedDirectories].find((path) => path === "/" || path === resolve(homedir()) || boundaryRejected(path, repository));
   if (forbidden !== undefined) {
-    return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope: { files: scopedFiles, directories: [forbidden] }, rejectedPath: forbidden });
+    return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope, rejectedPath: forbidden });
   }
   const numeric = (value, fallback, minimum) => Number.isSafeInteger(value) && value >= minimum ? value : fallback;
   const timeout = numeric(timeoutMs, DEFAULT_SEARCH_TIMEOUT_MS, 0);

@@ -162,7 +162,12 @@ test("STORY-413 final gate planning selects each top-level root once and records
   assert.throws(() => pushGateExecutionPlan(wrongChild), (error) => error.reasonCode === "GATE_CONTAINMENT_PUSH_PLAN_INVALID");
   const cyclic = { ...declaration, groups: declaration.groups.map((group) => group.id === "engine-p1" ? { ...group, contains: ["engine-p1"] } : group) };
   assert.throws(() => buildContainedExecutionPlan(cyclic), (error) => error.reasonCode === "GATE_CONTAINMENT_CYCLE");
-  assert.throws(() => containedGroupIds({ schemaVersion: "tcrn.gate-containment.v1", groups: [{ id: "root", contains: ["child"] }, { id: "child", contains: ["root"] }] }, "root"), (error) => error.reasonCode === "GATE_CONTAINMENT_CYCLE");
+  const assertDirectCycle = (groups, target) => assert.throws(
+    () => containedGroupIds({ schemaVersion: "tcrn.gate-containment.v1", groups }, "root"),
+    (error) => error.reasonCode === "GATE_CONTAINMENT_CYCLE" && error.message === target,
+  );
+  assertDirectCycle([{ id: "root", contains: ["root"] }], "root");
+  assertDirectCycle([{ id: "root", contains: ["child"] }, { id: "child", contains: ["root"] }], "root");
 });
 
 test("STORY-350 red locator runs every contained child separately and returns each conclusion", async () => {

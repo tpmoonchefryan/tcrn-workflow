@@ -20,7 +20,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { DEFAULT_STATE_DIRECTORY, acknowledgeInjection } from "./injection-session.mjs";
-import { INJECTION_PROTOCOL_VERSION, MAX_INJECTION_PROTOCOL_BYTES, parseInjectionProtocol } from "./knowledge-inject.mjs";
+import { INJECTION_PROTOCOL_VERSION, MAX_INJECTION_PROTOCOL_BYTES, hasChildAgentMarker, parseInjectionProtocol } from "./knowledge-inject.mjs";
 
 export const PLATFORM_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 export const INJECT_SCRIPT = resolve(dirname(fileURLToPath(import.meta.url)), "knowledge-inject.mjs");
@@ -162,7 +162,7 @@ function runInjectAttempt(input, { stateDirectory, host, retryPending = false, s
     "--event", event,
     "--session-id", String(sessionId),
     "--hook-input", boundedHookInput(input),
-    ...(input?.hook_event_name === "SubagentStart" || binding.role !== undefined || binding.workId !== undefined || binding.pack !== undefined ? ["--enforce-binding", "true"] : []),
+    ...(input?.hook_event_name === "SubagentStart" || hasChildAgentMarker(input) || binding.role !== undefined || binding.workId !== undefined || binding.pack !== undefined ? ["--enforce-binding", "true"] : []),
     "--delivery-mode", "pending",
   ];
   if (binding.role !== undefined) argv.push("--role", String(binding.role));
