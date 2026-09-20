@@ -3,6 +3,15 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 1.1.1 — patch candidate
+
+This append-only patch repairs same-process stale output-session recovery by
+serialising recovery per canonical repository while preserving the durable
+inter-process claim protocol. It also corrects the install-surface contract in
+the next Helper release: canonical Codex and Claude Code copies are the only
+required live placements, and the legacy Codex location is reported as orphan
+history. Immutable v1.1.0 and v1.0.2 publications remain unchanged.
+
 ## 1.1.0 — unpublished candidate
 
 This candidate carries the complete unpublished capability delta since 1.0.1,

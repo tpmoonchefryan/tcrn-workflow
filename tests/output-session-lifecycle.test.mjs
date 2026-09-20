@@ -1598,6 +1598,22 @@ test("two and three concurrent dead-owner recoverers permit one winner and leave
   }
 });
 
+test("same-process recovery guard makes the local loser causal, clears after CLEAN, and permits immediate reacquisition", async (context) => {
+  const { root, lock } = await deadOwnerLock(context);
+  // Calling the second recoverer before awaiting the first is the deterministic
+  // overlap: the first call reserves the canonical-repository guard before its
+  // first filesystem await, so the second local caller cannot enter claim
+  // mutation or turn ordinary contention into CLAIM_CHANGED.
+  const winner = recoverStaleOutputSessionLock(root);
+  const loser = recoverStaleOutputSessionLock(root);
+  await assert.rejects(loser, expectReason("OUTPUT_SESSION_RECOVERY_CONCURRENT"));
+  assert.equal((await winner).reasonCode, "OUTPUT_SESSION_STALE_LOCK_RECOVERED");
+  await assertRecoveryStateClean(root);
+  assert.equal(await withExclusiveOutputSession(root, async () => "acquired"), "acquired");
+  await assertRecoveryStateClean(root);
+  await assert.rejects(lstat(lock), { code: "ENOENT" });
+});
+
 test("repeated two-and-three recoverer stress records only causal losers and always reaches CLEAN", async (context) => {
   const iterationsPerWidth = 12;
   const distribution = new Map();
