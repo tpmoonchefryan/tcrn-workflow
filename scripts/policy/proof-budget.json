@@ -482,7 +482,7 @@
       "id": "TCRN-CROSS-SUB-167-D7-r7-measured-ratio-20260919",
       "recordedAt": "2026-09-19",
       "ratio": 2.5109,
-      "rationale": "Owner minutes:39ea684728c4e836a8f6754c D3 pre-authorize this INIT-051 batch to move a touched proof/product hard line to the exact measured value in the same commit, with no reserve and a cited rationale. After the R7 D4 empty-boundary fix and focused regression test, reportBudget measured proofLines=69663 and productLines=27748, ratio=2.5106; verifyScriptCount=14/cap=14, claimCount=9/cap=9, and coreSourceLines=23815/cap=23815 remain unchanged. This exact ratio-only update preserves all effective tests and assertions and does not change the denominator, roster, waiver, timeout, or any unrelated cap."
+      "rationale": "Owner minutes:39ea684728c4e836a8f6754c D3 pre-authorize this INIT-051 batch to move a touched proof/product hard line to the exact measured value in the same commit, with no reserve and a cited rationale. After the R7 D4 empty-boundary fix and focused regression test, reportBudget measured proofLines=69673 and productLines=27748, ratio=2.5109; verifyScriptCount=14/cap=14, claimCount=9/cap=9, and coreSourceLines=23815/cap=23815 remain unchanged. This exact ratio-only update preserves all effective tests and assertions and does not change the denominator, roster, waiver, timeout, or any unrelated cap."
     }
   ],
   "surfaceCaps": {
