@@ -166,6 +166,38 @@ test("STORY-371: host-render drift is a named platform check", async (context) =
   assert.deepEqual(check.drift, [{ path: ".claude/agents/implement.md" }]);
 });
 
+test("INC-351: doctor compares host-render against the managed engine root", async (context) => {
+  const fixture = await completeInstallFixture(context, { engineVersion: "1.1.2", helperVersion: "1.1.2" });
+  const hostRenderSettings = [
+    { key: "execution.dispatchMode", value: "frontier" },
+    { key: "execution.dispatchTiers", value: JSON.stringify({ codex: {
+      flagship: { model: "codex-flagship", effort: "max" },
+      main: { model: "codex-main", effort: "high" },
+      economy: { model: "codex-economy", effort: "low" },
+    } }) },
+  ];
+  const managed = await inspectHostRenderDrift(fixture.root, {
+    homeRoot: fixture.home,
+    manifest: INSTALL_MANIFEST,
+    hostRenderSettings,
+    hostRenderHosts: ["codex"],
+    hostRenderScope: "hooks-only",
+  });
+  assert.equal(managed.ok, true, JSON.stringify(managed));
+
+  const developmentRoot = join(fixture.root, "TCRN Platform", "tcrn-workflow");
+  const development = await inspectHostRenderDrift(fixture.root, {
+    homeRoot: fixture.home,
+    manifest: INSTALL_MANIFEST,
+    hostRenderSettings,
+    hostRenderHosts: ["codex"],
+    hostRenderRepoRoot: developmentRoot,
+    hostRenderScope: "hooks-only",
+  });
+  assert.equal(development.ok, false, "the development checkout must not silently stand in for the managed engine");
+  assert.equal(development.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
+});
+
 test("TCRN-CROSS-STORY-429: doctor uses the explicitly selected hooks-only projection", async (context) => {
   const root = await fixture(context);
   const repoRoot = join(root, "TCRN Platform", "tcrn-workflow");
@@ -362,11 +394,12 @@ test("S259 bridge syntax skips hidden directories and the workspace container", 
   assert.equal(result.checks.find((item) => item.name === "bridgeSyntax").ok, true);
 });
 
-async function completeInstallFixture(context, { engineVersion = "0.11.15", helperVersion = "0.11.15", harness = true, roster = syntheticRoster() } = {}) {
+async function completeInstallFixture(context, { engineVersion = "0.11.15", helperVersion = "0.11.15", helperPin = "Targets TCRN Workflow", harness = true, roster = syntheticRoster() } = {}) {
   const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-init033-doctor-")));
   context.after(() => rm(base, { recursive: true, force: true }));
   const root = join(base, "platform");
   const home = join(base, "home");
+  const managedRepoRoot = join(home, "." + "tcrn-workflow", "tcrn-workflow");
   await mkdir(join(root, ".tcrn-workspace", "cross-project", "workspace"), { recursive: true });
   await mkdir(home, { recursive: true });
   // STORY-300: a complete container carries the acceptance-lane roster. INC-234: and its
@@ -423,13 +456,16 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
         const handler = join(fixtureRepo, entry.handler);
         await mkdir(join(handler, ".."), { recursive: true });
         await writeFile(handler, "export {}\n");
+        const managedHandler = join(managedRepoRoot, entry.handler);
+        await mkdir(join(managedHandler, ".."), { recursive: true });
+        await writeFile(managedHandler, "export {}\n");
       }
     }
     await writeFile(join(root, ".claude", "settings.json"), `${JSON.stringify({
       hooks: claudeHookSettings(),
       permissions: { deny: GUARDED_TREES.map((tree) => `Write(//${tree}/**)`) },
     }, null, 2)}\n`);
-    applyHostHarness("codex", root, { repoRoot: fixtureRepo });
+    applyHostHarness("codex", root, { repoRoot: managedRepoRoot });
   }
   await writeFile(join(root, "AGENTS.md"), `${topology}fixture\n`);
   await writeFile(join(root, "CLAUDE.md"), "@AGENTS.md\n");
@@ -437,7 +473,7 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   await writeFile(join(home, ".tcrn-workflow", "tcrn-workflow", "package.json"), `${JSON.stringify({ version: engineVersion })}\n`);
   for (const host of [".agents", ".claude"]) {
     await mkdir(join(home, host, "skills", "tcrn-workflow-helper"), { recursive: true });
-    await writeFile(join(home, host, "skills", "tcrn-workflow-helper", "SKILL.md"), `Targets TCRN Workflow \`v${helperVersion}\`\n`);
+    await writeFile(join(home, host, "skills", "tcrn-workflow-helper", "SKILL.md"), `${helperPin} \`v${helperVersion}\`\n`);
   }
   for (const host of ["agents", "claude"]) {
     await writeFile(join(home, [".tcrn", "workflow"].join("-"), `installed-copy-${host}.json`), JSON.stringify({ version: `v${helperVersion}` }));
@@ -450,6 +486,34 @@ test("S264 four install-completeness legs are green on a synthetic full fixture"
   const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(result.ok, true);
   assert.deepEqual(["helperCopies", "installWiring", "hooks", "deploymentFreshness"].map((name) => result.checks.find((item) => item.name === name).ok), [true, true, true, true]);
+});
+
+test("INC-351: freshness accepts the three closed Helper pin forms", async (context) => {
+  const forms = ["Supports TCRN Workflow", "Targets TCRN Workflow", "Targets the TCRN Workflow"];
+  for (const helperPin of forms) {
+    const fixture = await completeInstallFixture(context, { engineVersion: "1.1.2", helperVersion: "1.1.2", helperPin });
+    const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
+    const freshness = result.checks.find((item) => item.name === "deploymentFreshness");
+    assert.equal(freshness.ok, true, `${helperPin}: ${JSON.stringify(freshness)}`);
+    assert.equal(freshness.versions.engineVersion, "1.1.2");
+    assert.deepEqual(freshness.versions.helpers.map((helper) => helper.version), ["1.1.2", "1.1.2"]);
+  }
+});
+
+test("INC-351: missing, malformed, and conflicting Helper pins are red", async (context) => {
+  const cases = [
+    { helperPin: "Targets the Wrong Workflow", expected: "PLATFORM_DEPLOYMENT_VERSION_MISSING" },
+    { helperPin: "Targets the TCRN Workflow `v`", expected: "PLATFORM_DEPLOYMENT_VERSION_MISSING" },
+    { helperPin: "Targets the TCRN Workflow v1.1.2", expected: "PLATFORM_DEPLOYMENT_VERSION_MISSING" },
+    { helperPin: "Supports TCRN Workflow `v1.1.2`\nTargets TCRN Workflow `v1.1.3`", expected: "PLATFORM_DEPLOYMENT_VERSION_MISSING" },
+  ];
+  for (const testCase of cases) {
+    const fixture = await completeInstallFixture(context, { engineVersion: "1.1.2", helperVersion: "1.1.2", helperPin: testCase.helperPin });
+    const result = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
+    const freshness = result.checks.find((item) => item.name === "deploymentFreshness");
+    assert.equal(freshness.ok, false, `${testCase.helperPin}: ${JSON.stringify(freshness)}`);
+    assert.equal(freshness.reasonCode, testCase.expected);
+  }
 });
 
 test("S264 each install-completeness leg has a distinct synthetic red reason", async (context) => {

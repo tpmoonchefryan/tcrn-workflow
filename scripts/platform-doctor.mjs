@@ -1345,7 +1345,25 @@ export async function inspectHostRenderDrift(root, options) {
   }
   if (!Array.isArray(settings)) return check("hostRenderDrift", true, { comparable: false, reasonCode: "PLATFORM_HOST_RENDER_UNREADABLE", source: "dispatch settings + host-render projection" });
   const hosts = Array.isArray(options.hostRenderHosts) && options.hostRenderHosts.length > 0 ? options.hostRenderHosts : ["claude-code", "codex"];
-  const repoRoot = options.hostRenderRepoRoot ?? join(root, "TCRN Platform", "tcrn-workflow");
+  // The renderer is installed under the managed engine root.  The development
+  // checkout is a separate project entry in the manifest and must never become an
+  // implicit comparison source: doing so made the doctor disagree with the writer
+  // after a managed replacement.  Tests may still provide an explicit root so a
+  // synthetic platform can exercise the projection without a managed installation.
+  let repoRoot = options.hostRenderRepoRoot ?? null;
+  if (repoRoot === null) {
+    const manifest = options.manifest ?? INSTALL_MANIFEST;
+    const homeRoot = options.homeRoot ?? process.env.HOME ?? "";
+    const engineEntry = manifest.items?.find((entry) => entry.id === "machine.workflow-engine");
+    const engineRoot = engineEntry === undefined ? null : expandTemplate(engineEntry.pathTemplate, root, homeRoot);
+    repoRoot = engineRoot === null ? null : join(engineRoot, "tcrn-workflow");
+  }
+  if (repoRoot === null) {
+    return check("hostRenderDrift", false, {
+      reasonCode: "PLATFORM_HOST_RENDER_REPO_UNRESOLVED",
+      source: "install-manifest machine.workflow-engine",
+    });
+  }
   const scope = options.hostRenderScope ?? "hooks-only";
   const rows = [];
   for (const host of hosts) {
@@ -1832,7 +1850,11 @@ async function inspectHookExecutability(platformRoot, manifest) {
 }
 
 function versionFromSkill(text) {
-  const versions = [...text.matchAll(/(?:Supports|Targets) TCRN Workflow `v([^`]+)`/gu)].map((match) => match[1]);
+  // Keep this grammar closed: the Helper may use either historical wording or
+  // the truthful article-bearing wording, but no other subject/article form is
+  // an Engine pin.  Versions are non-empty, whitespace-free backtick payloads;
+  // every accepted occurrence must agree exactly.
+  const versions = [...text.matchAll(/\b(?:Supports TCRN Workflow|Targets TCRN Workflow|Targets the TCRN Workflow) `v([^`\s]+)`/gu)].map((match) => match[1]);
   return versions.length === 0 || new Set(versions).size !== 1 ? null : versions[0];
 }
 
@@ -2814,7 +2836,7 @@ export async function inspectPlatform(platformRootArgument, options = {}) {
       await inspectEngineFloorSatisfied(root, homeRoot, manifest, options),
       await inspectEngineCapabilitySurface(root, homeRoot, manifest, options),
       await inspectHelperSettingsCoverage(root, homeRoot, manifest, options),
-      await inspectHostRenderDrift(root, options),
+      await inspectHostRenderDrift(root, { ...options, manifest, homeRoot }),
       await inspectTrustArchiveFreshness(root, homeRoot, manifest, options),
       await inspectLaunchdDuty({ ...options, platformRoot: root, homeRoot }, manifest),
       await inspectHarnessSurface(root, manifest),
