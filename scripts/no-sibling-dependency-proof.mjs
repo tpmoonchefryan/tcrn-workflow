@@ -62,7 +62,7 @@ export class SiblingDependencyInputError extends Error {
   }
 }
 
-const HELPER_SKILL_PROBE = "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md";
+const HELPER_SKILL_PROBE = /^probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive\.json;state=state\.json;marker=installed-copy-[^;]+\.json;entry=SKILL\.md$/u;
 
 function ownPackageIdentity(repoRoot) {
   try {
@@ -105,12 +105,12 @@ export function canonicalSiblingRoster({ repoRoot = REPO_ROOT, manifest, manifes
   const self = ownPackageIdentity(repoRoot);
   if (!projectNames.includes(self)) throw new SiblingDependencyInputError(`repository identity ${self} is absent from the install-manifest project roster`);
 
-  const helperItems = resolvedManifest.items.filter((item) => item?.acceptanceProbe === HELPER_SKILL_PROBE);
+  const helperItems = resolvedManifest.items.filter((item) => typeof item?.acceptanceProbe === "string" && HELPER_SKILL_PROBE.test(item.acceptanceProbe));
   const helperNames = helperItems.map((item) => {
     const match = /(?:^|\/)tcrn-workflow-helper\/?$/u.exec(item.pathTemplate);
     return match === null ? null : "tcrn-workflow-helper";
   });
-  if (helperItems.length !== 3 || helperNames.some((name) => name === null) || new Set(helperNames).size !== 1) {
+  if (helperItems.length !== 2 || helperNames.some((name) => name === null) || new Set(helperNames).size !== 1) {
     throw new SiblingDependencyInputError("install-manifest Helper identity is missing, invalid, or ambiguous");
   }
   const helperIdentity = helperNames[0];
