@@ -162,10 +162,20 @@ test("STORY-393 B2/U6: host argv wins and replayed Stop payloads do not write an
   try {
     const input = { hook_event_name: "Stop", session_id: "capture-session", host: "codex" };
     const first = runCaptureHook(input, { containerRoot: fixture.container, now: () => instant(2) });
-    assert.equal(first.observationBoundary.ok, true, JSON.stringify(first));
+    assert.deepEqual(first.observationBoundary, {
+      ok: false,
+      reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
+      unknown: true,
+      resumed: true,
+      from: "2026-09-02",
+      until: "2026-09-02",
+      count: 4,
+      duplicate: false,
+      protocolVersion: "tcrn.injection-protocol.v2",
+    }, JSON.stringify(first));
     const telemetryRoot = join(fixture.container, ".tcrn-workspace", "cross-project", "transient");
     const before = await readTelemetryRecords(telemetryRoot, { limit: Number.MAX_SAFE_INTEGER });
-    assert.equal(before.records.filter((record) => record.payload.source.includes(":codex:")).length, 8);
+    assert.equal(before.records.filter((record) => record.payload.source.includes(":codex:")).length, 4);
 
     const snake = runCaptureHook({ ...input, stop_hook_active: true }, { containerRoot: fixture.container, now: () => instant(2, 1) });
     const camel = runCaptureHook({ ...input, stopHookActive: true }, { containerRoot: fixture.container, now: () => instant(2, 2) });

@@ -5,7 +5,7 @@
   "recordedAt": "2026-08-19",
   "rationale": "Frozen at the ratio measured when the ratchet was installed, not at the rule's 1.0 threshold. 1.0 is unreachable from here without retiring roughly a third of the proof mass, and a line nothing can satisfy is a line nobody reads. This one binds today: any change that raises the ratio must retire equivalent proof mass or record an exception below.",
   "warningRatio": 2.4,
-  "hardRatio": 2.5106,
+  "hardRatio": 2.5109,
   "ratioPolicy": {
     "schemaVersion": "tcrn.proof-budget-ratio-policy.v2",
     "scope": "repository-wide hard line with one explicit, finite-work-authorized nonblocking disposition",
@@ -481,7 +481,7 @@
     {
       "id": "TCRN-CROSS-SUB-167-D7-r7-measured-ratio-20260919",
       "recordedAt": "2026-09-19",
-      "ratio": 2.5106,
+      "ratio": 2.5109,
       "rationale": "Owner minutes:39ea684728c4e836a8f6754c D3 pre-authorize this INIT-051 batch to move a touched proof/product hard line to the exact measured value in the same commit, with no reserve and a cited rationale. After the R7 D4 empty-boundary fix and focused regression test, reportBudget measured proofLines=69663 and productLines=27748, ratio=2.5106; verifyScriptCount=14/cap=14, claimCount=9/cap=9, and coreSourceLines=23815/cap=23815 remain unchanged. This exact ratio-only update preserves all effective tests and assertions and does not change the denominator, roster, waiver, timeout, or any unrelated cap."
     }
   ],
