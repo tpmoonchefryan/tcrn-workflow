@@ -81,7 +81,7 @@ test("INC-258 install wiring accepts the stopped backup removal", async (context
 test("INC-258 install manifest matches the post-removal surface and rejects restored receipts", async (context) => {
   const fixture = await createInstallFixture(context, { skipItems: REMOVED_IDS });
   assertInstallManifestComplete(INSTALL_MANIFEST);
-  assert.equal(INSTALL_MANIFEST.items.length, 21);
+  assert.equal(INSTALL_MANIFEST.items.length, 20);
   assert.deepEqual(REMOVED_IDS.filter((id) => INSTALL_MANIFEST.items.some((entry) => entry.id === id)), []);
   assert.deepEqual(REMOVED_IDS.filter((id) => INSTALL_MANIFEST_REQUIRED_ITEM_IDS.includes(id)), []);
   const restored = {

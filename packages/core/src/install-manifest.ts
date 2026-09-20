@@ -106,9 +106,11 @@ export const INSTALL_MANIFEST_ITEMS: readonly InstallManifestItem[] = Object.fre
   // session is opened, which is a stronger guarantee than the per-project copies were.
   item("machine.claude-settings", "machine", "claude", "<HOME>/.claude/settings.json", "user-guided", "probe:regular-file"),
   item("machine.codex-config", "machine", "codex", "<HOME>/.codex/config.toml", "user-guided", "probe:regular-file"),
-  item("machine.claude-skill", "machine", "claude", "<HOME>/.claude/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md"),
-  item("machine.codex-skill", "machine", "codex", "<HOME>/.codex/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md"),
-  item("machine.agents-skill", "machine", "shared", "<HOME>/.agents/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;entry=SKILL.md"),
+  item("machine.claude-skill", "machine", "claude", "<HOME>/.claude/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;marker=installed-copy-claude.json;entry=SKILL.md"),
+  // Codex's universal user Skill root is ~/.agents/skills.  The older
+  // ~/.codex/skills copy is legacy history and is deliberately not an install
+  // obligation; skills@1.7.0 owns the canonical placement here.
+  item("machine.agents-skill", "machine", "codex", "<HOME>/.agents/skills/tcrn-workflow-helper", "user-guided", "probe:helper-skill-digest;source=trusted-archive-state;archive=skill-archive.json;state=state.json;marker=installed-copy-agents.json;entry=SKILL.md"),
   item("machine.workflow-engine", "machine", "shared", "<HOME>/.tcrn-workflow", "user-guided", "probe:engine-version"),
   item("machine.trust-archive", "machine", "shared", "<HOME>/.tcrn-workflow/skill-archive.json", "user-guided", "probe:trust-archive-freshness"),
   item("machine.local-snapshot-artifacts", "machine", "shared", "<PLATFORM_ROOT>/.tcrn-artifacts/chain-snapshots", "user-guided", "probe:regular-directory"),
@@ -135,7 +137,6 @@ const REQUIRED_ITEM_ID_CATALOG = [
   "machine.claude-settings",
   "machine.claude-skill",
   "machine.codex-config",
-  "machine.codex-skill",
   "machine.agents-skill",
   "machine.launchd-local-snapshot",
   "machine.local-snapshot-artifacts",

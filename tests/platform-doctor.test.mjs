@@ -435,9 +435,12 @@ async function completeInstallFixture(context, { engineVersion = "0.11.15", help
   await writeFile(join(root, "CLAUDE.md"), "@AGENTS.md\n");
   await mkdir(join(home, ".tcrn-workflow", "tcrn-workflow"), { recursive: true });
   await writeFile(join(home, ".tcrn-workflow", "tcrn-workflow", "package.json"), `${JSON.stringify({ version: engineVersion })}\n`);
-  for (const host of [".agents", ".claude", ".codex"]) {
+  for (const host of [".agents", ".claude"]) {
     await mkdir(join(home, host, "skills", "tcrn-workflow-helper"), { recursive: true });
-    await writeFile(join(home, host, "skills", "tcrn-workflow-helper", "SKILL.md"), `Supports TCRN Workflow \`v${helperVersion}\`\n`);
+    await writeFile(join(home, host, "skills", "tcrn-workflow-helper", "SKILL.md"), `Targets TCRN Workflow \`v${helperVersion}\`\n`);
+  }
+  for (const host of ["agents", "claude"]) {
+    await writeFile(join(home, [".tcrn", "workflow"].join("-"), `installed-copy-${host}.json`), JSON.stringify({ version: `v${helperVersion}` }));
   }
   return { root, home };
 }
@@ -464,7 +467,7 @@ test("S264 each install-completeness leg has a distinct synthetic red reason", a
   assert.equal(staleRed.reasonCode, "PLATFORM_DEPLOYMENT_STALE");
 
   const helper = await completeInstallFixture(context);
-  await rm(join(helper.home, ".codex", "skills", "tcrn-workflow-helper"), { recursive: true, force: true });
+  await rm(join(helper.home, ".agents", "skills", "tcrn-workflow-helper"), { recursive: true, force: true });
   const helperRed = await inspectPlatform(helper.root, { homeRoot: helper.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT });
   assert.equal(helperRed.reasonCode, "PLATFORM_HELPER_COPIES_INCOMPLETE");
 
@@ -682,13 +685,11 @@ test("S270 helper copies reject a declared digest mismatch", async (context) => 
   const fixture = await completeInstallFixture(context);
   const agents = join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "SKILL.md");
   const claude = join(fixture.home, ".claude", "skills", "tcrn-workflow-helper", "SKILL.md");
-  const codex = join(fixture.home, ".codex", "skills", "tcrn-workflow-helper", "SKILL.md");
   const digests = {
     "machine.agents-skill": createHash("sha256").update(await readFile(agents)).digest("hex"),
     "machine.claude-skill": createHash("sha256").update(await readFile(claude)).digest("hex"),
-    "machine.codex-skill": createHash("sha256").update(await readFile(codex)).digest("hex"),
   };
-  await writeFile(codex, "tampered synthetic helper\n");
+  await writeFile(agents, "tampered synthetic helper\n");
   const result = await inspectPlatform(fixture.root, {
     homeRoot: fixture.home,
     launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT,
@@ -696,7 +697,7 @@ test("S270 helper copies reject a declared digest mismatch", async (context) => 
     helperSkillDigests: digests,
   });
   assert.equal(result.reasonCode, "PLATFORM_HELPER_COPY_DIGEST_MISMATCH");
-  assert.equal(result.checks.find((item) => item.name === "helperCopies").mismatched[0].id, "machine.codex-skill");
+  assert.equal(result.checks.find((item) => item.name === "helperCopies").mismatched[0].id, "machine.agents-skill");
 });
 
 test("S270 lstat plus file-kind probing rejects a directory in a file residence", async (context) => {
@@ -744,7 +745,7 @@ test("INC-161 helper digest probe resolves from the trusted archive/state and fa
   assert.equal(greenCheck.source, "trusted-archive-state");
   assert.match(greenCheck.archiveDigest, /^[a-f0-9]{64}$/u);
 
-  await writeFile(join(fixture.home, ".codex", "skills", "tcrn-workflow-helper", "SKILL.md"), "tampered trusted helper\n");
+  await writeFile(join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "SKILL.md"), "tampered trusted helper\n");
   const tampered = await inspectPlatform(fixture.root, options);
   assert.equal(tampered.reasonCode, "PLATFORM_HELPER_COPY_DIGEST_MISMATCH");
 
@@ -767,7 +768,7 @@ test("S273 trust archive freshness compares the archive to all installed consume
   const skill = await readFile(skillPath);
   const entry = { path: "SKILL.md", contentBase64: skill.toString("base64"), sha256: createHash("sha256").update(skill).digest("hex") };
   await writeFile(join(fixture.home, ".tcrn-workflow", "skill-archive.json"), JSON.stringify({ schemaVersion: "tcrn.workflow.helper.archive.v1", entries: [entry] }));
-  // TCRN-CROSS-INC-272: write markers for all three known hosts (agents, claude, codex). Previously only claude and codex were checked.
+  // The canonical roster is agents + claude; the old codex marker is orphan history.
   for (const host of ["agents", "claude", "codex"]) await writeFile(join(fixture.home, ".tcrn-workflow", `installed-copy-${host}.json`), JSON.stringify({ version: "v0.11.14" }));
   await writeFile(join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "extra.md"), "drift\n");
   const red = await inspectPlatform(fixture.root, { homeRoot: fixture.home, launchdLabels: [launchdLabel], acceptanceHeadCommit: FIXTURE_COMMIT, enforceTrustArchive: true });
