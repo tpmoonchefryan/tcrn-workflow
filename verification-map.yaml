@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "09a77606651f27407257125367e8afbe0bb1ce6845c23cb9b5f53b3b7430ca0d",
+      "fixtureDigest": "f1c2b812ac62e7b3f1c1f673882537403cf7ef4c3333716dcff3676f2a703237",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -56,7 +56,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "da9d7730b95d4c82e7ea463d73155814ef5202cc5e4566978596b2d7591769d7",
+      "fixtureDigest": "3872cd128e93ce794b45e52e7be9001b3a5e406613e6a1d41cda8786aa8f057a",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -211,7 +211,7 @@
         "package.json",
         "pnpm-lock.yaml"
       ],
-      "fixtureDigest": "057907144c332298f7bf3f1193779da47a1d3a656fb9880d1e4e722cdffd2a69",
+      "fixtureDigest": "8b47fcd33f634d1523cd1db054e0ea8fe5cc3186ad8f97744781b7a2e83601a2",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
