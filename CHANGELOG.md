@@ -3,6 +3,14 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 1.1.2 — patch candidate
+
+This append-only patch closes the optional-article Helper freshness grammar and
+corrects platform-doctor host-render comparison to use the managed Engine
+checkout declared by `machine.workflow-engine`. The immutable 1.1.1 Engine and
+1.0.3 Helper publications remain unchanged; the paired 1.1.2/1.0.4 release is
+published only after exact-commit CI and independent asset verification.
+
 ## 1.1.1 — patch candidate
 
 This append-only patch repairs same-process stale output-session recovery by
