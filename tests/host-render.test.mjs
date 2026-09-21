@@ -42,8 +42,8 @@ async function scratch(prefix) {
   return realpath(await mkdtemp(join(tmpdir(), prefix)));
 }
 
-function generatedHooks(host) {
-  return host === "codex" ? codexHookDocument(repoRoot).hooks : claudeHookSettings();
+function generatedHooks(host, containerRoot) {
+  return host === "codex" ? codexHookDocument(repoRoot, containerRoot).hooks : claudeHookSettings();
 }
 
 function hookFilePath(host) {
@@ -82,7 +82,7 @@ test("STORY-371: Claude rendering preserves user fields, writes tier fields, and
   assert.equal(renderedSettings.custom, "keep");
   assert.equal(renderedSettings.hooks.Other[0].hooks[0].command, "user-hook");
   assert.equal(renderedSettings.hooks.Stop.length, 3);
-  assert.deepEqual(renderedSettings.hooks.PostToolUse, [{ hooks: [{ type: "command", command: `if [ -f "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs" ]; then node "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs" --host claude; fi`, timeout: 30 }] }]);
+  assert.deepEqual(renderedSettings.hooks.PostToolUse, [{ hooks: [{ type: "command", command: `if [ -f "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs" ]; then node "\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs" --container-root "\${CLAUDE_PROJECT_DIR}" --host claude; fi`, timeout: 30 }] }]);
   const agent = await readFile(join(root, ".claude", "agents", "implement.md"), "utf8");
   assert.match(agent, /description: user-owned/u);
   assert.match(agent, /model: claude-code-economy/u);
@@ -120,12 +120,12 @@ test("STORY-371: Codex rendering changes only root model keys and generated hook
   const hooks = JSON.parse(await readFile(join(root, ".codex", "hooks.json"), "utf8"));
   assert.equal(hooks.custom, true);
   assert.equal(hooks.hooks.User[0].hooks[0].command, "user-hook");
-  assert.deepEqual(hooks.hooks.PreToolUse, codexHookDocument(repoRoot).hooks.PreToolUse);
-  assert.deepEqual(hooks.hooks.SessionStart, codexHookDocument(repoRoot).hooks.SessionStart);
-  assert.deepEqual(hooks.hooks.PostToolUse, [{ hooks: [{ type: "command", command: `node ${JSON.stringify(join(repoRoot, "scripts/knowledge-inject-hook.mjs"))} --host codex`, timeout: 30 }] }]);
-  assert.deepEqual(hooks.hooks.Stop, codexHookDocument(repoRoot).hooks.Stop);
-  assert.deepEqual(hooks.hooks.SubagentStart, codexHookDocument(repoRoot).hooks.SubagentStart);
-  assert.deepEqual(hooks.hooks.SubagentStop, codexHookDocument(repoRoot).hooks.SubagentStop);
+  assert.deepEqual(hooks.hooks.PreToolUse, codexHookDocument(repoRoot, root).hooks.PreToolUse);
+  assert.deepEqual(hooks.hooks.SessionStart, codexHookDocument(repoRoot, root).hooks.SessionStart);
+  assert.deepEqual(hooks.hooks.PostToolUse, [{ hooks: [{ type: "command", command: `node ${JSON.stringify(join(repoRoot, "scripts/knowledge-inject-hook.mjs"))} --container-root ${JSON.stringify(root)} --host codex`, timeout: 30 }] }]);
+  assert.deepEqual(hooks.hooks.Stop, codexHookDocument(repoRoot, root).hooks.Stop);
+  assert.deepEqual(hooks.hooks.SubagentStart, codexHookDocument(repoRoot, root).hooks.SubagentStart);
+  assert.deepEqual(hooks.hooks.SubagentStop, codexHookDocument(repoRoot, root).hooks.SubagentStop);
   const green = await inspectHostRenderDrift({ host: "codex", settings: config, root, repoRoot });
   assert.equal(green.ok, true);
   assert.equal(green.drift.length, 0);
@@ -154,7 +154,7 @@ test("TCRN-CROSS-STORY-417: exact legacy telemetry groups migrate in place on bo
   for (const host of ["claude-code", "codex"]) {
     const root = await scratch(`tcrn-host-render-legacy-${host}-`);
     t.after(() => rm(root, { recursive: true, force: true }));
-    const generated = generatedHooks(host);
+    const generated = generatedHooks(host, root);
     const existingHooks = Object.fromEntries(Object.entries(generated).map(([event, groups]) => [
       event,
       groups.map((group) => event === "SubagentStart" || event === "SubagentStop" ? withoutHostSuffix(group, host) : structuredClone(group)),
@@ -244,7 +244,7 @@ test("TCRN-CROSS-STORY-417: same-script user groups, metadata, timeout and order
   for (const host of ["claude-code", "codex"]) {
     const root = await scratch(`tcrn-host-render-user-group-${host}-`);
     t.after(() => rm(root, { recursive: true, force: true }));
-    const generated = generatedHooks(host);
+    const generated = generatedHooks(host, root);
     const userGroup = {
       matcher: "UserOwnedSameScript",
       timeout: 37,
@@ -269,7 +269,7 @@ test("TCRN-CROSS-STORY-417: duplicate exact managed identities refuse before wri
     for (const scope of ["full", "hooks-only"]) {
       const root = await scratch(`tcrn-host-render-duplicate-${host}-${scope}-`);
       t.after(() => rm(root, { recursive: true, force: true }));
-      const generated = generatedHooks(host);
+      const generated = generatedHooks(host, root);
       const hooks = structuredClone(generated);
       hooks.SubagentStart = [structuredClone(hooks.SubagentStart[0]), structuredClone(hooks.SubagentStart[0]), ...hooks.SubagentStart.slice(1)];
       const existing = new Map([[hookFilePath(host), JSON.stringify({ hooks })]]);
@@ -283,7 +283,7 @@ test("TCRN-CROSS-STORY-417: generated event shape is not coerced when the target
   for (const value of [null, {}, "wrong", 4, true]) {
     const root = await scratch("tcrn-host-render-shape-");
     t.after(() => rm(root, { recursive: true, force: true }));
-    const hooks = { ...generatedHooks("codex"), SubagentStart: value };
+    const hooks = { ...generatedHooks("codex", root), SubagentStart: value };
     const existing = new Map([[".codex/hooks.json", JSON.stringify({ hooks })]]);
     assert.throws(() => renderHostPlan({ host: "codex", settings: settings("codex"), root, repoRoot, existing }), (error) => error?.reasonCode === "HOST_RENDER_TARGET_INVALID");
   }
@@ -293,7 +293,7 @@ test("TCRN-CROSS-STORY-417: duplicate nonmatching user groups and unknown event 
   for (const host of ["claude-code", "codex"]) {
     const root = await scratch(`tcrn-host-render-structural-${host}-`);
     t.after(() => rm(root, { recursive: true, force: true }));
-    const generated = generatedHooks(host);
+    const generated = generatedHooks(host, root);
     const userGroup = {
       matcher: "UserOwnedStructural",
       timeout: null,
@@ -350,7 +350,7 @@ test("TCRN-CROSS-STORY-429: Codex hooks-only ignores and preserves an existing p
   assert.equal(plan.resolutions.plan.model, "codex-flagship", "a real model resolution must not expand hooks-only scope");
   assert.deepEqual(plan.files.map((entry) => entry.path), [".codex/hooks.json"]);
   assert.deepEqual(plan.files[0].ownedFields, ["hooks"]);
-  assert.deepEqual(Object.keys(plan.files[0].expectedManaged), Object.keys(codexHookDocument(repoRoot).hooks));
+  assert.deepEqual(Object.keys(plan.files[0].expectedManaged), Object.keys(codexHookDocument(repoRoot, root).hooks));
 
   const receipt = await applyHostRender(plan, { backupDir: join(root, "backups") });
   assert.equal(receipt.reasonCode, "HOST_RENDER_COMMITTED");
@@ -478,7 +478,7 @@ test("TCRN-CROSS-STORY-429: the six authorized per-host hook changes do not alte
   for (const host of ["claude-code", "codex"]) {
     const root = await scratch(`tcrn-host-render-hooks-only-delta-${host}-`);
     t.after(() => rm(root, { recursive: true, force: true }));
-    const generated = generatedHooks(host);
+    const generated = generatedHooks(host, root);
     const beforeHooks = structuredClone(generated);
     const telemetry = (event) => generated[event].find((group) => group.hooks?.some((hook) => hook.command?.includes("dispatch-telemetry-hook.mjs")));
     const knowledge = generated.SubagentStart.find((group) => group.hooks?.some((hook) => hook.command?.includes("knowledge-inject-hook.mjs")));

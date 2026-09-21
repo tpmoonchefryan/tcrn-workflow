@@ -207,7 +207,7 @@ test("TCRN-CROSS-STORY-429: doctor uses the explicitly selected hooks-only proje
   const repoRoot = join(root, "TCRN Platform", "tcrn-workflow");
   await mkdir(join(root, ".codex"), { recursive: true });
   await writeFile(join(root, ".codex", "config.toml"), `model = "user-model"\nmodel_reasoning_effort = "low"\n`);
-  await writeFile(join(root, ".codex", "hooks.json"), `${JSON.stringify(codexHookDocument(repoRoot), null, 2)}\n`);
+  await writeFile(join(root, ".codex", "hooks.json"), `${JSON.stringify(codexHookDocument(repoRoot, root), null, 2)}\n`);
   const hostRenderSettings = codexDispatchSettings(["approved-flagship", "approved-main", "approved-economy"]);
   const scoped = await inspectHostRenderDrift(root, { hostRenderSettings, hostRenderHosts: ["codex"], hostRenderRepoRoot: repoRoot, hostRenderScope: "hooks-only" });
   assert.equal(scoped.ok, true, JSON.stringify(scoped));
@@ -653,6 +653,18 @@ test("S267 hook leg turns red for a missing target independently", async (contex
   const result = await inspectInstallFixture(fixture);
   assert.equal(result.reasonCode, "PLATFORM_HOOK_TARGET_UNAVAILABLE");
   assert.equal(result.checks.find((item) => item.name === "hooks").failures[0].event, "Stop");
+});
+
+test("S267 managed knowledge hooks must carry the explicit Claude container root", async (context) => {
+  const fixture = await completeInstallFixture(context);
+  const settings = JSON.parse(await readFile(join(fixture.root, ".claude", "settings.json"), "utf8"));
+  settings.hooks.SessionStart[0].hooks[0].command = settings.hooks.SessionStart[0].hooks[0].command
+    .replace(' --container-root "${CLAUDE_PROJECT_DIR}"', "");
+  await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify(settings));
+  const result = await inspectInstallFixture(fixture);
+  const hooks = result.checks.find((item) => item.name === "hooks");
+  assert.equal(hooks.ok, false);
+  assert.equal(hooks.reasonCode, "PLATFORM_HOOK_CONTAINER_ROOT_INVALID");
 });
 
 test("S267 missing settings stays a wiring red leg and does not become a hook false green", async (context) => {

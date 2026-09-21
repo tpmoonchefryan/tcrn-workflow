@@ -86,8 +86,8 @@ test("TCRN-CROSS-STORY-393 both hosts register the PostToolUse reference path", 
   }
   assert.equal(claudeHookSettings().PostToolUse.length, 1);
   assert.equal(codexHookDocument("/repo").hooks.PostToolUse.length, 1);
-  assert.match(claudeHookSettings().PostToolUse[0].hooks[0].command, /scripts\/knowledge-inject-hook\.mjs" --host claude; fi$/u);
-  assert.match(codexHookDocument("/repo").hooks.PostToolUse[0].hooks[0].command, /scripts\/knowledge-inject-hook\.mjs" --host codex$/u);
+  assert.match(claudeHookSettings().PostToolUse[0].hooks[0].command, /scripts\/knowledge-inject-hook\.mjs" --container-root "\$\{CLAUDE_PROJECT_DIR\}" --host claude; fi$/u);
+  assert.match(codexHookDocument("/repo").hooks.PostToolUse[0].hooks[0].command, /scripts\/knowledge-inject-hook\.mjs" --container-root "[^"]+" --host codex$/u);
 });
 
 test("INC-220 the two renderings carry the same handlers for the same capabilities", () => {
@@ -119,9 +119,9 @@ test("INC-220 the Codex document is shaped the way the host documents it", () =>
     }
   }
   const injection = document.hooks.SessionStart[0].hooks[0].command;
-  assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host codex$/u);
+  assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --container-root "[^"]+" --host codex$/u);
   const capture = document.hooks.Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
-  assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --host codex$/u);
+  assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --container-root "[^"]+" --host codex$/u);
   const telemetry = document.hooks.SubagentStart[0].hooks[0].command;
   assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host codex$/u);
 });
@@ -136,9 +136,9 @@ test("INC-220 the Claude rendering keeps the project-dir form that host resolves
     }
   }
   const injection = claudeHookSettings().SessionStart[0].hooks[0].command;
-  assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --host claude; fi$/u);
+  assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --container-root "\$\{CLAUDE_PROJECT_DIR\}" --host claude; fi$/u);
   const capture = claudeHookSettings().Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
-  assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --host claude; fi$/u);
+  assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --container-root "\$\{CLAUDE_PROJECT_DIR\}" --host claude; fi$/u);
   const telemetry = claudeHookSettings().SubagentStart[0].hooks[0].command;
   assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host claude; fi$/u);
 });
@@ -162,7 +162,7 @@ test("INC-220 applying the Codex harness is idempotent and atomic", () => {
     mkdirSync(join(root, ".codex"), { recursive: true });
     const first = applyHostHarness("codex", root, { repoRoot: "/repo" });
     assert.equal(first.reasonCode, "HOST_HARNESS_WRITTEN");
-    assert.equal(readFileSync(first.path, "utf8"), harnessBytes("codex", "/repo"));
+    assert.equal(readFileSync(first.path, "utf8"), harnessBytes("codex", "/repo", root));
     const second = applyHostHarness("codex", root, { repoRoot: "/repo" });
     assert.equal(second.reasonCode, "HOST_HARNESS_ALREADY_CURRENT");
     assert.equal(second.wrote, false, "an unchanged harness is not rewritten");

@@ -1819,9 +1819,13 @@ async function inspectHookExecutability(platformRoot, manifest) {
   for (const hook of commands) {
     if (!hook.command.includes("${CLAUDE_PROJECT_DIR}")) continue;
     checked += 1;
-    const match = /^(?:if \[ -f "[^"]+" \]; then )?node\s+"([^"]+)"(?:\s+--host\s+claude)?(?:; fi)?$/u.exec(hook.command.trim());
+    const match = /^(?:if \[ -f "[^"]+" \]; then )?node\s+"([^"]+)"(?:\s+--container-root\s+"([^"]+)")?(?:\s+--host\s+claude)?(?:; fi)?$/u.exec(hook.command.trim());
     if (!match) {
       failures.push({ event: hook.event, command: hook.command, reasonCode: "PLATFORM_HOOK_COMMAND_UNSUPPORTED" });
+      continue;
+    }
+    if (/scripts\/knowledge-(?:inject|capture)-hook\.mjs$/u.test(match[1]) && match[2] !== "${CLAUDE_PROJECT_DIR}") {
+      failures.push({ event: hook.event, command: hook.command, reasonCode: "PLATFORM_HOOK_CONTAINER_ROOT_INVALID", expected: "${CLAUDE_PROJECT_DIR}" });
       continue;
     }
     const target = resolve(match[1].replaceAll("${CLAUDE_PROJECT_DIR}", platformRoot));

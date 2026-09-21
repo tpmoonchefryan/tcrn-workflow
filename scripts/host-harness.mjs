@@ -37,6 +37,7 @@ import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const HOSTS = Object.freeze(["claude", "codex"]);
+const CONTAINER_ROOT_HANDLERS = new Set(["scripts/knowledge-inject-hook.mjs", "scripts/knowledge-capture-hook.mjs"]);
 
 /** The control trees no host may be edited into. Kept here so both renderings cite one list. */
 export const GUARDED_TREES = Object.freeze([".tcrn-workspace", ".tcrn-workflow"]);
@@ -190,17 +191,23 @@ export function capabilityGaps() {
   return gaps;
 }
 
-function claudeCommand(handler) {
-  const host = handler === "scripts/knowledge-inject-hook.mjs" || handler === "scripts/knowledge-capture-hook.mjs" || handler === "scripts/dispatch-telemetry-hook.mjs" ? " --host claude" : "";
-  const target = `\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/${handler}`;
-  return `if [ -f "${target}" ]; then node "${target}"${host}; fi`;
+function handlerArguments(handler, host, containerRoot) {
+  const hostArgument = handler === "scripts/knowledge-inject-hook.mjs" || handler === "scripts/knowledge-capture-hook.mjs" || handler === "scripts/dispatch-telemetry-hook.mjs" ? ` --host ${host}` : "";
+  if (!CONTAINER_ROOT_HANDLERS.has(handler)) return hostArgument;
+  const rootArgument = host === "claude" ? '"${CLAUDE_PROJECT_DIR}"' : JSON.stringify(resolve(containerRoot));
+  return ` --container-root ${rootArgument}${hostArgument}`;
 }
 
-function codexCommand(handler, repoRoot) {
+function claudeCommand(handler) {
+  const argumentsText = handlerArguments(handler, "claude", null);
+  const target = `\${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/${handler}`;
+  return `if [ -f "${target}" ]; then node "${target}"${argumentsText}; fi`;
+}
+
+function codexCommand(handler, repoRoot, containerRoot) {
   // Codex resolves no project-dir variable, so the command is absolute — the same shape
   // the engine's own generated Codex hooks use.
-  const host = handler === "scripts/knowledge-inject-hook.mjs" || handler === "scripts/knowledge-capture-hook.mjs" || handler === "scripts/dispatch-telemetry-hook.mjs" ? " --host codex" : "";
-  return `node ${JSON.stringify(join(repoRoot, handler))}${host}`;
+  return `node ${JSON.stringify(join(repoRoot, handler))}${handlerArguments(handler, "codex", containerRoot)}`;
 }
 
 function group(entry, command) {
@@ -222,11 +229,11 @@ export function claudeHookSettings() {
 }
 
 /** The whole `.codex/hooks.json` document. */
-export function codexHookDocument(repoRoot = REPO_ROOT) {
+export function codexHookDocument(repoRoot = REPO_ROOT, containerRoot = resolve(REPO_ROOT, "../..")) {
   const hooks = {};
   for (const entry of hookEntriesFor("codex")) {
     hooks[entry.event] ??= [];
-    hooks[entry.event].push(group(entry, codexCommand(entry.handler, repoRoot)));
+    hooks[entry.event].push(group(entry, codexCommand(entry.handler, repoRoot, containerRoot)));
   }
   return {
     description: "TCRN Workflow platform harness for Codex: governed write observation, control-tree write refusal, governed context injection, and the stop pact.",

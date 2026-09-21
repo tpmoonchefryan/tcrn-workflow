@@ -30,6 +30,7 @@ import {
   boundedUtf8,
   captureArguments,
   cardFor,
+  containerRootFromArgv,
   extractLessons,
   hostFromArgv,
   runCaptureHook,
@@ -158,6 +159,8 @@ test("STORY-393 B2/U6: host argv wins and replayed Stop payloads do not write an
   assert.equal(hostFromArgv(["--host", "codex"], { host: "claude" }, {}), "codex");
   assert.equal(hostFromArgv([], {}, { TCRN_HOST: "codex" }), "codex");
   assert.equal(hostFromArgv([], {}, {}), "unknown-host");
+  assert.equal(containerRootFromArgv(["--container-root", "/governed/container"]), "/governed/container");
+  assert.equal(containerRootFromArgv(["--container-root=/governed/container"]), "/governed/container");
   const fixture = await containerFixture("FIXTURE-CAPTURE-REPLAY");
   try {
     const input = { hook_event_name: "Stop", session_id: "capture-session", host: "codex" };

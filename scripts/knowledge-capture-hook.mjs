@@ -154,6 +154,15 @@ export function hostFromArgv(argv = process.argv.slice(2), input = {}, env = pro
   return typeof supplied === "string" && supplied.length > 0 ? supplied : "unknown-host";
 }
 
+export function containerRootFromArgv(argv = process.argv.slice(2), fallback = PLATFORM_ROOT) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--container-root" && typeof argv[index + 1] === "string" && !argv[index + 1].startsWith("--") && argv[index + 1].length > 0) return argv[index + 1];
+    if (typeof token === "string" && token.startsWith("--container-root=")) return token.slice("--container-root=".length) || fallback;
+  }
+  return fallback;
+}
+
 function observationBoundaryArguments(input, { containerRoot, partition, at }) {
   const sessionId = boundedUtf8(String(input?.session_id ?? input?.sessionId ?? "anonymous"), 256);
   const host = boundedUtf8(hostFromArgv([], input), 64);
@@ -233,7 +242,9 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   // body is already fail-open, and this last catch is the belt on top of the braces.
   try {
     const input = readStdin();
-    runCaptureHook({ ...input, host: hostFromArgv(process.argv.slice(2), input) });
+    runCaptureHook({ ...input, host: hostFromArgv(process.argv.slice(2), input) }, {
+      containerRoot: containerRootFromArgv(process.argv.slice(2)),
+    });
   } catch { /* fail-open: a lesson is never worth a stuck session */ }
   process.exit(0);
 }

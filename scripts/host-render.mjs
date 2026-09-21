@@ -120,13 +120,13 @@ function managedNodeInvocation(command) {
   if (typeof command !== "string") return null;
   const value = command.trim();
   const forms = [
-    /^node "([^"]+)"(?:\s+--host (claude|codex))?$/u,
-    /^\[\s*.+?\s*\]\s*&&\s*node "([^"]+)"(?:\s+--host (claude|codex))?(?:\s*\|\|\s*true)?$/u,
-    /^if\s+\[\s*.+?\s*\]\s*;\s*then\s+node "([^"]+)"(?:\s+--host (claude|codex))?\s*;\s*(?:else\s+cat\s*>\s*\/dev\/null\s*;\s*)?fi$/u,
+    /^node "([^"]+)"(?:\s+--container-root "([^"]+)")?(?:\s+--host (claude|codex))?$/u,
+    /^\[\s*.+?\s*\]\s*&&\s*node "([^"]+)"(?:\s+--container-root "([^"]+)")?(?:\s+--host (claude|codex))?(?:\s*\|\|\s*true)?$/u,
+    /^if\s+\[\s*.+?\s*\]\s*;\s*then\s+node "([^"]+)"(?:\s+--container-root "([^"]+)")?(?:\s+--host (claude|codex))?\s*;\s*(?:else\s+cat\s*>\s*\/dev\/null\s*;\s*)?fi$/u,
   ];
   for (const form of forms) {
     const match = form.exec(value);
-    if (match !== null) return { path: match[1], host: match[2] ?? null };
+    if (match !== null) return { path: match[1], containerRoot: match[2] ?? null, host: match[3] ?? null };
   }
   return null;
 }
@@ -403,7 +403,7 @@ export function renderHostPlan({ host, mode, scope = "full", settings, root, rep
       const expectedConfig = { model: plan.model, effort: plan.effort };
       files.push(pathEntry(CODEX_CONFIG_PATH, nextConfig, ["model", "model_reasoning_effort"], get(CODEX_CONFIG_PATH), { model: rootTomlValue(currentConfig, "model"), effort: rootTomlValue(currentConfig, "model_reasoning_effort") }, expectedConfig));
     }
-    const expectedHooks = codexHookDocument(repoRoot).hooks;
+    const expectedHooks = codexHookDocument(repoRoot, root).hooks;
     const currentHooks = parseJson(get(CODEX_HOOKS_PATH), CODEX_HOOKS_PATH);
     const nextHooks = mergeHookDocument(currentHooks, expectedHooks);
     files.push(pathEntry(CODEX_HOOKS_PATH, `${JSON.stringify(nextHooks, null, 2)}\n`, ["hooks"], get(CODEX_HOOKS_PATH), managedClaudeHooks(currentHooks.hooks, expectedHooks, "codex"), expectedHooks));

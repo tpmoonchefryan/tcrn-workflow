@@ -22,14 +22,14 @@ import { REPO_ROOT, codexHookDocument } from "./host-harness.mjs";
 export const CODEX_HARNESS_PATH = ".codex/hooks.json";
 
 /** Canonical bytes for a host's harness file: sorted keys, one trailing newline. */
-export function harnessBytes(host, repoRoot = REPO_ROOT) {
+export function harnessBytes(host, repoRoot = REPO_ROOT, containerRoot = resolve(REPO_ROOT, "../..")) {
   if (host !== "codex") throw Object.assign(new Error(`no writable harness renderer for ${host}`), { reasonCode: "HOST_HARNESS_NOT_WRITABLE" });
-  return `${JSON.stringify(codexHookDocument(repoRoot), null, 2)}\n`;
+  return `${JSON.stringify(codexHookDocument(repoRoot, containerRoot), null, 2)}\n`;
 }
 
 export function applyHostHarness(host, installationRoot, { repoRoot = REPO_ROOT } = {}) {
   const target = resolve(installationRoot, CODEX_HARNESS_PATH);
-  const bytes = harnessBytes(host, repoRoot);
+  const bytes = harnessBytes(host, repoRoot, installationRoot);
   const existing = existsSync(target) ? readFileSync(target, "utf8") : null;
   if (existing === bytes) {
     return { ok: true, reasonCode: "HOST_HARNESS_ALREADY_CURRENT", host, path: target, wrote: false };

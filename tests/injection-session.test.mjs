@@ -507,8 +507,8 @@ test("the injection hook carries the actual host instead of defaulting Codex to 
   assert.equal(inferHost({}, { CODEX_PROJECT_DIR: "/repo" }), "codex");
   assert.equal(inferHost({}, { CLAUDE_PROJECT_DIR: "/repo" }), "claude");
   assert.equal(inferHost({ host: "codex" }, { CLAUDE_PROJECT_DIR: "/repo" }), "codex");
-  assert.match(InjectionPlacementManifest.commands.codex, /--host codex$/u);
-  assert.match(InjectionPlacementManifest.commands.claude, /--host claude$/u);
+  assert.match(InjectionPlacementManifest.commands.codex, /--container-root "<PLATFORM_ROOT>" --host codex$/u);
+  assert.match(InjectionPlacementManifest.commands.claude, /--container-root "\$\{CLAUDE_PROJECT_DIR\}" --host claude$/u);
 });
 
 test("419 emits one bounded protocol document and parses legacy pretty JSON", () => {
@@ -556,6 +556,7 @@ test("419 drives the same bounded wrapper protocol through Claude and Codex path
     let seen = null;
     const result = runInject({ hook_event_name: "SubagentStart", session_id: `host-${host}`, role: "subagent", workId: "work:target", pack: "EPIC135/HC1" }, {
       host,
+      containerRoot: "/governed/container",
       retries: 0,
       spawnImpl: (_executable, args, options) => {
         seen = { args, options };
@@ -566,6 +567,7 @@ test("419 drives the same bounded wrapper protocol through Claude and Codex path
     assert.equal(result.protocol.version, "tcrn.injection-protocol.v2");
     assert.ok(seen.args.includes("--host"));
     assert.equal(seen.args[seen.args.indexOf("--host") + 1], host);
+    assert.equal(seen.args[seen.args.indexOf("--container-root") + 1], "/governed/container");
     assert.equal(seen.options.maxBuffer, MAX_HOOK_OUTPUT_BYTES);
   }
   const parsed = parseArgv(["--enforce-binding", "true", "--retry-pending", "true", "--judge-enabled", "false"]);

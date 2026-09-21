@@ -35,8 +35,8 @@ export const InjectionPlacementManifest = Object.freeze({
     codex: Object.freeze(["SessionStart", "UserPromptSubmit", "PostCompact", "PostToolUse", "SubagentStart"]),
   }),
   commands: Object.freeze({
-    claude: 'node "${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --host claude',
-    codex: 'node "${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --host codex',
+    claude: 'node "${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --container-root "${CLAUDE_PROJECT_DIR}" --host claude',
+    codex: 'node "${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs" --container-root "<PLATFORM_ROOT>" --host codex',
   }),
   modelMapping: Object.freeze({
     setting: "execution.dispatchTiers",
@@ -149,7 +149,7 @@ function bindingArguments(input) {
   return { role, workId, pack };
 }
 
-function runInjectAttempt(input, { stateDirectory, host, retryPending = false, spawnImpl = spawnSync } = {}) {
+function runInjectAttempt(input, { stateDirectory, host, containerRoot = PLATFORM_ROOT, retryPending = false, spawnImpl = spawnSync } = {}) {
   const event = input?.hook_event_name ?? "";
   const prompt = typeof input?.prompt === "string" ? boundedText(input.prompt, 64_000) : "";
   const sessionId = input?.session_id ?? input?.sessionId ?? "anonymous";
@@ -170,6 +170,7 @@ function runInjectAttempt(input, { stateDirectory, host, retryPending = false, s
   if (binding.pack !== undefined) argv.push("--pack", typeof binding.pack === "string" ? binding.pack : JSON.stringify(binding.pack));
   if (stateDirectory) argv.push("--state-dir", stateDirectory);
   if (retryPending) argv.push("--retry-pending", "true");
+  argv.push("--container-root", containerRoot);
   argv.push("--host", host ?? inferHost(input));
   const started = Date.now();
   let result;
@@ -224,12 +225,12 @@ function acknowledgeResult(result, sessionId, stateDirectory) {
  * after a complete protocol document has been parsed.  One retry is reserved
  * for transport failures; a generation ledger alone never proves host receipt.
  */
-export function runInject(input, { stateDirectory, host, retries = MAX_HOOK_RETRIES, spawnImpl = spawnSync } = {}) {
+export function runInject(input, { stateDirectory, host, containerRoot = PLATFORM_ROOT, retries = MAX_HOOK_RETRIES, spawnImpl = spawnSync } = {}) {
   const sessionId = input?.session_id ?? input?.sessionId ?? "anonymous";
   const attempts = [];
   const maximumRetries = Number.isSafeInteger(retries) && retries >= 0 ? Math.min(retries, MAX_HOOK_RETRIES) : MAX_HOOK_RETRIES;
   for (let attempt = 0; attempt <= maximumRetries; attempt += 1) {
-    const result = runInjectAttempt(input, { stateDirectory, host, retryPending: attempt > 0, spawnImpl });
+    const result = runInjectAttempt(input, { stateDirectory, host, containerRoot, retryPending: attempt > 0, spawnImpl });
     attempts.push({ attempt: attempt + 1, reasonCode: result.reasonCode ?? null, ok: result.ok === true, outputBytes: result.protocol?.outputBytes ?? result.outputBytes ?? null });
     if (result.ok === true) {
       const acknowledgement = acknowledgeResult(result, sessionId, stateDirectory);
@@ -245,7 +246,7 @@ export function runInject(input, { stateDirectory, host, retries = MAX_HOOK_RETR
   return { ok: false, reasonCode: "INJECT_PROCESS_FAILED", attempts };
 }
 
-function buildHookResponseResult(input, { host } = {}) {
+function buildHookResponseResult(input, { host, containerRoot = PLATFORM_ROOT } = {}) {
   const event = input.hook_event_name ?? "";
   // The host contract requires additionalContext to be a STRING (a JSON array is
   // schema-invalid and the whole hook output is dropped — verified against the Claude
@@ -254,7 +255,7 @@ function buildHookResponseResult(input, { host } = {}) {
   let result = { ok: true, reasonCode: "HOOK_EVENT_IGNORED", injected: false };
 
   const inject = () => {
-    result = runInject(input, { host: host ?? inferHost(input) });
+    result = runInject(input, { host: host ?? inferHost(input), containerRoot });
     if (result.ok === true && result.injected === true && typeof result.injection === "string" && result.injection.length > 0) {
       const count = result.candidateCount ?? result.l0?.lines?.length ?? 0;
       chunks.push(`[平台知识注入 · ${count} 条 · 来源 cross-project 知识面]\n${result.injection}`);
@@ -267,8 +268,8 @@ function buildHookResponseResult(input, { host } = {}) {
   return { response: { hookSpecificOutput: { hookEventName: event, additionalContext: chunks.join("\n") } }, result };
 }
 
-export function buildHookResponse(input, { host } = {}) {
-  return buildHookResponseResult(input, { host }).response;
+export function buildHookResponse(input, { host, containerRoot = PLATFORM_ROOT } = {}) {
+  return buildHookResponseResult(input, { host, containerRoot }).response;
 }
 
 /**
@@ -276,8 +277,8 @@ export function buildHookResponse(input, { host } = {}) {
  * intentionally unknown: stdout from a hook proves generation and wrapper
  * parsing, not that the host placed additionalContext in model context.
  */
-export function buildHookResponseWithEvidence(input, { host } = {}) {
-  const { response, result } = buildHookResponseResult(input, { host });
+export function buildHookResponseWithEvidence(input, { host, containerRoot = PLATFORM_ROOT } = {}) {
+  const { response, result } = buildHookResponseResult(input, { host, containerRoot });
   return {
     response,
     evidence: {
@@ -301,5 +302,9 @@ export function buildHookResponseWithEvidence(input, { host } = {}) {
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   const hostFlag = process.argv.indexOf("--host");
   const host = hostFlag >= 0 ? process.argv[hostFlag + 1] : undefined;
-  process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin(), { host }))}\n`);
+  const containerRootFlag = process.argv.indexOf("--container-root");
+  const containerRoot = containerRootFlag >= 0 && typeof process.argv[containerRootFlag + 1] === "string"
+    ? process.argv[containerRootFlag + 1]
+    : PLATFORM_ROOT;
+  process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin(), { host, containerRoot }))}\n`);
 }

@@ -17,8 +17,8 @@
     ]
   },
   "commands": {
-    "claude": "node \"${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\" --host claude",
-    "codex": "node \"${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\" --host codex"
+    "claude": "node \"${CLAUDE_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\" --container-root \"${CLAUDE_PROJECT_DIR}\" --host claude",
+    "codex": "node \"${CODEX_PROJECT_DIR}/scripts/knowledge-inject-hook.mjs\" --container-root \"<PLATFORM_ROOT>\" --host codex"
   },
   "modelMapping": {
     "setting": "execution.dispatchTiers",
