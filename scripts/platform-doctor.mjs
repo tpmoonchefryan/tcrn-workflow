@@ -60,6 +60,11 @@ function expandTemplate(template, platformRoot, homeRoot) {
   return resolve(template.replaceAll("<PLATFORM_ROOT>", platformRoot).replaceAll("<HOME>", homeRoot));
 }
 
+function manifestPath(manifest, id, platformRoot, homeRoot) {
+  const entry = manifest.items?.find((candidate) => candidate.id === id);
+  return entry === undefined ? null : expandTemplate(entry.pathTemplate, platformRoot, homeRoot);
+}
+
 const CHAIN_CONTAINER_REPOSITORY = "chain container";
 const CHAIN_CONTAINER_DIRECTORY = [".tcrn", "workspace"].join("-");
 const WORKFLOW_DIRECTORY = [".tcrn", "workflow"].join("-");
@@ -1352,10 +1357,7 @@ export async function inspectHostRenderDrift(root, options) {
   // synthetic platform can exercise the projection without a managed installation.
   let repoRoot = options.hostRenderRepoRoot ?? null;
   if (repoRoot === null) {
-    const manifest = options.manifest ?? INSTALL_MANIFEST;
-    const homeRoot = options.homeRoot ?? process.env.HOME ?? "";
-    const engineEntry = manifest.items?.find((entry) => entry.id === "machine.workflow-engine");
-    const engineRoot = engineEntry === undefined ? null : expandTemplate(engineEntry.pathTemplate, root, homeRoot);
+    const engineRoot = manifestPath(options.manifest ?? INSTALL_MANIFEST, "machine.workflow-engine", root, options.homeRoot ?? process.env.HOME ?? "");
     repoRoot = engineRoot === null ? null : join(engineRoot, "tcrn-workflow");
   }
   if (repoRoot === null) {
@@ -1859,10 +1861,10 @@ function versionFromSkill(text) {
 }
 
 async function inspectDeploymentFreshness(homeRoot, manifest) {
-  const engineEntry = manifest.items.find((entry) => entry.id === "machine.workflow-engine");
   const helperEntries = manifest.items.filter((entry) => entry.acceptanceProbe.startsWith("probe:helper-skill-digest"));
-  if (!engineEntry || helperEntries.length === 0) return check("deploymentFreshness", false, { reasonCode: "PLATFORM_MANIFEST_DEPLOYMENT_ITEMS_MISSING" });
-  const engineRoot = expandTemplate(engineEntry.pathTemplate, "<PLATFORM_ROOT>", homeRoot), helperSkills = helperEntries.map((entry) => ({ entry, path: expandTemplate(entry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) }));
+  const engineRoot = manifestPath(manifest, "machine.workflow-engine", "<PLATFORM_ROOT>", homeRoot);
+  if (engineRoot === null || helperEntries.length === 0) return check("deploymentFreshness", false, { reasonCode: "PLATFORM_MANIFEST_DEPLOYMENT_ITEMS_MISSING" });
+  const helperSkills = helperEntries.map((entry) => ({ entry, path: expandTemplate(entry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) }));
   if (engineRoot === null || helperSkills.some(({ path }) => path === null)) return check("deploymentFreshness", false, { reasonCode: "PLATFORM_MANIFEST_PATH_INVALID" });
   try {
     const engineVersion = JSON.parse(await readFile(join(engineRoot, "tcrn-workflow", "package.json"), "utf8")).version;
@@ -1916,8 +1918,7 @@ async function engineCopyVersions(root, homeRoot, manifest, options) {
     return { copies: options.engineCopyVersions, source: "synthetic" };
   }
   const copies = {};
-  const engineEntry = manifest.items.find((entry) => entry.id === "machine.workflow-engine");
-  const installedRoot = engineEntry ? expandTemplate(engineEntry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) : null;
+  const installedRoot = manifestPath(manifest, "machine.workflow-engine", "<PLATFORM_ROOT>", homeRoot);
   const engineProject = (manifest.projects ?? []).find((project) => project.name === "tcrn-workflow");
   const worktreeRoot = engineProject?.pathTemplate?.startsWith("<PLATFORM_ROOT>/")
     ? join(root, engineProject.pathTemplate.slice("<PLATFORM_ROOT>/".length))
@@ -2065,8 +2066,7 @@ async function inspectEngineCapabilitySurface(root, homeRoot, manifest, options)
 
   // Resolve the installed and worktree copy roots. Use the same resolution as
   // engineCopyVersions to ensure consistent paths across legs.
-  const engineEntry = manifest.items.find((entry) => entry.id === "machine.workflow-engine");
-  const installedRoot = engineEntry ? expandTemplate(engineEntry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) : null;
+  const installedRoot = manifestPath(manifest, "machine.workflow-engine", "<PLATFORM_ROOT>", homeRoot);
   const engineProject = (manifest.projects ?? []).find((project) => project.name === "tcrn-workflow");
   const worktreeRoot = engineProject?.pathTemplate?.startsWith("<PLATFORM_ROOT>/")
     ? join(root, engineProject.pathTemplate.slice("<PLATFORM_ROOT>/".length))
@@ -2550,10 +2550,9 @@ async function inspectTrustArchiveFreshness(platformRoot, homeRoot, manifest, op
   if (options.trustArchiveFreshness && typeof options.trustArchiveFreshness === "object") return check("trustArchive", options.trustArchiveFreshness.ok === true, options.trustArchiveFreshness);
   if (Array.isArray(options.launchdLabels) && options.enforceTrustArchive !== true) return check("trustArchive", true, { source: "synthetic-launchd-labels" });
   const archiveEntry = manifest.items.find((entry) => entry.id === "machine.trust-archive");
-  const engineEntry = manifest.items.find((entry) => entry.id === "machine.workflow-engine");
-  if (!archiveEntry || !engineEntry) return check("trustArchive", false, { reasonCode: "PLATFORM_TRUST_ARCHIVE_MANIFEST_ITEMS_MISSING" });
+  if (!archiveEntry || manifestPath(manifest, "machine.workflow-engine", platformRoot, homeRoot) === null) return check("trustArchive", false, { reasonCode: "PLATFORM_TRUST_ARCHIVE_MANIFEST_ITEMS_MISSING" });
   const archivePath = expandTemplate(archiveEntry.pathTemplate, platformRoot, homeRoot);
-  const engineRoot = expandTemplate(engineEntry.pathTemplate, platformRoot, homeRoot);
+  const engineRoot = manifestPath(manifest, "machine.workflow-engine", platformRoot, homeRoot);
   if (!archivePath || !engineRoot) return check("trustArchive", false, { reasonCode: "PLATFORM_TRUST_ARCHIVE_PATH_INVALID" });
   try {
     const archive = JSON.parse(await readFile(archivePath, "utf8"));
