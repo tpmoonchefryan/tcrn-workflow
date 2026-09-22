@@ -145,19 +145,12 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
   }
   return root;
 }
-// SUB-188 (INC-355): shared helper for the repeated ok+reasonCode assertion
-// pair. Every call site below performs exactly the same two assert.equal
-// calls it did before extraction -- this removes real duplication, not an
-// assertion.
-function assertCheckResult(result, ok, reasonCode, message) {
-  assert.equal(result.ok, ok, message);
-  assert.equal(result.reasonCode, reasonCode);
-}
 
 test("a complete synthetic platform container is green", async (context) => {
   const root = await fixture(context);
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, true, "PLATFORM_LAYOUT_HEALTHY");
+  assert.equal(result.ok, true);
+  assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
   assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true, true]);
 });
 
@@ -165,7 +158,8 @@ test("STORY-371: Claude's bridge is exact and arbitrary prose is red", async (co
   const invalid = await fixture(context, { claude: "@OTHER.md\n" });
   const red = await inspectPlatform(invalid, { includeInstallSurface: false });
   const redBridge = red.checks.find((entry) => entry.name === "claudeBridge");
-  assertCheckResult(redBridge, false, "PLATFORM_CLAUDE_BRIDGE_INVALID");
+  assert.equal(redBridge.ok, false);
+  assert.equal(redBridge.reasonCode, "PLATFORM_CLAUDE_BRIDGE_INVALID");
 
   const whitespace = await fixture(context, { claude: " @AGENTS.md \n\n" });
   const green = await inspectPlatform(whitespace, { includeInstallSurface: false });
@@ -178,7 +172,8 @@ test("STORY-371: host-render drift is a named platform check", async (context) =
     hostRenderDrift: { ok: false, reasonCode: "PLATFORM_HOST_RENDER_DRIFTED", drift: [{ path: ".claude/agents/implement.md" }] },
   });
   const check = result.checks.find((entry) => entry.name === "hostRenderDrift");
-  assertCheckResult(check, false, "PLATFORM_HOST_RENDER_DRIFTED");
+  assert.equal(check.ok, false);
+  assert.equal(check.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
   assert.deepEqual(check.drift, [{ path: ".claude/agents/implement.md" }]);
 });
 
@@ -203,7 +198,8 @@ test("INC-351: doctor compares host-render against the managed engine root", asy
     hostRenderRepoRoot: developmentRoot,
     hostRenderScope: "hooks-only",
   });
-  assertCheckResult(development, false, "PLATFORM_HOST_RENDER_DRIFTED", "the development checkout must not silently stand in for the managed engine");
+  assert.equal(development.ok, false, "the development checkout must not silently stand in for the managed engine");
+  assert.equal(development.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
 });
 
 test("TCRN-CROSS-STORY-429: doctor uses the explicitly selected hooks-only projection", async (context) => {
@@ -290,14 +286,16 @@ test("STORY-300: an acceptance roster entry missing a field is named by id", asy
 test("an empty platform AGENTS.md is a load-bearing red leg", async (context) => {
   const root = await fixture(context, { agents: "" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, false, "PLATFORM_AGENTS_EMPTY");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_AGENTS_EMPTY");
   assert.equal(result.checks.find((item) => item.name === "platformAgents").reasonCode, "PLATFORM_AGENTS_EMPTY");
 });
 
 test("a missing platform AGENTS.md is named separately", async (context) => {
   const root = await fixture(context, { agents: null });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, false, "PLATFORM_AGENTS_MISSING");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_AGENTS_MISSING");
   // A present, non-empty file with the marker removed must take the distinct
   // topology-negative path rather than being conflated with absence.
   const markerRoot = await fixture(context, { agents: "identity retained but topology omitted\n" });
@@ -311,13 +309,15 @@ test("a missing platform AGENTS.md is named separately", async (context) => {
 test("a missing chain container is a distinct red leg", async (context) => {
   const root = await fixture(context, { chain: false });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, false, "WORKSPACE_CONTAINER_MISSING");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "WORKSPACE_CONTAINER_MISSING");
 });
 
 test("a container inside Git ancestry is refused", async (context) => {
   const root = await fixture(context, { git: true });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, false, "PLATFORM_ROOT_INSIDE_GIT_REPOSITORY");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_ROOT_INSIDE_GIT_REPOSITORY");
   assert.equal(result.checks.find((item) => item.name === "containerOutsideGit").ok, false);
 });
 
@@ -332,7 +332,8 @@ test("the container whitelist repository is allowed, while code-repository ances
 test("a missing Claude bridge is named separately", async (context) => {
   const root = await fixture(context, { claude: null });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, false, "PLATFORM_CLAUDE_BRIDGE_MISSING");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_CLAUDE_BRIDGE_MISSING");
 });
 
 test("an empty misplaced AGENTS.md remains visible before the root is repaired", async (context) => {
@@ -340,13 +341,15 @@ test("an empty misplaced AGENTS.md remains visible before the root is repaired",
   await mkdir(join(root, "classification"));
   await writeFile(join(root, "classification", "AGENTS.md"), "");
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assertCheckResult(result, false, "PLATFORM_AGENTS_EMPTY");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_AGENTS_EMPTY");
   assert.equal(result.checks.find((item) => item.name === "platformAgents").path, "classification/AGENTS.md");
 });
 
 test("a missing --platform-root argument fails closed", async () => {
   const result = await inspectPlatform();
-  assertCheckResult(result, false, "PLATFORM_ROOT_REQUIRED");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_ROOT_REQUIRED");
 });
 
 test("S259 bridge syntax is green when root and direct-child references resolve", async (context) => {
@@ -507,7 +510,8 @@ test("INC-351: missing, malformed, and conflicting Helper pins are red", async (
     const fixture = await completeInstallFixture(context, { engineVersion: "1.1.2", helperVersion: "1.1.2", helperPin: testCase.helperPin });
     const result = await inspectInstallFixture(fixture);
     const freshness = result.checks.find((item) => item.name === "deploymentFreshness");
-    assertCheckResult(freshness, false, testCase.expected, `${testCase.helperPin}: ${JSON.stringify(freshness)}`);
+    assert.equal(freshness.ok, false, `${testCase.helperPin}: ${JSON.stringify(freshness)}`);
+    assert.equal(freshness.reasonCode, testCase.expected);
   }
 });
 
@@ -548,7 +552,8 @@ test("INC-206 an undeclared harness inside the governed area is red, and an unre
   await mkdir(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true });
   await writeFile(join(fixture.root, "TCRN Platform", ".claude", "settings.json"), "{}\n", "utf8");
   const strayRed = await inspectInstallFixture(fixture);
-  assertCheckResult(surface(strayRed), false, "PLATFORM_HARNESS_UNDECLARED");
+  assert.equal(surface(strayRed).ok, false);
+  assert.equal(surface(strayRed).reasonCode, "PLATFORM_HARNESS_UNDECLARED");
   assert.ok(surface(strayRed).undeclared.includes(join("TCRN Platform", ".claude")));
   await rm(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true, force: true });
 
@@ -571,7 +576,8 @@ test("INC-195 the snapshot train is owed only when a chain declares an automatic
   // defect. Green, but it has to say so — a silent pass would be the roster-shaped
   // outcome Owner ruled against.
   const manual = await inspectInstallFixture(fixture, { launchdLabels: [], declaredBackupCadence: allManual });
-  assertCheckResult(launchd(manual), true, "PLATFORM_BACKUP_DECLARED_MANUAL");
+  assert.equal(launchd(manual).ok, true);
+  assert.equal(launchd(manual).reasonCode, "PLATFORM_BACKUP_DECLARED_MANUAL");
   assert.equal(launchd(manual).onDuty, false);
   assert.equal(launchd(manual).freshnessAsserted, false);
   // "supplied" rather than "chain-declaration": the field distinguishes a value
@@ -585,7 +591,8 @@ test("INC-195 the snapshot train is owed only when a chain declares an automatic
       launchdLabels: [],
       declaredBackupCadence: { ...allManual, "TCRN-AOS": cadence },
     });
-    assertCheckResult(launchd(automatic), false, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+    assert.equal(launchd(automatic).ok, false);
+    assert.equal(launchd(automatic).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
   }
 
   // Freshness is asserted only against an automatic expectation; under `manual`
@@ -600,7 +607,8 @@ test("INC-195 the snapshot train is owed only when a chain declares an automatic
   // The declaration may only relax. When it cannot be read the strict
   // expectation stands, and the report names the read as unreadable.
   const unreadable = await inspectInstallFixture(fixture, { launchdLabels: [], engineCli: "/nonexistent/engine.mjs" });
-  assertCheckResult(launchd(unreadable), false, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+  assert.equal(launchd(unreadable).ok, false);
+  assert.equal(launchd(unreadable).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
   assert.equal(launchd(unreadable).cadenceSource, "unreadable");
 });
 
@@ -655,7 +663,8 @@ test("S267 managed knowledge hooks must carry the explicit Claude container root
   await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify(settings));
   const result = await inspectInstallFixture(fixture);
   const hooks = result.checks.find((item) => item.name === "hooks");
-  assertCheckResult(hooks, false, "PLATFORM_HOOK_CONTAINER_ROOT_INVALID");
+  assert.equal(hooks.ok, false);
+  assert.equal(hooks.reasonCode, "PLATFORM_HOOK_CONTAINER_ROOT_INVALID");
 });
 
 test("S267 missing settings stays a wiring red leg and does not become a hook false green", async (context) => {
@@ -826,7 +835,8 @@ test("S273 trust archive freshness compares the archive to all installed consume
   await writeFile(join(fixture.home, ".agents", "skills", "tcrn-workflow-helper", "extra.md"), "drift\n");
   const red = await inspectInstallFixture(fixture, { enforceTrustArchive: true });
   const redCheck = red.checks.find((item) => item.name === "trustArchive");
-  assertCheckResult(redCheck, false, "PLATFORM_TRUST_ARCHIVE_STALE");
+  assert.equal(redCheck.ok, false);
+  assert.equal(redCheck.reasonCode, "PLATFORM_TRUST_ARCHIVE_STALE");
   assert.equal(redCheck.consumerProblems.length > 0, true);
 });
 
@@ -874,13 +884,15 @@ test("STORY-286 a registered codex hook whose target cannot run turns the leg re
   } }));
   const missing = await inspectInstallFixture(fixture);
   const missingHooks = missing.checks.find((item) => item.name === "hooks");
-  assertCheckResult(missingHooks, false, "PLATFORM_HOOK_TARGET_UNAVAILABLE");
+  assert.equal(missingHooks.ok, false);
+  assert.equal(missingHooks.reasonCode, "PLATFORM_HOOK_TARGET_UNAVAILABLE");
   assert.equal(missingHooks.source, "container.codex-hooks");
 
   await writeFile(join(fixture.root, ".codex", "hooks.json"), "{ not json");
   const invalid = await inspectInstallFixture(fixture);
   const invalidHooks = invalid.checks.find((item) => item.name === "hooks");
-  assertCheckResult(invalidHooks, false, "PLATFORM_CODEX_HOOKS_INVALID");
+  assert.equal(invalidHooks.ok, false);
+  assert.equal(invalidHooks.reasonCode, "PLATFORM_CODEX_HOOKS_INVALID");
 });
 
 test("STORY-286 an adapter bundle is accepted by its receipt's digests, not by existing", async (context) => {
@@ -1032,7 +1044,8 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
     engineCopyVersions: copies,
     engineRequiredVersions: { "cross-project": null },
   });
-  assertCheckResult(alignment(undeclared), true, "PLATFORM_ENGINE_REQUIREMENT_UNDECLARED");
+  assert.equal(alignment(undeclared).ok, true);
+  assert.equal(alignment(undeclared).reasonCode, "PLATFORM_ENGINE_REQUIREMENT_UNDECLARED");
   assert.equal(alignment(undeclared).requirementAsserted, false);
 
   // A satisfied declaration is the other green, and it asserts.
@@ -1051,7 +1064,8 @@ test("MIN-102 engine alignment names a copy that is behind a chain declaration",
     engineRequiredVersions: { "cross-project": "0.12.0" },
   });
   assert.equal(behind.ok, false);
-  assertCheckResult(alignment(behind), false, "PLATFORM_ENGINE_BEHIND_CHAIN");
+  assert.equal(alignment(behind).ok, false);
+  assert.equal(alignment(behind).reasonCode, "PLATFORM_ENGINE_BEHIND_CHAIN");
   assert.deepEqual(alignment(behind).behind, [
     { partition: "cross-project", required: "0.12.0", copy: "installed", version: "0.11.15", reason: "BEHIND" },
   ]);
@@ -1089,7 +1103,8 @@ test("MIN-103 the platform names a setting the placed Helper never teaches", asy
     helperSettingKeys: { catalog, taught: ["backup.cadence", "design.authority"] },
   });
   assert.equal(gap.ok, false);
-  assertCheckResult(coverage(gap), false, "PLATFORM_HELPER_SETTINGS_UNTAUGHT");
+  assert.equal(coverage(gap).ok, false);
+  assert.equal(coverage(gap).reasonCode, "PLATFORM_HELPER_SETTINGS_UNTAUGHT");
   assert.deepEqual(coverage(gap).untaught, ["conference.positionBudgetBytes"]);
 
   // A payload teaching more than the catalog registers is not a fault: the Helper
@@ -1117,7 +1132,8 @@ test("INC-233: helper release alignment separates stale, aligned, uncomparable a
   // Stale: the state this platform was actually in on 2026-08-19, with both existing
   // checks green. Red leg: drop the inequality branch and it reads as aligned.
   const stale = leg(await run({ published: "a".repeat(64), trusted: "b".repeat(64) }));
-  assertCheckResult(stale, false, "PLATFORM_HELPER_PAYLOAD_STALE");
+  assert.equal(stale.ok, false);
+  assert.equal(stale.reasonCode, "PLATFORM_HELPER_PAYLOAD_STALE");
   assert.equal(stale.published, "a".repeat(12));
   assert.equal(stale.trusted, "b".repeat(12));
   // The remedy must say deploying is an Owner stop. A red whose obvious fix looks like
@@ -1142,7 +1158,8 @@ test("INC-233: helper release alignment separates stale, aligned, uncomparable a
   // Red leg: treat a missing trust root as uncomparable too, and a host with no installed
   // helper at all reports the same green as one that is correctly aligned.
   const missing = leg(await run({ published: "e".repeat(64), trusted: null }));
-  assertCheckResult(missing, false, "PLATFORM_HELPER_TRUST_ROOT_MISSING");
+  assert.equal(missing.ok, false);
+  assert.equal(missing.reasonCode, "PLATFORM_HELPER_TRUST_ROOT_MISSING");
 });
 
 // TCRN-CROSS-INC-224. Headroom is reported before the wall, not at it.
@@ -1170,7 +1187,8 @@ test("INC-224: crossing the trigger is red, with the remaining headroom and whos
     chainEventCounts: { "cross-project": 15_001, "TCRN-AOS": 1054 },
   });
   const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
-  assertCheckResult(leg, false, "PLATFORM_CHAIN_REVIEW_TRIGGER_REACHED");
+  assert.equal(leg.ok, false);
+  assert.equal(leg.reasonCode, "PLATFORM_CHAIN_REVIEW_TRIGGER_REACHED");
   assert.deepEqual(leg.partitions, [{ partition: "cross-project", events: 15_001, headroom: 4_999 }]);
   // The remedy must say the disposition is Owner's. A red that reads as a chore gets
   // treated as one, and the decision it exists to prompt is not a chore.
@@ -1204,7 +1222,8 @@ test("INC-234: missing, stale and red verdicts are each refused, and named", asy
 
   // No verdicts at all: the state on 2026-08-19, and the one this leg exists for.
   const none = leg(await run({ verdicts: {} }));
-  assertCheckResult(none, false, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
+  assert.equal(none.ok, false);
+  assert.equal(none.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
   assert.equal(none.missing.length, 7, "every roster group is named as unrecorded");
 
   // A red verdict stays visible rather than being absorbed. Red leg: treat any recorded
@@ -1359,7 +1378,8 @@ if (workspace.includes("broken-partition")) {
 }
 `);
   const result = await inspectChainValidation(root, { engineCli: cli });
-  assertCheckResult(result, false, "PLATFORM_CHAIN_VALIDATION_FAILED");
+  assert.equal(result.ok, false);
+  assert.equal(result.reasonCode, "PLATFORM_CHAIN_VALIDATION_FAILED");
   assert.deepEqual(result.failed.map((entry) => entry.partition), ["broken-partition"]);
   assert.equal(result.failed[0].reasonCode, "PLATFORM_CHAIN_VALIDATE_EXIT_1");
 });
@@ -1424,7 +1444,8 @@ test("STORY-304: a verdict recorded against another commit is stale, and names b
     acceptanceVerdicts: boundVerdicts("b".repeat(40)),
   });
   const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
-  assertCheckResult(leg, false, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
+  assert.equal(leg.ok, false);
+  assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
   assert.equal(leg.stale.length, 7, "every verdict recorded against another tree is stale");
   assert.equal(leg.stale[0].recordedAgainst, "b".repeat(12));
   assert.equal(leg.stale[0].head, "a".repeat(12), "and the commit it should have named is reported");
@@ -1469,7 +1490,8 @@ test("INC-250: an unresolved declared repository is red rather than an engine-HE
     acceptanceVerdicts: boundVerdicts("e".repeat(40)),
   });
   const leg = result.checks.find((entry) => entry.name === "acceptanceVerdicts");
-  assertCheckResult(leg, false, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
+  assert.equal(leg.ok, false);
+  assert.equal(leg.reasonCode, "PLATFORM_ACCEPTANCE_LANE_UNPROVEN");
   assert.equal(leg.unresolved.length, 7);
   assert.equal(leg.unresolved[0].reasonCode, "PLATFORM_ACCEPTANCE_REPOSITORY_UNRESOLVED");
 });
@@ -1519,7 +1541,8 @@ test("proofBudget compares each of the three counts to its own cap independently
     claimCount: 122, claimCap: 122,
     coreSourceLines: 32086, coreSourceLineCap: 32086,
   }));
-  assertCheckResult(oneOver, false, "PLATFORM_PROOF_BUDGET_EXCEEDED");
+  assert.equal(oneOver.ok, false);
+  assert.equal(oneOver.reasonCode, "PLATFORM_PROOF_BUDGET_EXCEEDED");
   assert.deepEqual(oneOver.exceeded, [{ metric: "verifyScriptCount", observed: 136, cap: 135, over: 1 }]);
   // The six raw fields stay at the top level regardless of which one tripped, so a
   // reader is never left reconstructing the untripped counts from elsewhere.
@@ -1581,7 +1604,8 @@ test("proofBudget compares each of the three counts to its own cap independently
   // Repeat with different names so a fourth hard-coded branch cannot satisfy it.
   for (const name of ["additionalProofCap", "anotherProofCap", "futureProofCap"]) {
     const red = await runFiles({ ...surfaceCaps, [name]: 0 });
-    assertCheckResult(red, false, "PLATFORM_PROOF_BUDGET_UNJUDGED_CAP");
+    assert.equal(red.ok, false);
+    assert.equal(red.reasonCode, "PLATFORM_PROOF_BUDGET_UNJUDGED_CAP");
     assert.deepEqual(red.unjudged, [name]);
     assert.ok(red.judgedCapFieldCount < red.capFieldCount);
     assert.equal((await runFiles(surfaceCaps)).ok, true);
@@ -1589,7 +1613,8 @@ test("proofBudget compares each of the three counts to its own cap independently
 
   for (const name of Object.keys(surfaceCaps).filter((key) => key.endsWith("Cap"))) {
     const red = await runFiles({ ...surfaceCaps, [name]: surfaceCaps[name] - 1 });
-    assertCheckResult(red, false, "PLATFORM_PROOF_BUDGET_EXCEEDED");
+    assert.equal(red.ok, false);
+    assert.equal(red.reasonCode, "PLATFORM_PROOF_BUDGET_EXCEEDED");
     assert.equal(red.exceeded.length, 1);
     assert.equal((await runFiles(surfaceCaps)).ok, true);
 
@@ -1693,7 +1718,8 @@ test("unusedExports names the export that is not already recorded as isolated", 
     allowed: ["beta"],
     consumerFiles: 23,
   }));
-  assertCheckResult(added, false, "PLATFORM_CORE_EXPORT_UNCONSUMED");
+  assert.equal(added.ok, false);
+  assert.equal(added.reasonCode, "PLATFORM_CORE_EXPORT_UNCONSUMED");
   assert.deepEqual(added.unconsumedWithoutAllowance, ["gamma"], "only the unrecorded symbol is named");
   // The measured counts stay at the top level whichever half tripped, so a reader is
   // never left reconstructing them from the lists.
@@ -1719,7 +1745,8 @@ test("a recorded allowance that gained a consumer or lost its symbol is its own 
     allowed: ["alpha", "beta", "zeta"],
     consumerFiles: 23,
   }));
-  assertCheckResult(stale, false, "PLATFORM_CORE_EXPORT_ALLOWANCE_STALE");
+  assert.equal(stale.ok, false);
+  assert.equal(stale.reasonCode, "PLATFORM_CORE_EXPORT_ALLOWANCE_STALE");
   assert.deepEqual(stale.consumedAllowances, ["alpha"], "still exported, now called");
   assert.deepEqual(stale.absentAllowances, ["zeta"], "no longer exported at all");
   assert.deepEqual(stale.unconsumedWithoutAllowance, undefined);
