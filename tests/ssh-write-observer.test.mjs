@@ -483,6 +483,55 @@ test("a HIT lands in a sink whose directory does not exist yet, and reads back",
   }
 });
 
+test("TCRN-CROSS-INC-368 leg 1: --container-root redirects the default sink under the given container, not the installed copy's own ancestor", async () => {
+  const container = await mkdtemp(join(tmpdir(), "inc368-container-root-"));
+  try {
+    // No `sink`: S2_OBSERVE_LOG is deleted by runCli, so only --container-root can be
+    // steering `observeLogPath()` here -- exactly the codex-managed-copy scenario INC-368
+    // reports, where self-derivation lands one ancestor too shallow.
+    const run = runCli(["--container-root", container], { input: hookPayload });
+    assert.equal(run.status, 0, "the hook never blocks a session");
+    const expectedSink = resolve(container, ".tcrn-artifacts/observe/var/tcrn-observe/ssh-write-hits.jsonl");
+    assert.ok(existsSync(expectedSink), `expected the hit under the named container root at ${expectedSink}`);
+    const logged = (await readFile(expectedSink, "utf8")).trim().split("\n");
+    assert.equal(logged.length, 1);
+    const entry = JSON.parse(logged[0]);
+    assert.equal(entry.command, HIT_COMMAND);
+    assert.equal(entry.reason, "ssh-write");
+  } finally {
+    await rm(container, { recursive: true, force: true });
+  }
+});
+
+test("TCRN-CROSS-INC-368 leg 2: S2_OBSERVE_LOG still outranks --container-root, unchanged", async () => {
+  const container = await mkdtemp(join(tmpdir(), "inc368-container-root-outranked-"));
+  const sink = join(container, "explicit-sink.jsonl");
+  try {
+    const run = runCli(["--container-root", join(container, "not-the-real-root")], { sink, input: hookPayload });
+    assert.equal(run.status, 0);
+    const derivedFromContainerRoot = resolve(container, "not-the-real-root", ".tcrn-artifacts/observe/var/tcrn-observe/ssh-write-hits.jsonl");
+    assert.equal(existsSync(derivedFromContainerRoot), false, "S2_OBSERVE_LOG must win over --container-root, exactly as it already won over the self-derived default");
+    assert.ok(existsSync(sink));
+  } finally {
+    await rm(container, { recursive: true, force: true });
+  }
+});
+
+test("TCRN-CROSS-INC-368 leg 3: omitting --container-root is still plain hook mode (transition safety for an installed copy that predates the flag)", async () => {
+  // The exact argv an already-installed copy of this script would still be invoked with.
+  // An explicit sink keeps this off the real container's real observe log.
+  const sink = join(await mkdtemp(join(tmpdir(), "inc368-legacy-argv-")), "sink.jsonl");
+  try {
+    const run = runCli([], { sink, input: hookPayload });
+    assert.equal(run.status, 0);
+    const logged = (await readFile(sink, "utf8")).trim().split("\n");
+    assert.equal(logged.length, 1);
+    assert.equal(JSON.parse(logged[0]).command, HIT_COMMAND);
+  } finally {
+    await rm(dirname(sink), { recursive: true, force: true });
+  }
+});
+
 // ---------------------------------------------------------------------------
 // INC-041 — the gate must verify the command the HOST will run.
 //
@@ -786,6 +835,10 @@ test("an unknown, misspelled or missing flag is reason-coded and non-zero", asyn
     [["--self-test", "--project-dir", "."], "UNEXPECTED_ARGUMENT"],
     [["--classify"], "MISSING_OPERAND"],
     [["--classify", "git status", "extra"], "UNEXPECTED_ARGUMENT"],
+    // TCRN-CROSS-INC-368: --container-root is a prefix, not a mode, but a missing
+    // operand must still fail loud rather than silently falling through to hook mode.
+    [["--container-root"], "MISSING_OPERAND"],
+    [["--container-root", "--self-test"], "MISSING_OPERAND"],
   ];
   for (const [args, reason] of cases) {
     const run = runCli(args, { sink: join(workdir, "usage.jsonl") });

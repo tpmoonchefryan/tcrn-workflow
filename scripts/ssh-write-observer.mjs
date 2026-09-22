@@ -73,7 +73,21 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // move again (same shape as TCRN-AOS/deploy/aos-local-client/ceremony-spans.mjs). And the
 // channel now has a gate that can go red: see `verifyChannel` below.
 const CONTAINER_ROOT = resolve(REPO_ROOT, "..", "..");
-const DEFAULT_LOG = resolve(CONTAINER_ROOT, ".tcrn-artifacts/observe/var/tcrn-observe/ssh-write-hits.jsonl");
+const OBSERVE_LOG_RELATIVE_PATH = ".tcrn-artifacts/observe/var/tcrn-observe/ssh-write-hits.jsonl";
+const DEFAULT_LOG = resolve(CONTAINER_ROOT, OBSERVE_LOG_RELATIVE_PATH);
+
+// TCRN-CROSS-INC-368: a managed Codex copy of this hook resolves `CONTAINER_ROOT` above
+// to the wrong ancestor (it derives from the script's own installed location), which
+// lands the sink outside the real container. `--container-root <dir>` (see `parseCliArgs`
+// below) lets the render step that knows the true root pass it in; this override is
+// consulted by `observeLogPath()` only when `S2_OBSERVE_LOG` is unset, matching the
+// existing env-var-wins precedence exactly. `null` (the default) reproduces the prior
+// self-derived behaviour byte for byte.
+let containerRootOverride = null;
+
+export function setContainerRootOverride(root) {
+  containerRootOverride = typeof root === "string" && root.length > 0 ? resolve(root) : null;
+}
 
 // Keep deployment topology configurable without publishing a literal private
 // host/path in the candidate source. The deployed hook supplies the same values
@@ -996,7 +1010,8 @@ export function runSelfTest({ env = process.env, rosterPath } = {}) {
 // Resolved per call, never cached: the override has to be readable at the moment the
 // hook runs, and the gate below must resolve the SAME path the hook would.
 export function observeLogPath() {
-  return process.env.S2_OBSERVE_LOG ?? DEFAULT_LOG;
+  const overrideLog = containerRootOverride === null ? DEFAULT_LOG : resolve(containerRootOverride, OBSERVE_LOG_RELATIVE_PATH);
+  return process.env.S2_OBSERVE_LOG ?? overrideLog;
 }
 
 // Last append failure, for diagnostics. `null` means the last append succeeded — so a
@@ -1429,24 +1444,39 @@ export function isDirectInvocation(entry = process.argv[1], self = fileURLToPath
 // indistinguishable from a passing gate. A CI step can be retired by one typo, and nothing
 // downstream can tell.
 export function parseCliArgs(argv) {
-  if (argv.length === 0) return { mode: "hook" };
-  const mode = argv[0];
+  // TCRN-CROSS-INC-368: an optional `--container-root <dir>` may prefix any mode
+  // (including no mode at all, i.e. hook invocation) without becoming a mode itself —
+  // the render step that knows the true container root supplies it ahead of whatever
+  // else it was already passing. `containerRoot` is `null`, not merely absent, when no
+  // override was given, so every branch below returns the field consistently.
+  let containerRoot = null;
+  let rest = argv;
+  if (rest[0] === "--container-root") {
+    const value = rest[1];
+    if (value === undefined || value.startsWith("--")) {
+      return { mode: "usage-error", reason: "MISSING_OPERAND", detail: "--container-root <dir>" };
+    }
+    containerRoot = value;
+    rest = rest.slice(2);
+  }
+  if (rest.length === 0) return { mode: "hook", containerRoot };
+  const mode = rest[0];
   if (mode === "--self-test") {
-    if (argv.length > 1) return { mode: "usage-error", reason: "UNEXPECTED_ARGUMENT", detail: `--self-test takes no arguments (got ${argv[1]})` };
-    return { mode };
+    if (rest.length > 1) return { mode: "usage-error", reason: "UNEXPECTED_ARGUMENT", detail: `--self-test takes no arguments (got ${rest[1]})` };
+    return { mode, containerRoot };
   }
   if (mode === "--classify") {
-    if (argv.length < 2) return { mode: "usage-error", reason: "MISSING_OPERAND", detail: "--classify <command>" };
-    if (argv.length > 2) return { mode: "usage-error", reason: "UNEXPECTED_ARGUMENT", detail: `--classify takes one command (got ${argv.length - 1})` };
-    return { mode, command: argv[1] };
+    if (rest.length < 2) return { mode: "usage-error", reason: "MISSING_OPERAND", detail: "--classify <command>" };
+    if (rest.length > 2) return { mode: "usage-error", reason: "UNEXPECTED_ARGUMENT", detail: `--classify takes one command (got ${rest.length - 1})` };
+    return { mode, command: rest[1], containerRoot };
   }
   if (mode === "--verify-channel") {
     const projectDirs = [];
-    for (let index = 1; index < argv.length; index += 1) {
-      if (argv[index] !== "--project-dir") {
-        return { mode: "usage-error", reason: "UNKNOWN_FLAG", detail: `${argv[index]} is not a flag of --verify-channel` };
+    for (let index = 1; index < rest.length; index += 1) {
+      if (rest[index] !== "--project-dir") {
+        return { mode: "usage-error", reason: "UNKNOWN_FLAG", detail: `${rest[index]} is not a flag of --verify-channel` };
       }
-      const value = argv[index + 1];
+      const value = rest[index + 1];
       if (value === undefined || value.startsWith("--")) {
         return { mode: "usage-error", reason: "MISSING_OPERAND", detail: "--project-dir <dir>" };
       }
@@ -1456,19 +1486,25 @@ export function parseCliArgs(argv) {
     if (projectDirs.length === 0) {
       return { mode: "usage-error", reason: "MISSING_PROJECT_DIR", detail: "--verify-channel requires at least one --project-dir <dir>" };
     }
-    return { mode, projectDirs };
+    return { mode, projectDirs, containerRoot };
   }
   return { mode: "usage-error", reason: "UNKNOWN_MODE", detail: `${mode} is not a mode of this script` };
 }
 
 // 64 is EX_USAGE. It is deliberately neither 0 (a clean run) nor 1 (a red gate), so a
-// caller can tell "the gate said no" from "the gate was never asked". It is unreachable
-// from the hook invocation, which carries no arguments at all — and it is never 2, the one
+// caller can tell "the gate said no" from "the gate was never asked". A hook invocation
+// carrying no arguments (or a well-formed `--container-root <dir>` ahead of none) cannot
+// reach it — only a malformed `--container-root` with no operand can, which is meant to
+// fail loud rather than silently fall through to hook mode — and it is never 2, the one
 // code that would block a tool call.
 const EXIT_USAGE = 64;
 
 if (isDirectInvocation()) {
   const parsed = parseCliArgs(process.argv.slice(2));
+  // Applies uniformly: every mode (including "hook") resolves `observeLogPath()`
+  // through the same override, and a `null` containerRoot restores exactly the prior
+  // self-derived `DEFAULT_LOG` behaviour.
+  setContainerRootOverride(parsed.containerRoot ?? null);
   if (parsed.mode === "usage-error") {
     writeSync(2, `${JSON.stringify({ status: "SSH_WRITE_OBSERVER_USAGE_ERROR", reason: parsed.reason, detail: parsed.detail })}\n`);
     process.exit(EXIT_USAGE);

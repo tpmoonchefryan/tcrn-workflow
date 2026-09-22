@@ -122,8 +122,16 @@ test("INC-220 the Codex document is shaped the way the host documents it", () =>
   assert.match(injection, /scripts\/knowledge-inject-hook\.mjs" --container-root "[^"]+" --host codex$/u);
   const capture = document.hooks.Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
   assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --container-root "[^"]+" --host codex$/u);
+  // TCRN-CROSS-INC-368: three managed handlers that used to self-derive their container
+  // root (and get it wrong from a managed Codex copy's install location) now carry
+  // `--container-root` on Codex. Each is checked individually — a single representative
+  // leg standing in for all three was exactly accept-r3 issue #157's lesson.
   const telemetry = document.hooks.SubagentStart[0].hooks[0].command;
-  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host codex$/u);
+  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --container-root "[^"]+" --host codex$/u);
+  const agentsZero = document.hooks.UserPromptSubmit.find((group) => group.hooks[0].command.includes("agents-zero-hook.mjs")).hooks[0].command;
+  assert.match(agentsZero, /scripts\/agents-zero-hook\.mjs" --container-root "[^"]+"$/u, "agents-zero-hook takes no --host, only --container-root");
+  const sshObserver = document.hooks.PreToolUse.find((group) => group.hooks[0].command.includes("ssh-write-observer.mjs")).hooks[0].command;
+  assert.match(sshObserver, /scripts\/ssh-write-observer\.mjs" --container-root "[^"]+"$/u, "ssh-write-observer takes no --host, only --container-root");
 });
 
 test("INC-220 the Claude rendering keeps the project-dir form that host resolves", () => {
@@ -140,7 +148,14 @@ test("INC-220 the Claude rendering keeps the project-dir form that host resolves
   const capture = claudeHookSettings().Stop.find((group) => group.hooks[0].command.includes("knowledge-capture-hook.mjs")).hooks[0].command;
   assert.match(capture, /scripts\/knowledge-capture-hook\.mjs" --container-root "\$\{CLAUDE_PROJECT_DIR\}" --host claude; fi$/u);
   const telemetry = claudeHookSettings().SubagentStart[0].hooks[0].command;
-  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host claude; fi$/u);
+  assert.match(telemetry, /scripts\/dispatch-telemetry-hook\.mjs" --host claude; fi$/u, "Claude's telemetry command must stay byte-identical: no --container-root");
+  // TCRN-CROSS-INC-368: the same three handlers stay byte-identical on Claude, which
+  // already runs them via ${CLAUDE_PROJECT_DIR} and needs no explicit root. Checked
+  // individually, same reasoning as the Codex-side assertions above.
+  const agentsZero = claudeHookSettings().UserPromptSubmit.find((group) => group.hooks[0].command.includes("agents-zero-hook.mjs")).hooks[0].command;
+  assert.match(agentsZero, /scripts\/agents-zero-hook\.mjs"; fi$/u, "Claude's agents-zero-hook command must stay byte-identical: no --container-root");
+  const sshObserver = claudeHookSettings().PreToolUse.find((group) => group.hooks[0].command.includes("ssh-write-observer.mjs")).hooks[0].command;
+  assert.match(sshObserver, /scripts\/ssh-write-observer\.mjs"; fi$/u, "Claude's ssh-write-observer command must stay byte-identical: no --container-root");
 });
 
 test("INC-220 harness drift is reported when a live Claude hook is gone", () => {

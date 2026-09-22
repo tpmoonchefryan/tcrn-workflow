@@ -2,10 +2,12 @@
 // TCRN-CROSS-STORY-372 — local dispatch telemetry, hook registration and done evidence.
 
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { appendFile, mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   acquireWorkspaceLease,
@@ -56,6 +58,24 @@ async function workspaceFixture(t) {
   const state = await initializeWorkspace({ roots, externalKey: "TELEMETRY-TEST", createdAt: INSTANT(0) });
   return { base, workspace: join(base, "workspace"), transient: join(base, "transient"), state };
 }
+
+// TCRN-CROSS-INC-368: a fixture shaped like a real container -- roots live under
+// `<base>/.tcrn-workspace/<partition>/*`, matching `workspaceForPartition()`'s own
+// derivation -- rather than `workspaceFixture()`'s flatter `<base>/*`, which existing
+// tests reach only through `TCRN_TELEMETRY_ROOT`/`TCRN_TELEMETRY_WORKSPACE` and never
+// through `containerRoot` itself.
+async function containerRootFixture(t, partition = "cross-project") {
+  const base = await scratch("tcrn-telemetry-container-root-");
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const partitionBase = join(base, ".tcrn-workspace", partition);
+  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"]
+    .map((kind) => ({ kind, path: join(partitionBase, kind) }));
+  for (const root of roots) await mkdir(root.path, { recursive: true });
+  await initializeWorkspace({ roots, externalKey: "TELEMETRY-CONTAINER-ROOT-TEST", createdAt: INSTANT(0) });
+  return { base, transient: join(partitionBase, "transient") };
+}
+
+const DISPATCH_TELEMETRY_HOOK_PATH = fileURLToPath(new URL("../scripts/dispatch-telemetry-hook.mjs", import.meta.url));
 
 async function cli(args) {
   let output = "";
@@ -137,6 +157,55 @@ test("STORY-393 U6: an explicit Codex hook host is preserved over payload ambigu
   assert.equal(result.reasonCode, "TELEMETRY_RECORDED");
   const record = (await readTelemetryRecords(root, { limit: 10 })).records[0];
   assert.equal(record.payload.source, "hook:codex:SubagentStart");
+});
+
+test("TCRN-CROSS-INC-368 leg 1: a container root with an initialized workspace records telemetry under it", async (t) => {
+  const { base, transient } = await containerRootFixture(t);
+  const input = JSON.stringify({ hook_event_name: "SubagentStart", session_id: "container-root-child", parent_session: "container-root-parent" });
+  const run = spawnSync(process.execPath, [DISPATCH_TELEMETRY_HOOK_PATH, "--container-root", base, "--host", "codex"], { encoding: "utf8", input });
+  assert.equal(run.status, 0, `expected a clean exit; stderr=${run.stderr}`);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.reasonCode, "TELEMETRY_RECORDED", `--container-root must resolve the fixture's own workspace, not fail open against it: ${run.stdout}`);
+  const records = await readTelemetryRecords(transient, { limit: 10 });
+  assert.equal(records.records.length, 1);
+  assert.equal(records.records[0].payload.source, "hook:codex:SubagentStart");
+});
+
+test("TCRN-CROSS-INC-368 leg 2: an empty (uninitialized) --container-root fails open rather than silently falling back to the installed copy's own container", async (t) => {
+  const bare = await scratch("tcrn-telemetry-bare-container-root-");
+  t.after(() => rm(bare, { recursive: true, force: true }));
+  const input = JSON.stringify({ hook_event_name: "SubagentStart", session_id: "bare-child", parent_session: "bare-parent" });
+  const run = spawnSync(process.execPath, [DISPATCH_TELEMETRY_HOOK_PATH, "--container-root", bare, "--host", "codex"], { encoding: "utf8", input });
+  assert.equal(run.status, 0, "fail-open never exits non-zero");
+  const result = JSON.parse(run.stdout);
+  // If the flag were silently ignored, `containerRoot` would default to this script's
+  // real, already-initialized `PLATFORM_ROOT` and the call would come back
+  // TELEMETRY_RECORDED -- exactly the false negative INC-368 reports. Getting a failure
+  // instead of a real container's real chain is the proof the flag was actually consulted.
+  assert.equal(result.ok, true);
+  assert.notEqual(result.reasonCode, "TELEMETRY_RECORDED");
+  assert.match(result.reasonCode, /^TELEMETRY_(FAIL_OPEN|UNAVAILABLE)$/u);
+});
+
+test("TCRN-CROSS-INC-368 leg 3: omitting --container-root is still a clean, recognised invocation (transition safety for an installed copy that predates the flag)", async (t) => {
+  // The exact argv an already-installed copy of this script would still be invoked with
+  // once a render adds the flag only to *new* renders: no --container-root at all. This
+  // must not become a usage error or otherwise change shape -- proven here via
+  // TCRN_TELEMETRY_ROOT (which this repo's own tests already use throughout this file to
+  // reach a scratch sink) rather than the real platform container, so the test never
+  // touches the live chain under `.tcrn-workspace`.
+  const root = await scratch("tcrn-telemetry-legacy-argv-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const input = JSON.stringify({ hook_event_name: "SubagentStart", session_id: "legacy-argv-child", parent_session: "legacy-argv-parent" });
+  const run = spawnSync(process.execPath, [DISPATCH_TELEMETRY_HOOK_PATH, "--host", "codex"], {
+    encoding: "utf8",
+    input,
+    env: { ...process.env, TCRN_TELEMETRY_ROOT: root },
+  });
+  assert.equal(run.status, 0, `expected a clean exit; stderr=${run.stderr}`);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.ok, true);
+  assert.equal(result.reasonCode, "TELEMETRY_RECORDED", `no --container-root must not become a usage error: ${run.stdout}`);
 });
 
 test("STORY-424: lifecycle facts are bounded and missing facts stay unknown", async (t) => {

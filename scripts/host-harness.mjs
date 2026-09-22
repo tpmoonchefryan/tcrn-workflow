@@ -38,6 +38,16 @@ import { fileURLToPath } from "node:url";
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const HOSTS = Object.freeze(["claude", "codex"]);
 const CONTAINER_ROOT_HANDLERS = new Set(["scripts/knowledge-inject-hook.mjs", "scripts/knowledge-capture-hook.mjs"]);
+// TCRN-CROSS-INC-368: these three handlers self-derive their container root from their
+// own installed location, which resolves to the wrong ancestor from a managed Codex
+// copy's actual position. Claude already runs them via `${CLAUDE_PROJECT_DIR}` and does
+// not need the flag (see `claudeCommand`/`handlerArguments` below — Claude rendering for
+// these handlers is untouched), so this set is consulted for the `codex` host only.
+const CODEX_ONLY_CONTAINER_ROOT_HANDLERS = new Set([
+  "scripts/dispatch-telemetry-hook.mjs",
+  "scripts/agents-zero-hook.mjs",
+  "scripts/ssh-write-observer.mjs",
+]);
 
 /** The control trees no host may be edited into. Kept here so both renderings cite one list. */
 export const GUARDED_TREES = Object.freeze([".tcrn-workspace", ".tcrn-workflow"]);
@@ -193,9 +203,16 @@ export function capabilityGaps() {
 
 function handlerArguments(handler, host, containerRoot) {
   const hostArgument = handler === "scripts/knowledge-inject-hook.mjs" || handler === "scripts/knowledge-capture-hook.mjs" || handler === "scripts/dispatch-telemetry-hook.mjs" ? ` --host ${host}` : "";
-  if (!CONTAINER_ROOT_HANDLERS.has(handler)) return hostArgument;
-  const rootArgument = host === "claude" ? '"${CLAUDE_PROJECT_DIR}"' : JSON.stringify(resolve(containerRoot));
-  return ` --container-root ${rootArgument}${hostArgument}`;
+  if (CONTAINER_ROOT_HANDLERS.has(handler)) {
+    const rootArgument = host === "claude" ? '"${CLAUDE_PROJECT_DIR}"' : JSON.stringify(resolve(containerRoot));
+    return ` --container-root ${rootArgument}${hostArgument}`;
+  }
+  // Codex-only: Claude rendering for these three stays byte-identical to before this set
+  // existed (`hostArgument` alone — none of the three take `--host` either).
+  if (host === "codex" && CODEX_ONLY_CONTAINER_ROOT_HANDLERS.has(handler)) {
+    return ` --container-root ${JSON.stringify(resolve(containerRoot))}${hostArgument}`;
+  }
+  return hostArgument;
 }
 
 function claudeCommand(handler) {

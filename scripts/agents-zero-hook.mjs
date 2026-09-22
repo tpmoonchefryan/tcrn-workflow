@@ -189,9 +189,24 @@ function readStdin() {
   }
 }
 
+// TCRN-CROSS-INC-368: a managed Codex copy of this hook resolves `DEFAULT_CONTAINER_ROOT`
+// above to the wrong ancestor, and Codex sets no `CLAUDE_PROJECT_DIR` to fall back on
+// either — so `containerRoot()`'s self-derivation is the one that lands wrong, and
+// AGENTS.md section zero silently never re-injects. `--container-root <dir>` lets the
+// render step that knows the true root pass it straight in as `buildHookResponse`'s
+// existing `root` override, which already outranks both `CLAUDE_PROJECT_DIR` and
+// self-derivation; omitting the flag reproduces the prior default exactly.
+function containerRootArgument(argv = process.argv.slice(2)) {
+  const index = argv.findIndex((value) => value === "--container-root");
+  if (index < 0) return null;
+  const value = argv[index + 1];
+  return typeof value === "string" && value.length > 0 ? resolve(value) : null;
+}
+
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   try {
-    process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin()))}\n`);
+    const root = containerRootArgument() ?? undefined;
+    process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin(), { root }))}\n`);
   } catch {
     process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: "", additionalContext: "" } })}\n`);
   }

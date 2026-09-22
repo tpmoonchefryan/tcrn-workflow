@@ -262,6 +262,20 @@ function hostArgument(argv = process.argv.slice(2)) {
   return value === "claude" || value === "codex" ? value : null;
 }
 
+// TCRN-CROSS-INC-368: a managed Codex copy of this hook resolves `PLATFORM_ROOT` above
+// to the wrong ancestor, which silently drops dispatch telemetry (`telemetryRoot()`
+// resolves a workspace under the wrong root and the fail-open catch in
+// `runTelemetryHook` reports `TELEMETRY_FAIL_OPEN`/`TELEMETRY_UNAVAILABLE` instead of
+// recording anything). `--container-root <dir>` lets the render step that knows the true
+// root pass it through to `runTelemetryHook`'s existing `containerRoot` option; omitting
+// the flag reproduces the prior self-derived `PLATFORM_ROOT` default exactly.
+function containerRootArgument(argv = process.argv.slice(2)) {
+  const index = argv.findIndex((value) => value === "--container-root");
+  if (index < 0) return null;
+  const value = argv[index + 1];
+  return typeof value === "string" && value.length > 0 ? resolve(value) : null;
+}
+
 function eventName(input, env) {
   return firstDefined(input?.hook_event_name, input?.hookEventName, env?.TCRN_TELEMETRY_EVENT);
 }
@@ -373,8 +387,9 @@ function readStdin() {
 
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   const host = hostArgument();
+  const containerRoot = containerRootArgument();
   const env = host === null ? process.env : { ...process.env, TCRN_TELEMETRY_HOST: host, TCRN_HOST: host };
-  const result = await runTelemetryHook(readStdin(), { env });
+  const result = await runTelemetryHook(readStdin(), containerRoot === null ? { env } : { env, containerRoot });
   process.stdout.write(`${JSON.stringify(result)}\n`);
   process.exit(0);
 }
