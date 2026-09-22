@@ -299,12 +299,13 @@ export function buildHookResponseWithEvidence(input, { host, containerRoot = PLA
   };
 }
 
+function cliValue(name, fallback) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 && typeof process.argv[index + 1] === "string" ? process.argv[index + 1] : fallback;
+}
+
 if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
-  const hostFlag = process.argv.indexOf("--host");
-  const host = hostFlag >= 0 ? process.argv[hostFlag + 1] : undefined;
-  const containerRootFlag = process.argv.indexOf("--container-root");
-  const containerRoot = containerRootFlag >= 0 && typeof process.argv[containerRootFlag + 1] === "string"
-    ? process.argv[containerRootFlag + 1]
-    : PLATFORM_ROOT;
+  const host = cliValue("--host");
+  const containerRoot = cliValue("--container-root", PLATFORM_ROOT);
   process.stdout.write(`${JSON.stringify(buildHookResponse(readStdin(), { host, containerRoot }))}\n`);
 }

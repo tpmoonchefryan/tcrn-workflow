@@ -149,8 +149,7 @@ async function fixture(context, { agents = `${topology}fixture\n`, chain = true,
 test("a complete synthetic platform container is green", async (context) => {
   const root = await fixture(context);
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, true);
-  assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
+  assert.equal(result.ok, true); assert.equal(result.reasonCode, "PLATFORM_LAYOUT_HEALTHY");
   assert.deepEqual(result.checks.map((item) => item.ok), [true, true, true, true, true, true, true, true, true]);
 });
 
@@ -158,8 +157,7 @@ test("STORY-371: Claude's bridge is exact and arbitrary prose is red", async (co
   const invalid = await fixture(context, { claude: "@OTHER.md\n" });
   const red = await inspectPlatform(invalid, { includeInstallSurface: false });
   const redBridge = red.checks.find((entry) => entry.name === "claudeBridge");
-  assert.equal(redBridge.ok, false);
-  assert.equal(redBridge.reasonCode, "PLATFORM_CLAUDE_BRIDGE_INVALID");
+  assert.equal(redBridge.ok, false); assert.equal(redBridge.reasonCode, "PLATFORM_CLAUDE_BRIDGE_INVALID");
 
   const whitespace = await fixture(context, { claude: " @AGENTS.md \n\n" });
   const green = await inspectPlatform(whitespace, { includeInstallSurface: false });
@@ -172,8 +170,7 @@ test("STORY-371: host-render drift is a named platform check", async (context) =
     hostRenderDrift: { ok: false, reasonCode: "PLATFORM_HOST_RENDER_DRIFTED", drift: [{ path: ".claude/agents/implement.md" }] },
   });
   const check = result.checks.find((entry) => entry.name === "hostRenderDrift");
-  assert.equal(check.ok, false);
-  assert.equal(check.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
+  assert.equal(check.ok, false); assert.equal(check.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
   assert.deepEqual(check.drift, [{ path: ".claude/agents/implement.md" }]);
 });
 
@@ -198,8 +195,7 @@ test("INC-351: doctor compares host-render against the managed engine root", asy
     hostRenderRepoRoot: developmentRoot,
     hostRenderScope: "hooks-only",
   });
-  assert.equal(development.ok, false, "the development checkout must not silently stand in for the managed engine");
-  assert.equal(development.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
+  assert.equal(development.ok, false, "the development checkout must not silently stand in for the managed engine"); assert.equal(development.reasonCode, "PLATFORM_HOST_RENDER_DRIFTED");
 });
 
 test("TCRN-CROSS-STORY-429: doctor uses the explicitly selected hooks-only projection", async (context) => {
@@ -210,14 +206,12 @@ test("TCRN-CROSS-STORY-429: doctor uses the explicitly selected hooks-only proje
   await writeFile(join(root, ".codex", "hooks.json"), `${JSON.stringify(codexHookDocument(repoRoot, root), null, 2)}\n`);
   const hostRenderSettings = codexDispatchSettings(["approved-flagship", "approved-main", "approved-economy"]);
   const scoped = await inspectHostRenderDrift(root, { hostRenderSettings, hostRenderHosts: ["codex"], hostRenderRepoRoot: repoRoot, hostRenderScope: "hooks-only" });
-  assert.equal(scoped.ok, true, JSON.stringify(scoped));
-  assert.equal(scoped.scope, "hooks-only");
+  assert.equal(scoped.ok, true, JSON.stringify(scoped)); assert.equal(scoped.scope, "hooks-only");
   assert.equal(scoped.hosts[0].scope, "hooks-only");
   assert.deepEqual(scoped.drift, []);
 
   const full = await inspectHostRenderDrift(root, { hostRenderSettings, hostRenderHosts: ["codex"], hostRenderRepoRoot: repoRoot, hostRenderScope: "full" });
-  assert.equal(full.ok, false, "explicit full doctor scope still detects model configuration drift");
-  assert.equal(full.scope, "full");
+  assert.equal(full.ok, false, "explicit full doctor scope still detects model configuration drift"); assert.equal(full.scope, "full");
   assert.ok(full.drift.some((entry) => entry.path === ".codex/config.toml"));
 });
 
@@ -286,16 +280,14 @@ test("STORY-300: an acceptance roster entry missing a field is named by id", asy
 test("an empty platform AGENTS.md is a load-bearing red leg", async (context) => {
   const root = await fixture(context, { agents: "" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "PLATFORM_AGENTS_EMPTY");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "PLATFORM_AGENTS_EMPTY");
   assert.equal(result.checks.find((item) => item.name === "platformAgents").reasonCode, "PLATFORM_AGENTS_EMPTY");
 });
 
 test("a missing platform AGENTS.md is named separately", async (context) => {
   const root = await fixture(context, { agents: null });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "PLATFORM_AGENTS_MISSING");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "PLATFORM_AGENTS_MISSING");
   // A present, non-empty file with the marker removed must take the distinct
   // topology-negative path rather than being conflated with absence.
   const markerRoot = await fixture(context, { agents: "identity retained but topology omitted\n" });
@@ -309,15 +301,13 @@ test("a missing platform AGENTS.md is named separately", async (context) => {
 test("a missing chain container is a distinct red leg", async (context) => {
   const root = await fixture(context, { chain: false });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "WORKSPACE_CONTAINER_MISSING");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "WORKSPACE_CONTAINER_MISSING");
 });
 
 test("a container inside Git ancestry is refused", async (context) => {
   const root = await fixture(context, { git: true });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "PLATFORM_ROOT_INSIDE_GIT_REPOSITORY");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "PLATFORM_ROOT_INSIDE_GIT_REPOSITORY");
   assert.equal(result.checks.find((item) => item.name === "containerOutsideGit").ok, false);
 });
 
@@ -332,8 +322,7 @@ test("the container whitelist repository is allowed, while code-repository ances
 test("a missing Claude bridge is named separately", async (context) => {
   const root = await fixture(context, { claude: null });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "PLATFORM_CLAUDE_BRIDGE_MISSING");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "PLATFORM_CLAUDE_BRIDGE_MISSING");
 });
 
 test("an empty misplaced AGENTS.md remains visible before the root is repaired", async (context) => {
@@ -341,15 +330,13 @@ test("an empty misplaced AGENTS.md remains visible before the root is repaired",
   await mkdir(join(root, "classification"));
   await writeFile(join(root, "classification", "AGENTS.md"), "");
   const result = await inspectPlatform(root, { includeInstallSurface: false });
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "PLATFORM_AGENTS_EMPTY");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "PLATFORM_AGENTS_EMPTY");
   assert.equal(result.checks.find((item) => item.name === "platformAgents").path, "classification/AGENTS.md");
 });
 
 test("a missing --platform-root argument fails closed", async () => {
   const result = await inspectPlatform();
-  assert.equal(result.ok, false);
-  assert.equal(result.reasonCode, "PLATFORM_ROOT_REQUIRED");
+  assert.equal(result.ok, false); assert.equal(result.reasonCode, "PLATFORM_ROOT_REQUIRED");
 });
 
 test("S259 bridge syntax is green when root and direct-child references resolve", async (context) => {
@@ -358,8 +345,7 @@ test("S259 bridge syntax is green when root and direct-child references resolve"
   await writeFile(join(root, "classification", "AGENTS.md"), "@../AGENTS.md\n");
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   const bridge = result.checks.find((item) => item.name === "bridgeSyntax");
-  assert.equal(result.ok, true);
-  assert.equal(bridge.ok, true);
+  assert.equal(result.ok, true); assert.equal(bridge.ok, true);
   assert.equal(bridge.source, "platform-and-direct-child-bridges");
 });
 
@@ -367,9 +353,7 @@ test("S259 bridge syntax names a double-at reference independently", async (cont
   const root = await fixture(context, { claude: "@@\n" });
   const result = await inspectPlatform(root, { includeInstallSurface: false });
   const bridge = result.checks.find((item) => item.name === "bridgeSyntax");
-  assert.equal(bridge.reasonCode, "PLATFORM_BRIDGE_SYNTAX_INVALID");
-  assert.equal(bridge.failures[0].path, "CLAUDE.md");
-  assert.equal(bridge.failures[0].line, 1);
+  assert.equal(bridge.reasonCode, "PLATFORM_BRIDGE_SYNTAX_INVALID"); assert.equal(bridge.failures[0].path, "CLAUDE.md"); assert.equal(bridge.failures[0].line, 1);
 });
 
 test("S259 bridge syntax names a dangling target independently", async (context) => {
@@ -510,8 +494,7 @@ test("INC-351: missing, malformed, and conflicting Helper pins are red", async (
     const fixture = await completeInstallFixture(context, { engineVersion: "1.1.2", helperVersion: "1.1.2", helperPin: testCase.helperPin });
     const result = await inspectInstallFixture(fixture);
     const freshness = result.checks.find((item) => item.name === "deploymentFreshness");
-    assert.equal(freshness.ok, false, `${testCase.helperPin}: ${JSON.stringify(freshness)}`);
-    assert.equal(freshness.reasonCode, testCase.expected);
+    assert.equal(freshness.ok, false, `${testCase.helperPin}: ${JSON.stringify(freshness)}`); assert.equal(freshness.reasonCode, testCase.expected);
   }
 });
 
@@ -552,8 +535,7 @@ test("INC-206 an undeclared harness inside the governed area is red, and an unre
   await mkdir(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true });
   await writeFile(join(fixture.root, "TCRN Platform", ".claude", "settings.json"), "{}\n", "utf8");
   const strayRed = await inspectInstallFixture(fixture);
-  assert.equal(surface(strayRed).ok, false);
-  assert.equal(surface(strayRed).reasonCode, "PLATFORM_HARNESS_UNDECLARED");
+  assert.equal(surface(strayRed).ok, false); assert.equal(surface(strayRed).reasonCode, "PLATFORM_HARNESS_UNDECLARED");
   assert.ok(surface(strayRed).undeclared.includes(join("TCRN Platform", ".claude")));
   await rm(join(fixture.root, "TCRN Platform", ".claude"), { recursive: true, force: true });
 
@@ -576,10 +558,7 @@ test("INC-195 the snapshot train is owed only when a chain declares an automatic
   // defect. Green, but it has to say so — a silent pass would be the roster-shaped
   // outcome Owner ruled against.
   const manual = await inspectInstallFixture(fixture, { launchdLabels: [], declaredBackupCadence: allManual });
-  assert.equal(launchd(manual).ok, true);
-  assert.equal(launchd(manual).reasonCode, "PLATFORM_BACKUP_DECLARED_MANUAL");
-  assert.equal(launchd(manual).onDuty, false);
-  assert.equal(launchd(manual).freshnessAsserted, false);
+  assert.equal(launchd(manual).ok, true); assert.equal(launchd(manual).reasonCode, "PLATFORM_BACKUP_DECLARED_MANUAL"); assert.equal(launchd(manual).onDuty, false); assert.equal(launchd(manual).freshnessAsserted, false);
   // "supplied" rather than "chain-declaration": the field distinguishes a value
   // this fixture injected from one actually read off a chain, so a synthetic run
   // can never be mistaken for evidence about the real platform.
@@ -591,8 +570,7 @@ test("INC-195 the snapshot train is owed only when a chain declares an automatic
       launchdLabels: [],
       declaredBackupCadence: { ...allManual, "TCRN-AOS": cadence },
     });
-    assert.equal(launchd(automatic).ok, false);
-    assert.equal(launchd(automatic).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+    assert.equal(launchd(automatic).ok, false); assert.equal(launchd(automatic).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
   }
 
   // Freshness is asserted only against an automatic expectation; under `manual`
@@ -607,8 +585,7 @@ test("INC-195 the snapshot train is owed only when a chain declares an automatic
   // The declaration may only relax. When it cannot be read the strict
   // expectation stands, and the report names the read as unreadable.
   const unreadable = await inspectInstallFixture(fixture, { launchdLabels: [], engineCli: "/nonexistent/engine.mjs" });
-  assert.equal(launchd(unreadable).ok, false);
-  assert.equal(launchd(unreadable).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
+  assert.equal(launchd(unreadable).ok, false); assert.equal(launchd(unreadable).reasonCode, "PLATFORM_LAUNCHD_NOT_ON_DUTY");
   assert.equal(launchd(unreadable).cadenceSource, "unreadable");
 });
 
@@ -640,8 +617,7 @@ test("S267 hook leg expands the container root and checks all four root-bound ev
   } }));
   const result = await inspectInstallFixture(fixture);
   const hooks = result.checks.find((item) => item.name === "hooks");
-  assert.equal(hooks.ok, true);
-  assert.equal(hooks.checked, 4);
+  assert.equal(hooks.ok, true); assert.equal(hooks.checked, 4);
   assert.deepEqual(hooks.events, ["PreToolUse", "SessionStart", "Stop", "UserPromptSubmit"]);
 });
 
@@ -663,8 +639,7 @@ test("S267 managed knowledge hooks must carry the explicit Claude container root
   await writeFile(join(fixture.root, ".claude", "settings.json"), JSON.stringify(settings));
   const result = await inspectInstallFixture(fixture);
   const hooks = result.checks.find((item) => item.name === "hooks");
-  assert.equal(hooks.ok, false);
-  assert.equal(hooks.reasonCode, "PLATFORM_HOOK_CONTAINER_ROOT_INVALID");
+  assert.equal(hooks.ok, false); assert.equal(hooks.reasonCode, "PLATFORM_HOOK_CONTAINER_ROOT_INVALID");
 });
 
 test("S267 missing settings stays a wiring red leg and does not become a hook false green", async (context) => {
@@ -683,8 +658,7 @@ test("S269 launchd is green only when the manifest duty, exit status, and fresh 
     backupFreshness: { ok: true, latestBackupAt: "synthetic", ageHours: 0 },
   });
   const launchd = result.checks.find((item) => item.name === "launchd");
-  assert.equal(launchd.ok, true);
-  assert.equal(launchd.requiredLabel, launchdLabel);
+  assert.equal(launchd.ok, true); assert.equal(launchd.requiredLabel, launchdLabel);
   assert.equal(result.ok, true);
 });
 
@@ -732,8 +706,7 @@ test("S269 launchd label mutation is followed from the manifest", async (context
     backupFreshness: { ok: true, latestBackupAt: "synthetic", ageHours: 0 },
   });
   const launchd = result.checks.find((item) => item.name === "launchd");
-  assert.equal(launchd.ok, true);
-  assert.equal(launchd.requiredLabel, "synthetic.launchd");
+  assert.equal(launchd.ok, true); assert.equal(launchd.requiredLabel, "synthetic.launchd");
 });
 
 test("S270 install wiring executes every safe manifest probe, including codex config and three launchers", async (context) => {

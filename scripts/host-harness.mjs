@@ -218,26 +218,25 @@ function group(entry, command) {
   return rendered;
 }
 
-/** The `hooks` object for `.claude/settings.json`. */
-export function claudeHookSettings() {
+function renderHooks(host, commandFor) {
   const hooks = {};
-  for (const entry of hookEntriesFor("claude")) {
+  for (const entry of hookEntriesFor(host)) {
     hooks[entry.event] ??= [];
-    hooks[entry.event].push(group(entry, claudeCommand(entry.handler)));
+    hooks[entry.event].push(group(entry, commandFor(entry)));
   }
   return hooks;
 }
 
+/** The `hooks` object for `.claude/settings.json`. */
+export function claudeHookSettings() {
+  return renderHooks("claude", (entry) => claudeCommand(entry.handler));
+}
+
 /** The whole `.codex/hooks.json` document. */
 export function codexHookDocument(repoRoot = REPO_ROOT, containerRoot = resolve(REPO_ROOT, "../..")) {
-  const hooks = {};
-  for (const entry of hookEntriesFor("codex")) {
-    hooks[entry.event] ??= [];
-    hooks[entry.event].push(group(entry, codexCommand(entry.handler, repoRoot, containerRoot)));
-  }
   return {
     description: "TCRN Workflow platform harness for Codex: governed write observation, control-tree write refusal, governed context injection, and the stop pact.",
-    hooks,
+    hooks: renderHooks("codex", (entry) => codexCommand(entry.handler, repoRoot, containerRoot)),
   };
 }
 

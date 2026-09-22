@@ -135,32 +135,37 @@ function appendLog(containerRoot, record) {
 
 function runEngine(argv) {
   const result = spawnSync(process.execPath, argv, { encoding: "utf8", timeout: 25_000 });
-  const text = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-  const lines = text.split("\n").filter((line) => line.trim().length > 0);
   try {
-    return JSON.parse(lines[lines.length - 1] ?? "");
+    return parseLastJson(result.stdout, result.stderr);
   } catch {
-    return { ok: false, reasonCode: "KNOWLEDGE_CAPTURE_OUTPUT_UNPARSEABLE", error: text.slice(-200) };
+    return { ok: false, reasonCode: "KNOWLEDGE_CAPTURE_OUTPUT_UNPARSEABLE", error: `${result.stdout ?? ""}${result.stderr ?? ""}`.trim().slice(-200) };
   }
 }
 
-export function hostFromArgv(argv = process.argv.slice(2), input = {}, env = process.env) {
+function parseLastJson(stdout, stderr) {
+  const text = `${stdout ?? ""}${stderr ?? ""}`.trim();
+  const lines = text.split("\n").filter((line) => line.trim().length > 0);
+  return JSON.parse(lines.at(-1) ?? "");
+}
+
+function flagValue(argv, name) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === "--host" && typeof argv[index + 1] === "string" && !argv[index + 1].startsWith("--") && argv[index + 1].length > 0) return argv[index + 1];
-    if (typeof token === "string" && token.startsWith("--host=")) return token.slice("--host=".length) || "unknown-host";
+    if (token === name && typeof argv[index + 1] === "string" && !argv[index + 1].startsWith("--") && argv[index + 1].length > 0) return argv[index + 1];
+    if (typeof token === "string" && token.startsWith(`${name}=`)) return token.slice(name.length + 1);
   }
+  return undefined;
+}
+
+export function hostFromArgv(argv = process.argv.slice(2), input = {}, env = process.env) {
+  const flagged = flagValue(argv, "--host");
+  if (flagged !== undefined) return flagged || "unknown-host";
   const supplied = input?.host ?? input?.host_name ?? env?.TCRN_HOST;
   return typeof supplied === "string" && supplied.length > 0 ? supplied : "unknown-host";
 }
 
 export function containerRootFromArgv(argv = process.argv.slice(2), fallback = PLATFORM_ROOT) {
-  for (let index = 0; index < argv.length; index += 1) {
-    const token = argv[index];
-    if (token === "--container-root" && typeof argv[index + 1] === "string" && !argv[index + 1].startsWith("--") && argv[index + 1].length > 0) return argv[index + 1];
-    if (typeof token === "string" && token.startsWith("--container-root=")) return token.slice("--container-root=".length) || fallback;
-  }
-  return fallback;
+  return flagValue(argv, "--container-root") || fallback;
 }
 
 function observationBoundaryArguments(input, { containerRoot, partition, at }) {
@@ -172,9 +177,7 @@ function observationBoundaryArguments(input, { containerRoot, partition, at }) {
 function recordStopObservationBoundary(input, { containerRoot, partition, at }) {
   try {
     const result = spawnSync(process.execPath, observationBoundaryArguments(input, { containerRoot, partition, at }), { encoding: "utf8", timeout: 25_000 });
-    const text = `${result.stdout ?? ""}${result.stderr ?? ""}`.trim();
-    const lines = text.split("\n").filter((line) => line.trim().length > 0);
-    return JSON.parse(lines.at(-1) ?? "");
+    return parseLastJson(result.stdout, result.stderr);
   } catch (error) {
     return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", error: String(error?.message ?? error) };
   }
