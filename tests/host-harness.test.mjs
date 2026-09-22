@@ -13,9 +13,11 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   HARNESS_CAPABILITIES,
@@ -29,6 +31,12 @@ import {
 } from "../scripts/host-harness.mjs";
 import { applyHostHarness, harnessBytes } from "../scripts/host-harness-apply.mjs";
 import { guardDecision, responseFor, stringsIn } from "../scripts/chain-write-guard.mjs";
+
+// TCRN-CROSS-INC-373: the previous two constants exercise the renderer only -- they prove
+// the generated command *line* carries `--container-root`, not that agents-zero-hook.mjs's
+// own `containerRootArgument()` entry point actually reads it. This path lets the tests
+// below spawn the real handler, the way an installed Codex copy actually invokes it.
+const AGENTS_ZERO_HOOK_PATH = fileURLToPath(new URL("../scripts/agents-zero-hook.mjs", import.meta.url));
 
 // Codex's documented event set. Every event the harness uses must be in it, and Codex's
 // set is a strict subset of Claude Code's, so membership here settles both directions.
@@ -156,6 +164,74 @@ test("INC-220 the Claude rendering keeps the project-dir form that host resolves
   assert.match(agentsZero, /scripts\/agents-zero-hook\.mjs"; fi$/u, "Claude's agents-zero-hook command must stay byte-identical: no --container-root");
   const sshObserver = claudeHookSettings().PreToolUse.find((group) => group.hooks[0].command.includes("ssh-write-observer.mjs")).hooks[0].command;
   assert.match(sshObserver, /scripts\/ssh-write-observer\.mjs"; fi$/u, "Claude's ssh-write-observer command must stay byte-identical: no --container-root");
+});
+
+// TCRN-CROSS-INC-373: agents-zero-hook.mjs's containerRootArgument() CLI entry point had
+// no automated coverage at all -- host-harness.test.mjs only ever asserted the *rendered
+// command line* contains the flag (see the two constants above). A fixture AGENTS.md
+// carries only the legacy `## 零、输出行文（硬约束）` heading agents-zero-hook.mjs's
+// readZeroSection() still recognises (production's resident index does not; see that
+// file's own comment), each with a distinct marker so a mis-resolved root is visible as
+// the WRONG marker rather than merely a missing one.
+function agentsZeroFixture(marker) {
+  const root = mkdtempSync(join(tmpdir(), "tcrn-agents-zero-"));
+  writeFileSync(
+    join(root, "AGENTS.md"),
+    `## 零、输出行文（硬约束）\n\n${marker}: fixture body recorded for TCRN-CROSS-INC-373 counterfactual coverage.\n\n## 一、unrelated\n\nnot part of the injected section.\n`,
+  );
+  return root;
+}
+
+function runAgentsZeroHook({ containerRootArgument, projectDir } = {}) {
+  const args = containerRootArgument ? ["--container-root", containerRootArgument] : [];
+  const env = { ...process.env };
+  delete env.CLAUDE_PROJECT_DIR;
+  if (projectDir) env.CLAUDE_PROJECT_DIR = projectDir;
+  const run = spawnSync(process.execPath, [AGENTS_ZERO_HOOK_PATH, ...args], {
+    encoding: "utf8",
+    env,
+    input: `${JSON.stringify({ hook_event_name: "UserPromptSubmit" })}\n`,
+  });
+  assert.equal(run.status, 0, `agents-zero-hook.mjs must exit clean: stderr=${run.stderr}`);
+  return JSON.parse(run.stdout);
+}
+
+test("TCRN-CROSS-INC-373 leg a: --container-root is read by the hook process itself, not only rendered into a command line", () => {
+  const fixture = agentsZeroFixture("INC373-FIXTURE-MARKER");
+  try {
+    const result = runAgentsZeroHook({ containerRootArgument: fixture });
+    assert.match(
+      result.hookSpecificOutput.additionalContext,
+      /INC373-FIXTURE-MARKER/u,
+      `--container-root must steer containerRoot(), not just the rendered command line: ${JSON.stringify(result)}`,
+    );
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("TCRN-CROSS-INC-373 leg b: argv --container-root outranks CLAUDE_PROJECT_DIR, same precedence as the other two self-deriving handlers", () => {
+  const fixture = agentsZeroFixture("INC373-FIXTURE-MARKER");
+  const envDir = agentsZeroFixture("INC373-ENV-MARKER");
+  try {
+    const result = runAgentsZeroHook({ containerRootArgument: fixture, projectDir: envDir });
+    assert.match(result.hookSpecificOutput.additionalContext, /INC373-FIXTURE-MARKER/u, "argv --container-root must win over CLAUDE_PROJECT_DIR");
+    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /INC373-ENV-MARKER/u, "the env-derived root must not leak through when argv is given");
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+    rmSync(envDir, { recursive: true, force: true });
+  }
+});
+
+test("TCRN-CROSS-INC-373 leg c: omitting --container-root leaves CLAUDE_PROJECT_DIR resolution unchanged (transition safety)", () => {
+  const envDir = agentsZeroFixture("INC373-ENV-MARKER");
+  try {
+    const result = runAgentsZeroHook({ projectDir: envDir });
+    assert.match(result.hookSpecificOutput.additionalContext, /INC373-ENV-MARKER/u, "default CLAUDE_PROJECT_DIR resolution must still work with the flag absent");
+    assert.doesNotMatch(result.hookSpecificOutput.additionalContext, /INC373-FIXTURE-MARKER/u);
+  } finally {
+    rmSync(envDir, { recursive: true, force: true });
+  }
 });
 
 test("INC-220 harness drift is reported when a live Claude hook is gone", () => {
