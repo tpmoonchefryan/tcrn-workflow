@@ -10,6 +10,13 @@ let temporarySequence = 0;
 const outputSessionStorage = new AsyncLocalStorage();
 const locallyPublishedRecoveryClaims = new Map();
 const locallyPublishingRecoveryClaims = new Map();
+// A recovery transaction is already protected across processes by the durable
+// claim protocol below.  Keep a separate in-process guard as well: two
+// promises in one Node process can otherwise both pass the filesystem reads
+// before either one publishes a claim, and the loser then observes a claim that
+// the winner has legitimately reconciled.  The guard is keyed by the resolved
+// repository path (with the lexical path reserved synchronously first so the
+// second same-path caller cannot reach the first await).
 const locallyRecoveringOutputSessions = new Map();
 const outputLockName = "tcrn-workflow-output.lock";
 const outputLockMetadataName = "owner.json";
@@ -890,8 +897,26 @@ async function acquireRecoveryClaim(claimPath, repositoryPath, lockPath, lock, r
 }
 
 export async function recoverStaleOutputSessionLock(repositoryPath, authority) {
-  const lexicalRepositoryPath = resolve(repositoryPath), guard = {}, existing = locallyRecoveringOutputSessions.get(lexicalRepositoryPath); if (existing) fail("OUTPUT_SESSION_RECOVERY_CONCURRENT", lexicalRepositoryPath); locallyRecoveringOutputSessions.set(lexicalRepositoryPath, guard); let canonicalRepositoryPath;
-  try { const repository = await resolveOutputRepository(repositoryPath); canonicalRepositoryPath = repository.realPath; if (locallyRecoveringOutputSessions.has(canonicalRepositoryPath) && locallyRecoveringOutputSessions.get(canonicalRepositoryPath) !== guard) fail("OUTPUT_SESSION_RECOVERY_CONCURRENT", canonicalRepositoryPath); locallyRecoveringOutputSessions.set(canonicalRepositoryPath, guard); return await recoverStaleOutputSessionLockImpl(repository, authority); } finally { for (const key of [lexicalRepositoryPath, canonicalRepositoryPath]) if (key !== undefined && locallyRecoveringOutputSessions.get(key) === guard) locallyRecoveringOutputSessions.delete(key); }
+  const lexicalRepositoryPath = resolve(repositoryPath);
+  const guard = {};
+  const lexicalOwner = locallyRecoveringOutputSessions.get(lexicalRepositoryPath);
+  if (lexicalOwner) fail("OUTPUT_SESSION_RECOVERY_CONCURRENT", lexicalRepositoryPath);
+  locallyRecoveringOutputSessions.set(lexicalRepositoryPath, guard);
+  let canonicalRepositoryPath;
+  try {
+    const repository = await resolveOutputRepository(repositoryPath);
+    canonicalRepositoryPath = repository.realPath;
+    const canonicalOwner = locallyRecoveringOutputSessions.get(canonicalRepositoryPath);
+    if (canonicalOwner && canonicalOwner !== guard) fail("OUTPUT_SESSION_RECOVERY_CONCURRENT", canonicalRepositoryPath);
+    locallyRecoveringOutputSessions.set(canonicalRepositoryPath, guard);
+    return await recoverStaleOutputSessionLockImpl(repository, authority);
+  } finally {
+    for (const key of new Set([lexicalRepositoryPath, canonicalRepositoryPath])) {
+      if (key !== undefined && locallyRecoveringOutputSessions.get(key) === guard) {
+        locallyRecoveringOutputSessions.delete(key);
+      }
+    }
+  }
 }
 
 async function recoverStaleOutputSessionLockImpl(repository, authority) {

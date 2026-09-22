@@ -1861,7 +1861,8 @@ function versionFromSkill(text) {
   // an Engine pin.  Versions are non-empty, whitespace-free backtick payloads;
   // every accepted occurrence must agree exactly.
   const versions = [...text.matchAll(/\b(?:Supports TCRN Workflow|Targets TCRN Workflow|Targets the TCRN Workflow) `v([^`\s]+)`/gu)].map((match) => match[1]);
-  return versions.length === 0 || new Set(versions).size !== 1 ? null : versions[0];
+  if (versions.length === 0 || new Set(versions).size !== 1) return null;
+  return versions[0];
 }
 
 async function inspectDeploymentFreshness(homeRoot, manifest) {
@@ -1871,17 +1872,20 @@ async function inspectDeploymentFreshness(homeRoot, manifest) {
   const helperSkills = helperEntries.map((entry) => ({ entry, path: expandTemplate(entry.pathTemplate, "<PLATFORM_ROOT>", homeRoot) }));
   if (engineRoot === null || helperSkills.some(({ path }) => path === null)) return check("deploymentFreshness", false, { reasonCode: "PLATFORM_MANIFEST_PATH_INVALID" });
   try {
-    const engineVersion = JSON.parse(await readFile(join(engineRoot, "tcrn-workflow", "package.json"), "utf8")).version;
+    const packageValue = JSON.parse(await readFile(join(engineRoot, "tcrn-workflow", "package.json"), "utf8"));
+    const engineVersion = packageValue.version;
     const helperVersions = [];
     for (const { entry, path } of helperSkills) {
+      let text;
       try {
-        helperVersions.push({ id: entry.id, pathTemplate: entry.pathTemplate, version: versionFromSkill(await readFile(join(path, "SKILL.md"), "utf8")) });
+        text = await readFile(join(path, "SKILL.md"), "utf8");
       } catch (error) {
         if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
           return check("deploymentFreshness", false, { reasonCode: "PLATFORM_DEPLOYMENT_MISSING", source: "package.json-vs-helper-pin", missingInput: entry.id });
         }
         throw error;
       }
+      helperVersions.push({ id: entry.id, pathTemplate: entry.pathTemplate, version: versionFromSkill(text) });
     }
     const versions = { engineVersion, helpers: helperVersions };
     const allVersions = [engineVersion, ...helperVersions.map((helper) => helper.version)];
@@ -2573,10 +2577,23 @@ async function inspectTrustArchiveFreshness(platformRoot, homeRoot, manifest, op
       if (digest !== entry.sha256 || declared.has(entry.path)) archiveProblems.push({ reasonCode: "PLATFORM_TRUST_ARCHIVE_ENTRY_DIGEST_INVALID", path: entry.path });
       declared.set(entry.path, entry.sha256);
     }
+    // The Helper manifest entries are the single source for both canonical
+    // consumer roots and their managed marker names. Do not rebuild a host
+    // roster from .agents/.claude/.codex conventions: a removed legacy entry
+    // must disappear from the required set while its old marker remains visible
+    // as orphan history.
     const helperConsumers = manifest.items
       .filter((item) => item.acceptanceProbe.startsWith("probe:helper-skill-digest"))
-      .map((entry) => ({ entry, root: expandTemplate(entry.pathTemplate, platformRoot, homeRoot), markerName: parseAcceptanceProbe(entry.acceptanceProbe)?.parameters.marker ?? null }))
-      .map((consumer) => ({ ...consumer, markerName: /^[^/]+\.json$/u.test(consumer.markerName ?? "") ? consumer.markerName : null }));
+      .map((entry) => {
+        const probe = parseAcceptanceProbe(entry.acceptanceProbe);
+        const markerName = probe?.parameters.marker ?? null;
+        const markerValid = typeof markerName === "string" && /^[^/]+\.json$/u.test(markerName);
+        return {
+          entry,
+          root: expandTemplate(entry.pathTemplate, platformRoot, homeRoot),
+          markerName: markerValid ? markerName : null,
+        };
+      });
     const consumerRoots = helperConsumers.map(({ root }) => root).filter((root) => root !== null);
     const consumerProblems = [];
     for (const consumer of helperConsumers) {
@@ -2600,11 +2617,20 @@ async function inspectTrustArchiveFreshness(platformRoot, homeRoot, manifest, op
     const expectedVersion = `v${packageValue.version}`;
     const markerProblems = [];
     for (const consumer of helperConsumers) {
-      if (consumer.markerName === null) { markerProblems.push({ id: consumer.entry.id, reasonCode: "PLATFORM_MARKER_DECLARATION_INVALID" }); continue; }
+      if (consumer.markerName === null) {
+        markerProblems.push({ id: consumer.entry.id, reasonCode: "PLATFORM_MARKER_DECLARATION_INVALID" });
+        continue;
+      }
       const markerPath = join(homeRoot, ".tcrn-workflow", consumer.markerName);
       const marker = JSON.parse(await readFile(markerPath, "utf8"));
       if (marker.version !== expectedVersion) markerProblems.push({ id: consumer.entry.id, markerPath, expectedVersion, actualVersion: marker.version ?? null });
     }
+    // TCRN-CROSS-INC-272: detect orphan markers. An orphan is an installed-copy-*.json file
+    // whose host is not in the known consumer set. Orphans occur when install shapes change
+    // (e.g., an old "claude-home" marker from v0.11.17 sitting three versions behind current
+    // ones). They mislead a reader into thinking an install position is live, but they don't
+    // break a live position — they are cargo for human visibility, not platform failures.
+    // Report them by host, path, and version, but do not fail the leg over them alone.
     const orphanMarkers = [];
     try {
       const markerDir = join(homeRoot, ".tcrn-workflow");

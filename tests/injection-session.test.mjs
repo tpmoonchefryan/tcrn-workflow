@@ -51,7 +51,11 @@ const languageSettings = (model = "test-economy") => [
 ];
 
 function mockChild({ output = "reply", onInput = () => {}, close = true, onKill = null } = {}) {
-  const child = Object.assign(new EventEmitter(), { pid: process.pid, stdin: { end: onInput }, stdout: new EventEmitter(), stderr: new EventEmitter() });
+  const child = new EventEmitter();
+  child.pid = process.pid;
+  child.stdin = { end: onInput };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
   if (onKill !== null) child.kill = onKill;
   if (close) setImmediate(() => { child.stdout.emit("data", output); child.emit("close", 0, null); });
   return child;
@@ -258,12 +262,20 @@ test("a sixty-prompt session stays under the cumulative budget and records every
 
 test("the exact bare injection-session command is green or a stable fast failure", { skip: bareRegressionChild }, async (context) => {
   const result = await runUnpreloadedRelay(context, [
-    'const environment = { ...process.env, TCRN_INJECTION_BARE_REGRESSION_CHILD: "1" }; delete environment.NODE_OPTIONS; delete environment.NODE_TEST_CONTEXT;',
+    'const environment = { ...process.env, TCRN_INJECTION_BARE_REGRESSION_CHILD: "1" };',
+    'delete environment.NODE_OPTIONS;',
+    'delete environment.NODE_TEST_CONTEXT;',
     'const child = spawn(process.execPath, ["--test", "tests/injection-session.test.mjs"], { cwd: process.argv[2], env: environment, detached: true, stdio: ["ignore", "pipe", "pipe"], timeout: 120000, killSignal: "SIGKILL" });',
-    'const stdout = []; const stderr = []; child.stdout.on("data", (chunk) => stdout.push(chunk)); child.stderr.on("data", (chunk) => stderr.push(chunk)); const startedAt = Date.now();',
-    'const [exitCode, signal] = await once(child, "close"); try { process.kill(-child.pid, "SIGKILL"); } catch {}',
+    'const stdout = [];',
+    'const stderr = [];',
+    'child.stdout.on("data", (chunk) => stdout.push(chunk));',
+    'child.stderr.on("data", (chunk) => stderr.push(chunk));',
+    'const startedAt = Date.now();',
+    'const [exitCode, signal] = await once(child, "close");',
+    'try { process.kill(-child.pid, "SIGKILL"); } catch {}',
     'const output = { command: [process.execPath, "--test", "tests/injection-session.test.mjs"], cwd: process.argv[2], timeoutMs: 120000, elapsedMs: Date.now() - startedAt, timedOut: signal === "SIGKILL", exitCode, signal, processGroup: child.pid, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };',
-    'try { process.kill(-child.pid, 0); output.processGroupAliveAfterReclaim = true; } catch { output.processGroupAliveAfterReclaim = false; } process.stdout.write(JSON.stringify(output));',
+    'try { process.kill(-child.pid, 0); output.processGroupAliveAfterReclaim = true; } catch { output.processGroupAliveAfterReclaim = false; }',
+    'process.stdout.write(JSON.stringify(output));',
   ].join("\n"), process.cwd());
   if (process.env.TCRN_INJECTION_BARE_REGRESSION_EVIDENCE) await writeFile(process.env.TCRN_INJECTION_BARE_REGRESSION_EVIDENCE, `${JSON.stringify(result, null, 2)}\n`);
   assert.equal(result.timedOut, false, `bare command exceeded 120000 ms\n${result.stderr}\n${result.stdout.slice(-4_096)}`);
@@ -425,7 +437,10 @@ test("R1 boundedSearch returns hits from an explicitly bounded directory", async
   assert.equal(result.partial, false);
   assert.equal(result.nextScope, null);
   assert.deepEqual(result.matches, [{ path: file, line: 2, text: "needle is here" }]);
-  const renamed = await mkdtemp(join(tmpdir(), "tcrn-renamed-container-")); context.after(() => rm(renamed, { recursive: true, force: true })); await writeFile(join(renamed, "record.txt"), "portable needle\n"); assert.equal((await boundedSearch({ query: "needle", directories: [renamed] })).reasonCode, "SEARCH_COMPLETED");
+  const renamed = await mkdtemp(join(tmpdir(), "tcrn-renamed-container-"));
+  context.after(() => rm(renamed, { recursive: true, force: true }));
+  await writeFile(join(renamed, "record.txt"), "portable needle\n");
+  assert.equal((await boundedSearch({ query: "needle", directories: [renamed] })).reasonCode, "SEARCH_COMPLETED");
 });
 
 test("R2 boundedSearch rejects the platform container and sibling without a directory-name literal", async (context) => {
