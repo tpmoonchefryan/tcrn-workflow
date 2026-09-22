@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { EventEmitter, once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -493,6 +493,66 @@ test("R2 boundedSearch rejects the platform container and sibling without a dire
   assert.equal(ancestorRejected.ok, false);
   assert.equal(ancestorRejected.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
   assert.equal(ancestorRejected.rejectedPath, ancestor);
+});
+
+test("TCRN-CROSS-INC-362 boundedSearch resolves a symlinked explicit scope item before judging the boundary", async (context) => {
+  const container = await mkdtemp(join(tmpdir(), "tcrn-platform-arbitrary-"));
+  context.after(() => rm(container, { recursive: true, force: true }));
+  const repository = join(container, "classification", "engine-repo");
+  const sibling = join(container, "classification", "adjacent-repo");
+  // The repository root is created up front (unlike the lexical-only R2 fixture
+  // above, which never needs it to exist) so its realpath resolves consistently
+  // with the other realpath'd values below -- exactly like a real, already
+  // checked-out repositoryRoot always does in production.
+  await mkdir(repository, { recursive: true });
+  await mkdir(sibling, { recursive: true });
+  await writeFile(join(sibling, "secret.txt"), "needle leaked from the sibling repository\n");
+  const boundary = { repositoryRoot: repository };
+
+  const outside = await mkdtemp(join(tmpdir(), "tcrn-outside-symlink-"));
+  context.after(() => rm(outside, { recursive: true, force: true }));
+
+  // (a) an explicit directory root that lexically sits outside the container -- the
+  // existing ".." allowance would admit it on the lexical check alone -- but is
+  // itself a symlink whose real target is the sibling repository inside the
+  // container. Traversal already skips symlinked children (SEARCH_SYMLINK_SKIPPED);
+  // this is the boundary check on the *root* itself, before traversal starts.
+  const linkedRoot = join(outside, "link-to-sibling-root");
+  await symlink(sibling, linkedRoot, "dir");
+  const rootRejected = await boundedSearch({ query: "needle", directories: [linkedRoot], ...boundary });
+  assert.equal(rootRejected.ok, false);
+  assert.equal(rootRejected.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
+  assert.equal(rootRejected.rejectedPath, linkedRoot);
+
+  // (b) an explicit file whose parent directory is a symlink to the sibling
+  // repository, so the file's own lexical path looks like it lives outside the
+  // container while its real path resolves inside it.
+  const linkedParent = join(outside, "link-to-sibling-parent");
+  await symlink(sibling, linkedParent, "dir");
+  const fileViaLink = join(linkedParent, "secret.txt");
+  const fileRejected = await boundedSearch({ query: "needle", files: [fileViaLink], ...boundary });
+  assert.equal(fileRejected.ok, false);
+  assert.equal(fileRejected.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
+  assert.equal(fileRejected.rejectedPath, fileViaLink);
+
+  // A real (non-symlinked) in-repository read must stay green: realpath resolution
+  // must not turn a legitimate in-repo item into a false rejection.
+  const inRepoDirectory = join(repository, "nested");
+  await mkdir(inRepoDirectory, { recursive: true });
+  const inRepoFile = join(inRepoDirectory, "record.txt");
+  await writeFile(inRepoFile, "needle is inside the repository\n");
+  const filePositive = await boundedSearch({ query: "needle", files: [inRepoFile], ...boundary });
+  assert.equal(filePositive.ok, true);
+  assert.equal(filePositive.reasonCode, "SEARCH_COMPLETED");
+  assert.deepEqual(filePositive.matches, [{ path: inRepoFile, line: 1, text: "needle is inside the repository" }]);
+
+  // A path that does not exist keeps the existing lexical-only behavior (realpath
+  // has nothing to canonicalize) rather than throwing.
+  const missing = join(outside, "does-not-exist", "also-missing");
+  const missingResult = await boundedSearch({ query: "needle", directories: [missing], ...boundary });
+  assert.equal(missingResult.ok, true);
+  assert.equal(missingResult.reasonCode, "SEARCH_PARTIAL");
+  assert.equal(missingResult.partialReason, "SEARCH_SCOPE_UNREADABLE");
 });
 
 test("R1 boundedSearch refuses home scans and exposes timeout continuation", async (context) => {

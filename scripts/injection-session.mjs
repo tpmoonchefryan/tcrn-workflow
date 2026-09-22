@@ -15,7 +15,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { lstat as lstatAsync, readdir as readdirAsync, readFile as readFileAsync } from "node:fs/promises";
+import { lstat as lstatAsync, readdir as readdirAsync, readFile as readFileAsync, realpath as realpathAsync } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -125,14 +125,41 @@ function isAncestorOrSelf(ancestorCandidate, descendant) {
   return relativeFromCandidate === "" || (!isAbsolute(relativeFromCandidate) && relativeFromCandidate !== ".." && !relativeFromCandidate.startsWith(`..${sep}`));
 }
 
+function boundaryRejectedForResolved(resolvedPath, platformRoot, repositoryResolved, homeResolved) {
+  if (isAncestorOrSelf(resolvedPath, platformRoot) || isAncestorOrSelf(resolvedPath, homeResolved)) return true;
+  const candidate = relative(platformRoot, resolvedPath);
+  const allowed = relative(platformRoot, repositoryResolved);
+  return candidate !== allowed && !candidate.startsWith(`${allowed}${sep}`)
+    && candidate !== ".." && !candidate.startsWith(`..${sep}`);
+}
+
 function boundaryRejected(path, repositoryRoot) {
   const platformRoot = resolve(repositoryRoot, "../..");
   const resolvedPath = resolve(path);
-  if (isAncestorOrSelf(resolvedPath, platformRoot) || isAncestorOrSelf(resolvedPath, resolve(homedir()))) return true;
-  const candidate = relative(platformRoot, resolvedPath);
-  const allowed = relative(platformRoot, resolve(repositoryRoot));
-  return candidate !== allowed && !candidate.startsWith(`${allowed}${sep}`)
-    && candidate !== ".." && !candidate.startsWith(`..${sep}`);
+  return boundaryRejectedForResolved(resolvedPath, platformRoot, resolve(repositoryRoot), resolve(homedir()));
+}
+
+// TCRN-CROSS-INC-362: boundaryRejected above is a purely lexical check. An explicit
+// scope item that is itself a symlink (or sits under a symlinked parent directory)
+// can resolve lexically outside the platform root while its real target sits inside
+// the container or a sibling repository -- readdir/readFile follow the link and
+// silently read that target. The lexical check alone cannot see this; only resolving
+// each explicit scope entry (and the repository root and home it is compared against)
+// to its real path exposes it. A path that does not exist yet keeps the existing
+// (lexical-only) behavior, since realpath has nothing to canonicalize.
+async function resolvedOrSelf(path) {
+  try {
+    return await realpathAsync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+async function canonicalBoundaryRejected(path, canonicalPlatformRoot, canonicalRepository, canonicalHome) {
+  const canonicalPath = await resolvedOrSelf(path);
+  const rejected = canonicalPath === "/" || canonicalPath === canonicalHome
+    || boundaryRejectedForResolved(canonicalPath, canonicalPlatformRoot, canonicalRepository, canonicalHome);
+  return { rejected, canonicalPath };
 }
 
 function searchResult({ query, matches = [], scannedFiles = 0, partial = false, reasonCode = "SEARCH_COMPLETED", partialReason = null, nextScope = null, ...extra }) {
@@ -182,6 +209,19 @@ export async function boundedSearch({
   const forbidden = [...scopedFiles, ...scopedDirectories].find((path) => path === "/" || path === resolve(homedir()) || boundaryRejected(path, repository));
   if (forbidden !== undefined) {
     return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope, rejectedPath: forbidden });
+  }
+  // TCRN-CROSS-INC-362: the lexical check above cannot see a symlinked explicit scope
+  // root or ancestor that resolves outside the platform root while its real target is
+  // inside the container or a sibling repository. Resolve each explicit item (and the
+  // repository root and home) to its real path and re-apply the same rejection rules.
+  const canonicalRepository = await resolvedOrSelf(repository);
+  const canonicalPlatformRoot = resolve(canonicalRepository, "../..");
+  const canonicalHome = await resolvedOrSelf(resolve(homedir()));
+  for (const path of [...scopedFiles, ...scopedDirectories]) {
+    const { rejected } = await canonicalBoundaryRejected(path, canonicalPlatformRoot, canonicalRepository, canonicalHome);
+    if (rejected) {
+      return searchResult({ query: text, partial: true, reasonCode: "SEARCH_SCOPE_OUT_OF_BOUNDS", nextScope, rejectedPath: path });
+    }
   }
   const numeric = (value, fallback, minimum) => Number.isSafeInteger(value) && value >= minimum ? value : fallback;
   const timeout = numeric(timeoutMs, DEFAULT_SEARCH_TIMEOUT_MS, 0);
