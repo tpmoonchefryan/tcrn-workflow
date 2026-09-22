@@ -5,7 +5,7 @@ import { spawn } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 import {
@@ -457,6 +457,42 @@ test("R2 boundedSearch rejects the platform container and sibling without a dire
     assert.equal(rejected.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
     assert.equal(rejected.rejectedPath, rejectedPath);
   }
+
+  // TCRN-CROSS-INC-359 (SUB-192): the repository itself sits inside this same
+  // arbitrarily-named container and must stay searchable -- every existing
+  // positive leg elsewhere in this file happens to live outside the container
+  // and only exercises the ".." allowance, never the in-repo allowance below.
+  const inRepoDirectory = join(repository, "nested");
+  await mkdir(inRepoDirectory, { recursive: true });
+  const inRepoFile = join(inRepoDirectory, "record.txt");
+  await writeFile(inRepoFile, "needle is inside the repository\n");
+
+  const filePositive = await boundedSearch({ query: "needle", files: [inRepoFile], ...boundary });
+  assert.equal(filePositive.ok, true);
+  assert.equal(filePositive.reasonCode, "SEARCH_COMPLETED");
+  assert.deepEqual(filePositive.matches, [{ path: inRepoFile, line: 1, text: "needle is inside the repository" }]);
+
+  const directoryPositive = await boundedSearch({ query: "needle", directories: [repository], maxDepth: 2, ...boundary });
+  assert.equal(directoryPositive.ok, true);
+  assert.equal(directoryPositive.reasonCode, "SEARCH_COMPLETED");
+  assert.deepEqual(directoryPositive.matches, [{ path: inRepoFile, line: 1, text: "needle is inside the repository" }]);
+
+  const partial = await boundedSearch({ query: "needle", directories: [repository], maxDepth: 2, timeoutMs: 0, ...boundary });
+  assert.equal(partial.ok, true);
+  assert.equal(partial.reasonCode, "SEARCH_PARTIAL");
+  assert.equal(partial.partial, true);
+  assert.equal(partial.partialReason, "SEARCH_TIMEOUT");
+  assert.deepEqual(partial.nextScope.directories, [repository]);
+
+  // The container's own parent is an ancestor of the platform root, not merely
+  // "outside" it, and must be refused for the same reason the container itself
+  // is: left open, a caller could walk back down into the container and its
+  // sibling repositories from above (INC-359's finding).
+  const ancestor = dirname(container);
+  const ancestorRejected = await boundedSearch({ query: "needle", directories: [ancestor], ...boundary });
+  assert.equal(ancestorRejected.ok, false);
+  assert.equal(ancestorRejected.reasonCode, "SEARCH_SCOPE_OUT_OF_BOUNDS");
+  assert.equal(ancestorRejected.rejectedPath, ancestor);
 });
 
 test("R1 boundedSearch refuses home scans and exposes timeout continuation", async (context) => {

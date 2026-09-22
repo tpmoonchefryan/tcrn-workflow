@@ -114,9 +114,22 @@ function searchNextScope(queue, current = null) {
   };
 }
 
+// TCRN-CROSS-INC-359: a path outside the platform root is otherwise allowed (the
+// container-external search semantics below), but an ancestor of the platform root
+// or of the home directory -- equal to or above either -- must still be refused.
+// Left unchecked, a caller can name /Users (or any other ancestor) as "outside the
+// container" and, given enough maxDepth, walk straight back into the container and
+// its sibling repositories from above.
+function isAncestorOrSelf(ancestorCandidate, descendant) {
+  const relativeFromCandidate = relative(ancestorCandidate, descendant);
+  return relativeFromCandidate === "" || (!isAbsolute(relativeFromCandidate) && relativeFromCandidate !== ".." && !relativeFromCandidate.startsWith(`..${sep}`));
+}
+
 function boundaryRejected(path, repositoryRoot) {
   const platformRoot = resolve(repositoryRoot, "../..");
-  const candidate = relative(platformRoot, resolve(path));
+  const resolvedPath = resolve(path);
+  if (isAncestorOrSelf(resolvedPath, platformRoot) || isAncestorOrSelf(resolvedPath, resolve(homedir()))) return true;
+  const candidate = relative(platformRoot, resolvedPath);
   const allowed = relative(platformRoot, resolve(repositoryRoot));
   return candidate !== allowed && !candidate.startsWith(`${allowed}${sep}`)
     && candidate !== ".." && !candidate.startsWith(`..${sep}`);
