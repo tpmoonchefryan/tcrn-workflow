@@ -69,7 +69,8 @@ export async function backfillWorkSummaries(argv) {
     };
   }
   const state = await validateWorkspace(workspace);
-  const genesis = await materializeWorkspaceFromGenesis(workspace); if (genesis.stateDigest !== state.stateDigest) return { ok: false, reasonCode: "BACKFILL_GENESIS_DIVERGENCE" };
+  const genesis = await materializeWorkspaceFromGenesis(workspace);
+  if (genesis.stateDigest !== state.stateDigest) return { ok: false, reasonCode: "BACKFILL_GENESIS_DIVERGENCE" };
   const scoped = state.work.filter((record) => !record.tombstone && scopeOf(record).length > 0);
   // A record qualifies when it has scope to derive from and no summary yet. `undefined` is
   // the pre-363 shape and `null` is a record created after the field existed with nothing
