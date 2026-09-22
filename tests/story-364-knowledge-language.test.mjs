@@ -404,6 +404,30 @@ test("STORY-364: a prompt outside the recorded prompt languages is counted once,
     "a workspace that declared no language owes no translation");
 });
 
+test("TCRN-CROSS-INC-369: a query already in the artifact's own language is never owed a translation, even when it is also outside promptLanguages", () => {
+  // The live cross-project configuration: artifact.language=en, promptLanguages=zh-CN.
+  // Before this fix, `outside` only checked "not in promptLanguages" and never compared
+  // against the artifact language itself, so an English query here was misjudged as
+  // owing an en->en translation.
+  const policy = readKnowledgeLanguagePolicy([
+    { key: "artifact.language", value: "en" },
+    { key: "retrieval.promptLanguages", value: "zh-CN" },
+    { key: "execution.dispatchTiers", value: DISPATCH_TIERS_VALUE },
+  ], "claude-code");
+  const english = resolveQueryLanguage("is the key still blocking development", policy);
+  assert.equal(english.queryLanguage, "en");
+  // Counterfactual: reverting INC-369's `queryLanguage !== target` guard makes this
+  // query "outside" again (artifact.language=en, promptLanguages=zh-CN does not include
+  // "en"), so queryTranslation would be {from:"en",to:"en",...} and telemetry would be 1
+  // -- this assertion is the one that goes red without the fix.
+  assert.equal(english.queryTranslation, null, "an English query is not outside the English artifact language");
+  assert.deepEqual(english.telemetry, { queryTranslations: 0 });
+  const chinese = resolveQueryLanguage("密钥还没申请下来是不是整个开发都得先卡住", policy);
+  assert.equal(chinese.queryLanguage, "zh-CN");
+  assert.equal(chinese.queryTranslation, null, "zh-CN is a recorded prompt language, unaffected by this fix");
+  assert.deepEqual(chinese.telemetry, { queryTranslations: 0 });
+});
+
 test("STORY-364: the recall verb reports the query language and its telemetry", async (context) => {
   const workspace = await languageWorkspace(context, {
     "artifact.language": "zh-CN",

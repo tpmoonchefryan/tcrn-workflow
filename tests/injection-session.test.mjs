@@ -50,6 +50,16 @@ const languageSettings = (model = "test-economy") => [
   { key: "execution.dispatchTiers", currentValue: dispatchTiers(model) },
 ];
 
+// TCRN-CROSS-INC-369: the live cross-project configuration -- artifact.language=en,
+// retrieval.promptLanguages=zh-CN. An English query here is not "outside" anything (it
+// already matches the artifact language), so it must never be owed a translation, even
+// though "en" is not itself in promptLanguages.
+const englishArtifactLanguageSettings = (model = "test-economy") => [
+  { key: "artifact.language", currentValue: "en" },
+  { key: "retrieval.promptLanguages", currentValue: "zh-CN" },
+  { key: "execution.dispatchTiers", currentValue: dispatchTiers(model) },
+];
+
 function mockChild({ output = "reply", onInput = () => {}, close = true, onKill = null } = {}) {
   const child = new EventEmitter();
   child.pid = process.pid;
@@ -367,6 +377,30 @@ test("R6 invokes its independent translator before the recall call", async () =>
     recall: async (query) => { order.push(`recall:${query}`); return { ok: true, result: { records: [] } }; },
   });
   assert.deepEqual(order, ["translate", "recall:你好世界"]);
+});
+
+test("TCRN-CROSS-INC-369: an English prompt under artifact.language=en never invokes the translator, before or after recall", async () => {
+  let translateCalls = 0;
+  const result = await runInjection({
+    prompt: "hello world",
+    partition: "cross-project",
+    host: "claude",
+    budget: 24_576,
+    settings: englishArtifactLanguageSettings(),
+    translate: async () => {
+      translateCalls += 1;
+      return { text: "should never be reached", model: "test-economy" };
+    },
+    recall: async () => ({ ok: true, result: { records: [] } }),
+  });
+  // Counterfactual: reverting INC-369's `queryLanguage !== target` guard in
+  // resolveQueryLanguage makes this query "outside" again (artifact.language=en,
+  // promptLanguages=zh-CN does not list "en"), which calls the translator once before
+  // the first recall -- this is the assertion that goes red without the fix. The second
+  // (post-recall, fail-open) call site is also proven at 0 here since the mocked recall
+  // returns no queryTranslation of its own.
+  assert.equal(translateCalls, 0, "an English query under artifact.language=en must never invoke the translator, pre- or post-recall");
+  assert.equal(result.telemetry?.queryTranslations ?? 0, 0);
 });
 
 test("R6 records a translator failure on the last session decision instead of dropping it", async (context) => {

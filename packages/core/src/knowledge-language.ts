@@ -301,7 +301,11 @@ export interface KnowledgeQueryLanguageAnswer {
 export function resolveQueryLanguage(query: string, policy: KnowledgeLanguagePolicy): KnowledgeQueryLanguageAnswer {
   const queryLanguage = detectLanguage(query);
   const target = policy.artifactLanguage;
-  const outside = target !== null && policy.promptLanguages.length > 0 && !policy.promptLanguages.includes(queryLanguage);
+  // TCRN-CROSS-INC-369: a query already in the artifact's own language is never owed a
+  // translation, even when it also happens not to be one of the recorded prompt
+  // languages (e.g. artifact.language=en, promptLanguages=zh-CN: an English query is not
+  // "outside" anything -- it already matches what recall is ranking against).
+  const outside = target !== null && queryLanguage !== target && policy.promptLanguages.length > 0 && !policy.promptLanguages.includes(queryLanguage);
   return Object.freeze({
     queryLanguage,
     queryTranslation: outside && target !== null
