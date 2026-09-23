@@ -521,5 +521,166 @@
       "limit": "this doctor leg can only compare a measured count against the cap recorded here; it cannot decide who is authorised to raise a cap, and does not try to. The frozenRatio exception mechanism above this field has carried the same limit since installation: recording who approved an exception has always been a human act performed in review, never a verdict any machine in this repository renders."
     },
     "rationale": "Zero margin, matching the posture frozenRatio itself and its exceptions above have held since 2026-08-19: each cap is recorded at the value measured the day this field was written, not at a value with headroom already spent. Headroom not measured is a decision nobody wrote down.\n\nThe cost of zero margin is not the same across the three counts it pins. verifyScriptCount and claimCount move only when this repository deliberately adds a verify:* script or a verification-map claim, so a red result on either one names a specific, intentional act. coreSourceLines moves on any change to packages/core/src, including an ordinary defect fix with no proof-surface intent at all -- STORY-354 alone added lines to that directory in the same round this cap was written. A red result on coreSourceLines is therefore not necessarily a proof-surface expansion; it may just be a fix that grew the file it touched. The remedy is the same either way: retire an equivalent number of lines in the same change, or record an Owner-authorised increase in this file. Whether that friction is worth keeping at zero margin once it starts landing on ordinary engine fixes is for Owner to weigh with the actual friction in view; it is recorded here rather than loosened in advance, because an unmeasured buffer is the same unrecorded decision this file was created to stop making.\n\nTCRN-CROSS-STORY-370 measured packages/core/src at 22338 raw 0x0a lines after the retirement. The cap is lowered to that exact count; no headroom or exception is added. TCRN-CROSS-STORY-372 measured packages/core/src at 22761 raw 0x0a lines after adding telemetry and done-evidence support. The cap is raised to that exact count; no headroom is added. TCRN-CROSS-STORY-373 measured packages/core/src at 22953 raw 0x0a lines after adding host-probe validation and process-lifecycle handling. The cap is raised to that exact count; no headroom is added. TCRN-CROSS-STORY-441 measured packages/core/src at 23785 raw 0x0a lines after routing the economy model through host dispatch tiers and threading host through the language paths. Under Owner ruling TCRN-CROSS-MIN-203 D3 (minutes:5d292c2243db8044289e67ca), the cap is raised to that exact measured value; no margin or ratio exception is added."
+  },
+  "responsibilityView": {
+    "schemaVersion": "tcrn.proof-budget.responsibility-view.v1",
+    "note": "TCRN-CROSS-STORY-462, rebuilding TCRN-CROSS-SUB-116 under TCRN-CROSS-MIN-213 D2 and TCRN-CROSS-MIN-221 D3, in the direction the 2026-09-15 ratio-policy Owner authorization (D5) approved: a view of reportBudget's proofLines by responsibility, printed beside the raw count by report:budget as its responsibility field. It classifies the same files the raw count reads (tests/**/*.mjs and scripts/**/*.mjs) with the same raw 0x0a count; productLines is not classified. proofLines, productLines, the ratio, frozenRatio, warningRatio, hardRatio, exceptions, ratioPolicy and surfaceCaps are unchanged and remain the only judged numbers. Nothing here is a cap, a threshold or an approval request, no key here ends in Cap, and no file was moved to change a count. A file named in mixed carries every responsibility it has; a file named nowhere is reported as unknown by path. The basis is in the document named below.",
+    "document": "docs/verification/proof-responsibility.md",
+    "responsibilities": [
+      "runtime-function",
+      "test",
+      "verification-tool"
+    ],
+    "prefixes": [
+      {
+        "prefix": "tests/",
+        "responsibility": "test"
+      },
+      {
+        "prefix": "scripts/bench/",
+        "responsibility": "verification-tool"
+      }
+    ],
+    "classes": {
+      "runtime-function": [
+        "scripts/agents-zero-hook.mjs",
+        "scripts/archive-cleanup.mjs",
+        "scripts/archive-inventory.mjs",
+        "scripts/backfill-work-summaries.mjs",
+        "scripts/chain-write-guard.mjs",
+        "scripts/dispatch-telemetry-hook.mjs",
+        "scripts/embed-ds-component-css-snapshot.mjs",
+        "scripts/generate-ds-component-css-snapshot.mjs",
+        "scripts/host-harness-apply.mjs",
+        "scripts/host-harness.mjs",
+        "scripts/host-render.mjs",
+        "scripts/injection-session.mjs",
+        "scripts/knowledge-capture-hook.mjs",
+        "scripts/knowledge-inject-hook.mjs",
+        "scripts/knowledge-inject.mjs",
+        "scripts/knowledge-language.mjs",
+        "scripts/owner-queue.mjs",
+        "scripts/platform-chain-backup.mjs",
+        "scripts/spawn-guard.mjs",
+        "scripts/ssh-write-observer.mjs",
+        "scripts/tcrn-workflow.mjs"
+      ],
+      "test": [
+        "scripts/pg-test-connection.mjs"
+      ],
+      "verification-tool": [
+        "scripts/breakglass-consistency-check.mjs",
+        "scripts/ceremony-cost.mjs",
+        "scripts/closeout-evidence-runner.mjs",
+        "scripts/closeout-verify.mjs",
+        "scripts/compaction-prototype.mjs",
+        "scripts/coverage-conservation-proof.mjs",
+        "scripts/coverage-conservation.mjs",
+        "scripts/cross-repo-privacy.mjs",
+        "scripts/dependency-materialization.mjs",
+        "scripts/ds-component-css-proof.mjs",
+        "scripts/ds-component-css-reconcile.mjs",
+        "scripts/final-gate-plan.mjs",
+        "scripts/gate-red-locator.mjs",
+        "scripts/generate-proof-artifacts.mjs",
+        "scripts/guard-check.mjs",
+        "scripts/init033-residence-probe.mjs",
+        "scripts/init034-manifest-mutation-proof.mjs",
+        "scripts/isolated-proof.mjs",
+        "scripts/lib/canonical-json.mjs",
+        "scripts/lib/code-only.mjs",
+        "scripts/lib/dependency-graph.mjs",
+        "scripts/lib/dependency-materialization.mjs",
+        "scripts/lib/incremental-output.mjs",
+        "scripts/lib/p8-workflow-rc.mjs",
+        "scripts/lib/privacy.mjs",
+        "scripts/lib/proof-artifacts.mjs",
+        "scripts/lib/proof-budget.mjs",
+        "scripts/lib/protocol-proof.mjs",
+        "scripts/lib/push-gate-children.mjs",
+        "scripts/lib/push-gate-output.mjs",
+        "scripts/lib/rc1-inputs.mjs",
+        "scripts/lib/release-tag-gate.mjs",
+        "scripts/lib/test-wiring.mjs",
+        "scripts/markdown-link-resolution.mjs",
+        "scripts/no-network.mjs",
+        "scripts/no-sibling-dependency-proof.mjs",
+        "scripts/observe-channel-proof.mjs",
+        "scripts/operational-batch-entry.mjs",
+        "scripts/p1-sequence.mjs",
+        "scripts/platform-doctor.mjs",
+        "scripts/preflight.mjs",
+        "scripts/push-gate.mjs",
+        "scripts/regen-rc1-inputs.mjs",
+        "scripts/retrieval-eval.mjs",
+        "scripts/review-evidence.mjs",
+        "scripts/s253-class-alignment-proof.mjs",
+        "scripts/s278-component-coverage.mjs",
+        "scripts/s279-catalog-mutation-proof.mjs",
+        "scripts/story-rule-conservation.mjs",
+        "scripts/story-scope-compliance.mjs",
+        "scripts/test-controller-bootstrap.mjs",
+        "scripts/test-controller-child-policy.mjs",
+        "scripts/test-controller-reaper.mjs",
+        "scripts/test-wiring-proof.mjs",
+        "scripts/token-attribution.mjs",
+        "scripts/verbatim-evidence-meta-proof.mjs",
+        "scripts/verbatim-evidence-proof.mjs",
+        "scripts/verification-links.mjs",
+        "scripts/verification-red-legs.mjs",
+        "scripts/verify-otel-privacy.mjs",
+        "scripts/verify-portal.mjs",
+        "scripts/verify-s6.mjs",
+        "scripts/verify-staged-privacy.mjs"
+      ]
+    },
+    "mixed": {
+      "scripts/dispatch-adapter.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/canonical-order.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/files.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/local-command.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/private-token-roster.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/release-trust.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/safe-io.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/lib/scoped-strip-types.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/task.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ],
+      "scripts/verify-release-trust.mjs": [
+        "runtime-function",
+        "verification-tool"
+      ]
+    },
+    "costBaseline": {
+      "runtime": "unknown",
+      "resources": "unknown",
+      "repeatedExecution": "unknown",
+      "maintenance": "unknown"
+    }
   }
 }

@@ -14,6 +14,9 @@ export const PROOF_BUDGET_EXCEEDED_REASON = "PROOF_BUDGET_EXCEEDED";
 export const PROOF_BUDGET_VERIFIED_REASON = "PROOF_BUDGET_VERIFIED";
 export const PROOF_BUDGET_SCOPED_NONBLOCKING_REASON = "PROOF_BUDGET_EXCEEDED_SCOPED_NONBLOCKING";
 export const PROOF_BUDGET_SCOPE_BINDING_SCHEMA = "tcrn.proof-budget-scope-binding.v1";
+export const PROOF_RESPONSIBILITY_VIEW_SCHEMA = "tcrn.proof-budget.responsibility-view.v1";
+export const PROOF_RESPONSIBILITY_COUNT_SCHEMA = "tcrn.proof-budget.responsibility-count.v1";
+export const PROOF_RESPONSIBILITIES = Object.freeze(["runtime-function", "test", "verification-tool"]);
 
 function canonicalValue(value) {
   if (Array.isArray(value)) return value.map(canonicalValue);
@@ -337,4 +340,95 @@ export function isNonBlockingProofBudgetWarning(value, { policy = defaultPolicy(
     && warning.scopeBindingSha256 === configured.bindingSha256
     && scopeBindingSha256 === configured.bindingSha256
     && canonicalText(warning.scopeBinding) === canonicalText(configured.binding);
+}
+
+// TCRN-CROSS-STORY-462 (rebuilding TCRN-CROSS-SUB-116). A view beside the raw count, never in
+// place of it: reportBudget's proof files are classified by what each one does -- runtime
+// function, test, or verification tool -- as policy.responsibilityView records it. A file with
+// more than one responsibility is counted once under `mixed` with all of them named; a file
+// the view does not name is `unknown` and listed. Nothing here is a cap, a threshold, or an
+// approval request, and the ratio verdict above never reads it.
+// docs/verification/proof-responsibility.md states the basis.
+function responsibilityList(value) {
+  return Array.isArray(value) && value.length > 0 && value.every((entry) => PROOF_RESPONSIBILITIES.includes(entry)) && new Set(value).size === value.length;
+}
+
+/** Problems that keep a responsibility view from classifying; an empty list means it can. */
+export function proofResponsibilityViewProblems(view) {
+  if (!view || typeof view !== "object" || Array.isArray(view)) return ["responsibilityView is missing"];
+  const problems = [];
+  if (view.schemaVersion !== PROOF_RESPONSIBILITY_VIEW_SCHEMA) problems.push("responsibilityView.schemaVersion");
+  if (typeof view.document !== "string" || !/^docs\/[A-Za-z0-9./_-]+\.md$/u.test(view.document)) problems.push("responsibilityView.document");
+  if (JSON.stringify(view.responsibilities) !== JSON.stringify(PROOF_RESPONSIBILITIES)) problems.push("responsibilityView.responsibilities");
+  const named = new Set();
+  const name = (path, where) => {
+    if (typeof path !== "string" || !/^(?:scripts|tests)\/[A-Za-z0-9./_-]+\.mjs$/u.test(path)) problems.push(`${where}: ${String(path)}`);
+    else if (named.has(path)) problems.push(`${where}: ${path} is named twice`);
+    named.add(path);
+  };
+  if (!Array.isArray(view.prefixes) || view.prefixes.some((rule) => typeof rule?.prefix !== "string" || !/^(?:scripts|tests)\/(?:[A-Za-z0-9._-]+\/)*$/u.test(rule.prefix) || !PROOF_RESPONSIBILITIES.includes(rule?.responsibility))) {
+    problems.push("responsibilityView.prefixes");
+  }
+  if (!view.classes || typeof view.classes !== "object" || Array.isArray(view.classes)
+    || JSON.stringify(Object.keys(view.classes).sort()) !== JSON.stringify([...PROOF_RESPONSIBILITIES])) {
+    problems.push("responsibilityView.classes");
+  } else {
+    for (const responsibility of PROOF_RESPONSIBILITIES) {
+      if (!Array.isArray(view.classes[responsibility])) problems.push(`responsibilityView.classes.${responsibility}`);
+      else for (const path of view.classes[responsibility]) name(path, `responsibilityView.classes.${responsibility}`);
+    }
+  }
+  if (!view.mixed || typeof view.mixed !== "object" || Array.isArray(view.mixed)) {
+    problems.push("responsibilityView.mixed");
+  } else {
+    for (const [path, responsibilities] of Object.entries(view.mixed)) {
+      name(path, "responsibilityView.mixed");
+      if (!responsibilityList(responsibilities) || responsibilities.length < 2) problems.push(`responsibilityView.mixed: ${path} must name two or more responsibilities`);
+    }
+  }
+  const cost = view.costBaseline;
+  if (!cost || typeof cost !== "object" || Array.isArray(cost) || Object.keys(cost).length === 0) problems.push("responsibilityView.costBaseline");
+  else for (const [field, value] of Object.entries(cost)) {
+    // No measured baseline exists; a number here would be a claim nothing measured.
+    if (value !== "unknown") problems.push(`responsibilityView.costBaseline.${field} must stay unknown until measured`);
+  }
+  return problems;
+}
+
+/** Classify [{path, lines}] proof files; the raw proofLines is their plain sum either way. */
+export function classifyProofResponsibility(files, view) {
+  const rows = (Array.isArray(files) ? files : []).filter((row) => typeof row?.path === "string" && Number.isSafeInteger(row.lines) && row.lines >= 0);
+  const proofLines = rows.reduce((total, row) => total + row.lines, 0);
+  const problems = proofResponsibilityViewProblems(view);
+  if (problems.length > 0) {
+    return { schemaVersion: PROOF_RESPONSIBILITY_COUNT_SCHEMA, status: "invalid", reasonCode: "PROOF_RESPONSIBILITY_VIEW_INVALID", proofLines, problems };
+  }
+  const assigned = new Map();
+  for (const responsibility of PROOF_RESPONSIBILITIES) for (const path of view.classes[responsibility]) assigned.set(path, [responsibility]);
+  for (const [path, responsibilities] of Object.entries(view.mixed)) assigned.set(path, [...responsibilities].sort());
+  const byResponsibility = Object.fromEntries(PROOF_RESPONSIBILITIES.map((responsibility) => [responsibility, 0]));
+  const mixed = [];
+  const unknown = [];
+  const seen = new Set();
+  for (const row of [...rows].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0))) {
+    seen.add(row.path);
+    const responsibilities = assigned.get(row.path)
+      ?? view.prefixes.filter((rule) => row.path.startsWith(rule.prefix)).map((rule) => [rule.responsibility])[0]
+      ?? null;
+    if (responsibilities === null) unknown.push({ path: row.path, lines: row.lines });
+    else if (responsibilities.length > 1) mixed.push({ path: row.path, lines: row.lines, responsibilities });
+    else byResponsibility[responsibilities[0]] += row.lines;
+  }
+  const total = (list) => list.reduce((sum, row) => sum + row.lines, 0);
+  return {
+    schemaVersion: PROOF_RESPONSIBILITY_COUNT_SCHEMA,
+    status: "classified",
+    proofLines,
+    byResponsibility,
+    mixed: { lines: total(mixed), files: mixed },
+    unknown: { lines: total(unknown), files: unknown },
+    staleEntries: [...assigned.keys()].filter((path) => !seen.has(path)).sort(),
+    costBaseline: { ...view.costBaseline },
+    document: view.document,
+  };
 }

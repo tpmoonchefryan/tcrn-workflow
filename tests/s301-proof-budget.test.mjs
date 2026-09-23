@@ -19,11 +19,14 @@ import test from "node:test";
 
 import { P1_SEQUENCE } from "../scripts/p1-sequence.mjs";
 import {
+  classifyProofResponsibility,
   evaluateProofBudget,
   isNonBlockingProofBudgetWarning,
   proofBudgetScopeBindingDigest,
+  proofResponsibilityViewProblems,
   validateProofBudgetScopeBinding,
   PROOF_BUDGET_SCOPED_NONBLOCKING_REASON,
+  PROOF_RESPONSIBILITIES,
 } from "../scripts/lib/proof-budget.mjs";
 import { budgetWarningNotices, hasWarningOrError, inspectStructuredChildOutput, onlyBudgetWarning, validateStructuredChildExpectations } from "../scripts/lib/push-gate-output.mjs";
 import { P8_RELEASE_ARTIFACTS, P8_TAG } from "../scripts/lib/p8-workflow-rc.mjs";
@@ -532,4 +535,69 @@ test("TCRN-CROSS-STORY-435/436: native implementation results require real bindi
     else candidate[field] = value;
     assert.equal(normalizeNativeImplementationResult(candidate, bound).valid, false, field);
   }
+});
+
+// TCRN-CROSS-STORY-462 (SUB-242, rebuilding SUB-116). The responsibility view sits beside the
+// raw count: it classifies reportBudget's proof files by what they do, never replaces the raw
+// total, and is judged by nothing. Red legs: drop a file from the classified total, fold a
+// mixed file into one class, report an unknown or a cost as zero, or let the view move the
+// ratio verdict.
+test("STORY-462 SUB-242: the responsibility view counts every proof line once beside the raw total", () => {
+  const view = {
+    schemaVersion: "tcrn.proof-budget.responsibility-view.v1",
+    document: "docs/verification/proof-responsibility.md",
+    responsibilities: [...PROOF_RESPONSIBILITIES],
+    prefixes: [{ prefix: "tests/", responsibility: "test" }],
+    classes: {
+      "runtime-function": ["scripts/hook.mjs"],
+      test: [],
+      "verification-tool": ["scripts/gate.mjs", "scripts/retired.mjs"],
+    },
+    mixed: { "scripts/adapter.mjs": ["runtime-function", "verification-tool"] },
+    costBaseline: { runtime: "unknown", resources: "unknown", repeatedExecution: "unknown", maintenance: "unknown" },
+  };
+  const files = [
+    { path: "tests/a.test.mjs", lines: 40 },
+    { path: "tests/fixtures/helper.mjs", lines: 2 },
+    { path: "scripts/hook.mjs", lines: 11 },
+    { path: "scripts/gate.mjs", lines: 7 },
+    { path: "scripts/adapter.mjs", lines: 13 },
+    { path: "scripts/new-tool.mjs", lines: 5 },
+  ];
+  const counted = classifyProofResponsibility(files, view);
+  assert.equal(counted.status, "classified");
+  assert.equal(counted.proofLines, 78, "the raw total is the plain sum of the same files");
+  assert.deepEqual(counted.byResponsibility, { "runtime-function": 11, test: 42, "verification-tool": 7 });
+  assert.deepEqual(counted.mixed, { lines: 13, files: [{ path: "scripts/adapter.mjs", lines: 13, responsibilities: ["runtime-function", "verification-tool"] }] });
+  assert.deepEqual(counted.unknown, { lines: 5, files: [{ path: "scripts/new-tool.mjs", lines: 5 }] });
+  assert.equal(Object.values(counted.byResponsibility).reduce((total, lines) => total + lines, 0) + counted.mixed.lines + counted.unknown.lines, counted.proofLines);
+  assert.deepEqual(counted.staleEntries, ["scripts/retired.mjs"]);
+  assert.deepEqual(Object.values(counted.costBaseline), ["unknown", "unknown", "unknown", "unknown"]);
+
+  const broken = classifyProofResponsibility(files, { ...view, mixed: { "scripts/adapter.mjs": ["runtime-function"] }, costBaseline: { ...view.costBaseline, runtime: 0 } });
+  assert.equal(broken.status, "invalid");
+  assert.equal(broken.reasonCode, "PROOF_RESPONSIBILITY_VIEW_INVALID");
+  assert.equal(broken.proofLines, 78, "an unusable view still reports the raw total");
+  assert.ok(broken.problems.some((problem) => problem.includes("scripts/adapter.mjs")), JSON.stringify(broken.problems));
+  assert.ok(broken.problems.some((problem) => problem.includes("costBaseline.runtime")), JSON.stringify(broken.problems));
+});
+
+test("STORY-462 SUB-242: the committed responsibility view is valid and leaves the ratio policy alone", async () => {
+  const policy = await readPolicy();
+  const view = policy.responsibilityView;
+  assert.deepEqual(proofResponsibilityViewProblems(view), []);
+  assert.deepEqual(view.responsibilities, ["runtime-function", "test", "verification-tool"]);
+  assert.deepEqual(view.mixed["scripts/dispatch-adapter.mjs"], ["runtime-function", "verification-tool"], "a file with two responsibilities is not forced into one");
+  assert.ok(Object.values(view.costBaseline).every((value) => value === "unknown"), "no measured cost baseline exists, so none is claimed");
+  assert.ok(view.classes["runtime-function"].includes("scripts/knowledge-inject.mjs"), "runtime code under scripts/ is not called proof by directory");
+  const documentText = await readFile(resolve(repositoryRoot, view.document), "utf8");
+  assert.match(documentText, /responsibilityView/u);
+  assert.deepEqual(Object.keys(policy.surfaceCaps).filter((key) => key.endsWith("Cap")).sort(), ["claimCap", "coreSourceLineCap", "verifyScriptCap"]);
+  const withoutView = { ...policy };
+  delete withoutView.responsibilityView;
+  assert.deepEqual(
+    evaluateProofBudget({ proofLines: 72_824, productLines: 29_041, policy }),
+    evaluateProofBudget({ proofLines: 72_824, productLines: 29_041, policy: withoutView }),
+    "the view does not move the ratio verdict",
+  );
 });

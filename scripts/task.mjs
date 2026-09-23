@@ -61,7 +61,7 @@ import {
 import { delay, PROGRESS_WAIT_MAX_MS, readProgressDelta, summarizeProgress, waitForProgress } from "./lib/incremental-output.mjs";
 import { installNoNetworkGuard } from "./no-network.mjs";
 import { ScopedStripTypesError, stripTypesWithScopedExperimentalWarning } from "./lib/scoped-strip-types.mjs";
-import { evaluateProofBudget } from "./lib/proof-budget.mjs";
+import { classifyProofResponsibility, evaluateProofBudget } from "./lib/proof-budget.mjs";
 
 installNoNetworkGuard();
 
@@ -1467,6 +1467,7 @@ async function reportBudget() {
   const files = await walkFiles();
   let proofLines = 0;
   let productLines = 0;
+  const proofFiles = [];
   for (const absolute of files) {
     const path = toPosixPath(relative(repositoryRoot, absolute));
     const isProof = (path.startsWith("tests/") || path.startsWith("scripts/")) && path.endsWith(".mjs");
@@ -1483,6 +1484,7 @@ async function reportBudget() {
     }
     if (isProof) {
       proofLines += newlines;
+      proofFiles.push({ path, lines: newlines });
     } else {
       productLines += newlines;
     }
@@ -1512,9 +1514,13 @@ async function reportBudget() {
       },
     });
   }
-  if (!evaluated.ok) fail(evaluated.reasonCode, evaluated.error, { proofBudget: evaluated });
+  // TCRN-CROSS-STORY-462: the same proof files by responsibility, reported beside the raw
+  // count. The verdict above is already settled and never reads this view.
+  const responsibility = classifyProofResponsibility(proofFiles, policy.responsibilityView);
+  if (!evaluated.ok) fail(evaluated.reasonCode, evaluated.error, { proofBudget: evaluated, responsibility });
   return success(evaluated.reasonCode, {
     ...evaluated,
+    responsibility,
     ...(evaluated.warning === null ? {} : { notice: evaluated.warning }),
   });
 }
