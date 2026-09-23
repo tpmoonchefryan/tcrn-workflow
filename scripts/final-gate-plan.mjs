@@ -1681,6 +1681,11 @@ export async function readNativeBatchState({ workspace, engineCli, workIds = [],
     const observation = nativeWorkObservation(record, advisory);
     shows.push({
       ...record,
+      // TCRN-CROSS-STORY-460 R4: qualification re-normalizes the native result
+      // against the task's scope, so the task carries the text this same
+      // work-show returned.  Without it every non-blocked Story was refused with
+      // "native stable scope text is missing" (#241).
+      ...(typeof advisory?.scope === "string" ? { scope: advisory.scope } : {}),
       ...(observation.dependencies.valid ? {
         dependencies: observation.dependencies.dependencies,
         dependencySource: observation.dependencies.source,
