@@ -55,6 +55,7 @@ import {
   removeTemporaryDirectory,
   promptDigest,
   recordIdentity,
+  redactFailureDetail,
 } from "./injection-session.mjs";
 import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
@@ -1290,7 +1291,7 @@ export async function runSessionInjection({
           try {
             judgement = await calls.judge(prompt, fresh, recallResult);
           } catch (error) {
-            judgement = { judgment: null, reasonCode: "UNINJECTED_MODEL_FAILED", error: String(error?.message ?? error) };
+            judgement = { judgment: null, reasonCode: "UNINJECTED_MODEL_FAILED", error: String(error?.message ?? error), failureDetail: redactFailureDetail(error?.message ?? error, [prompt]) };
           }
           const judgment = typeof judgement === "boolean" ? judgement : judgement?.judgment;
           lease.session.judgments.push({
@@ -1308,6 +1309,8 @@ export async function runSessionInjection({
               judgment: typeof judgment === "boolean" ? judgment : null,
               model: judgement?.model ?? economyModel,
               ...(judgement?.reasonCode ? { reasonCode: judgement.reasonCode } : {}),
+              // TCRN-CROSS-STORY-459 R1: bounded and redacted at the source; re-bounded here.
+              ...(typeof judgement?.failureDetail === "string" && judgement.failureDetail.length > 0 ? { failureDetail: redactFailureDetail(judgement.failureDetail, [prompt]) } : {}),
             },
           });
         }

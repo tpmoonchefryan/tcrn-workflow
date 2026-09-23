@@ -856,3 +856,53 @@ test("a real child that outlives the timeout is killed and leaves its process gr
   // process.kill is not intercepted by the policy, so this checks the relay-reported pid.
   assert.throws(() => process.kill(-childPid, 0));
 });
+
+// TCRN-CROSS-STORY-459 (SUB-235): a judge that fails used to leave only
+// UNINJECTED_MODEL_FAILED behind. The call now keeps a bounded failure detail from the
+// child's stderr, with the prompt text, anything shaped like a key and local absolute paths
+// removed. Red leg: drop the detail and the reason is gone again.
+function failingChild(stderrText, code = 1) {
+  const child = new EventEmitter();
+  child.pid = process.pid;
+  child.stdin = { end() {} };
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  setImmediate(() => { child.stderr.emit("data", stderrText); child.emit("close", code, null); });
+  return child;
+}
+
+test("STORY-459 AC1: a failed judge call keeps a bounded failure detail without the prompt, keys or local paths", async () => {
+  const prompt = "private prompt body 459 about the release plan";
+  const secret = `sk-ant-api03-${"A1b2".repeat(12)}`;
+  const stderrText = [
+    "x".repeat(3_000),
+    `loading ${"/Users"}/someone/.local/bin/claude and ${"/private"}/var/folders/zz/cache`,
+    `echo of the input: ${prompt}`,
+    `Authorization: Bearer ${"t0k3n".repeat(8)} api_key=${secret}`,
+    'API Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"This model is not supported"}}',
+  ].join("\n");
+  const call = new UninjectedModelCall({ model: "economy", cwd: tmpdir(), spawnImpl: () => failingChild(stderrText) });
+  const answer = await call.observeCandidates(prompt, ["row"]);
+  assert.equal(answer.reasonCode, "UNINJECTED_MODEL_FAILED");
+  assert.equal(typeof answer.failureDetail, "string");
+  assert.ok(answer.failureDetail.length > 0 && answer.failureDetail.length <= 256, `bounded: ${answer.failureDetail.length}`);
+  assert.match(answer.failureDetail, /API Error: 400/u, "the diagnosable part survives");
+  for (const leaked of [prompt, secret, "t0k3nt0k3n", "/Users/", "/private/", "/var/folders"]) {
+    assert.equal(answer.failureDetail.includes(leaked), false, `no ${leaked} in the detail`);
+  }
+});
+
+test("STORY-459 AC3: a failing judge leaves the injected bytes exactly as a succeeding one", async (context) => {
+  const succeeding = await stateDirectory(context, "judge-ok");
+  const failing = await stateDirectory(context, "judge-failed");
+  const outputs = { ok: [], failed: [] };
+  for (let index = 0; index < 5; index += 1) {
+    const records = [candidate(`knowledge:${(index + 459).toString(16).padStart(24, "0")}`, index)];
+    const common = { prompt: `judge-parity-${index}`, sessionId: "judge-parity", event: "UserPromptSubmit", workspaceState: emptyWorkspace, budget: 24_576, perPromptBytes: 1_600, recall: recallFor(records) };
+    outputs.ok.push(await runSelfContainedSession({ ...common, stateDirectory: succeeding, judge: async () => ({ judgment: true, model: "test-economy" }) }));
+    outputs.failed.push(await runSelfContainedSession({ ...common, stateDirectory: failing, judge: async () => ({ judgment: null, model: "test-economy", reasonCode: "UNINJECTED_MODEL_FAILED", failureDetail: "API Error: 400 model not supported" }) }));
+  }
+  assert.deepEqual(outputs.failed.map((result) => [result.injection, result.decision]), outputs.ok.map((result) => [result.injection, result.decision]));
+  const judgments = new InjectionSessionStore({ directory: failing }).readSession("judge-parity").judgments;
+  assert.deepEqual([...new Set(judgments.map((entry) => entry.reasonCode))], ["UNINJECTED_MODEL_FAILED"]);
+});

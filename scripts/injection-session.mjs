@@ -1062,6 +1062,27 @@ async function ensureProcessGroupEmpty(pid) {
   try { process.kill(-pid, "SIGKILL"); } catch { /* the group is already empty */ }
 }
 
+// TCRN-CROSS-STORY-459 R1: what a failed model call leaves behind for its telemetry. The
+// child's stderr tail with the prompt (and system prompt) text, anything shaped like a key or
+// credential and every local absolute path removed, whitespace collapsed, and at most 256
+// characters kept from the end, where a CLI prints its error.
+export const FAILURE_DETAIL_MAX = 256;
+export function redactFailureDetail(text, secrets = []) {
+  let detail = String(text ?? "").slice(-4_096);
+  for (const secret of secrets) {
+    for (const line of String(secret ?? "").split("\n").map((entry) => entry.trim()).filter((entry) => entry.length >= 8)) detail = detail.split(line).join("[prompt]");
+  }
+  detail = detail
+    .replace(/\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/giu, "[credential]")
+    .replace(/\b(api[_-]?key|token|secret|password|authorization)(\s*[:=]\s*)\S+/giu, "$1$2[redacted]")
+    .replace(/\b(?:sk|pk|rk)-[A-Za-z0-9_-]{16,}/gu, "[key]")
+    .replace(/[A-Za-z0-9+/_=-]{32,}/gu, "[redacted]")
+    .replace(/(?:file:\/\/)?\/(?:Users|home|private|var\/folders|tmp|root|opt)\/[^\s"'`)\]]*/gu, "[path]")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return detail.length <= FAILURE_DETAIL_MAX ? detail : `…${detail.slice(-(FAILURE_DETAIL_MAX - 1))}`;
+}
+
 function modelCommand(host, model, cwd, systemPrompt) {
   const codexCliModel = model.startsWith("codex-cli:") ? model.slice("codex-cli:".length) : null;
   if (host === "codex" || codexCliModel !== null) {
@@ -1134,18 +1155,18 @@ export class UninjectedModelCall {
       return { ok: false, reasonCode: "UNINJECTED_MODEL_TIMEOUT", model: this.model, timedOut: true };
     }
     await ensureProcessGroupEmpty(child.pid);
-    if (result?.code !== 0) return { ok: false, reasonCode: "UNINJECTED_MODEL_FAILED", model: this.model, error: stderr.slice(-200) };
+    if (result?.code !== 0) return { ok: false, reasonCode: "UNINJECTED_MODEL_FAILED", model: this.model, error: stderr.slice(-200), failureDetail: redactFailureDetail(stderr, [prompt, command.systemPrompt]) };
     return { ok: true, model: this.model, text: stdout.trim() };
   }
 
   async translatePrompt(prompt) {
     const answer = await this.call(prompt);
-    return answer.ok ? { text: answer.text, model: answer.model } : { text: null, model: this.model, reasonCode: answer.reasonCode };
+    return answer.ok ? { text: answer.text, model: answer.model } : { text: null, model: this.model, reasonCode: answer.reasonCode, ...(answer.failureDetail ? { failureDetail: answer.failureDetail } : {}) };
   }
 
   async observeCandidates(prompt, candidates) {
     const answer = await this.call(`${prompt}\n\nCandidates:\n${(candidates ?? []).join("\n")}`);
-    return answer.ok ? { judgment: modelOutputJudgment(answer.text), model: answer.model } : { judgment: null, model: this.model, reasonCode: answer.reasonCode };
+    return answer.ok ? { judgment: modelOutputJudgment(answer.text), model: answer.model } : { judgment: null, model: this.model, reasonCode: answer.reasonCode, ...(answer.failureDetail ? { failureDetail: answer.failureDetail } : {}) };
   }
 }
 

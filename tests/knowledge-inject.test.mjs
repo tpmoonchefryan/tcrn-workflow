@@ -302,3 +302,27 @@ test("STORY-452 SUB-225: each channel self-checks through its own write path and
   assert.equal(read.channels.find((entry) => entry.channel === "verify").reading, "observed-zero");
   assert.deepEqual(read.channels.find((entry) => entry.channel === "retrieval").selfChecks, { ok: 1, failed: 1 });
 });
+
+// TCRN-CROSS-STORY-459 AC1 (SUB-235): the judge telemetry record carries the failure detail
+// next to the reason code, bounded, under a field name the telemetry validator admits.
+test("STORY-459 AC1: judge telemetry keeps the failure detail with the reason code", async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-judge-failure-")));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => ({ kind, path: join(base, kind) }));
+  for (const root of roots) await mkdir(root.path, { recursive: true });
+  await initializeWorkspace({ roots, externalKey: "STORY-459-JUDGE", createdAt: "2026-09-01T00:00:00Z" });
+  const transient = join(base, "transient");
+  const candidate = { id: "knowledge:000000000000000000000459", kind: "card", key: "K459", status: "active", title: "Judge", summary: "Judge" };
+  const prompt = "judge failure prompt 459";
+  await runSessionInjection({
+    prompt, sessionId: "s459", event: "UserPromptSubmit", host: "claude",
+    stateDirectory: join(transient, "session-state"), workspaceState: await materializeWorkspace(join(base, "workspace")), settings: [], budget: 24_576, perPromptBytes: 1_600,
+    recall: async () => ({ ok: true, result: { records: [candidate] } }),
+    judge: async () => ({ judgment: null, model: "test-economy", reasonCode: "UNINJECTED_MODEL_FAILED", failureDetail: "API Error: 400 model not supported" }),
+  });
+  const judge = (await readTelemetryRecords(transient, { kind: "judge", limit: 10 })).records;
+  assert.equal(judge.length, 1);
+  assert.equal(judge[0].payload.reasonCode, "UNINJECTED_MODEL_FAILED");
+  assert.equal(judge[0].payload.failureDetail, "API Error: 400 model not supported");
+  assert.equal(JSON.stringify(judge[0]).includes(prompt), false, "the prompt never reaches the record");
+});
