@@ -2,7 +2,7 @@
   "schemaVersion": "tcrn.rc1-candidate-proof-manifest.v1",
   "status": "candidate_unreviewed",
   "accepted": false,
-  "basisDigest": "061c0a0c01312a09d480683e7f511aca55a4c7de219edde0c3ec971b593eea03",
+  "basisDigest": "20d5f97a1b4d3202d40b5be3147586c54850e91f814135bde930f5786bb17f77",
   "inputs": [
     {
       "path": "extensions/aos-requirements-v1.json",
@@ -321,8 +321,8 @@
     },
     {
       "path": "specs/time-attestation-v1.md",
-      "size": 4904,
-      "sha256": "7223e87654a5168fbbb823a6248552667d4b7676ee5a3f525956d4316c267d83"
+      "size": 20345,
+      "sha256": "e35db5e0201c3804a40d3b7c3b3f697b69c72ee04ddc372446be267be99314e7"
     },
     {
       "path": "specs/work-log-v1.md",
