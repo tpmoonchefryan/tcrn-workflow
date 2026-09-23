@@ -582,8 +582,8 @@ function byInstant(left: TelemetryRecord, right: TelemetryRecord): number {
  * TCRN-CROSS-STORY-453 R3: each channel's verdict for one UTC day. `records` holds the day's
  * records, the boundary rows around it and its seal receipts (the day file, the one before and
  * the three after). A valid v2 receipt gives sealed or observed-zero; a v1 receipt, judged by
- * the v1 rules, seals all four channels; otherwise the day is idle (no boundary row and no
- * self-check from any host, STORY-454 R2) or the channel is unproven. Receipts are listed with
+ * the v1 rules, seals all four channels; otherwise the day is idle (no boundary row for the day
+ * and no self-check from any host, STORY-454 R2) or the channel is unproven. Receipts are listed with
  * their validity. Read-only.
  */
 export function observationDayVerdicts(records: readonly TelemetryRecord[], day: string, { unreadable = false }: { readonly unreadable?: boolean } = {}): ObservationDayVerdicts {
@@ -592,7 +592,8 @@ export function observationDayVerdicts(records: readonly TelemetryRecord[], day:
   const entries = records.filter((record) => record.kind !== "observation-coverage");
   const inDay = entries.filter((record) => new Date(record.at).toISOString().slice(0, 10) === day).sort(byInstant);
   const boundary = entries.filter((record) => String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
-  const idle = !boundary.some((record) => record.payload.highWaterDay === day || new Date(record.at).toISOString().slice(0, 10) === day) && !inDay.some((record) => record.kind === COLLECTOR_SELF_CHECK_KIND);
+  // A boundary row belongs to the day its highWaterDay names (a Stop writes a day's rows later).
+  const idle = !boundary.some((record) => record.payload.highWaterDay === day) && !inDay.some((record) => record.kind === COLLECTOR_SELF_CHECK_KIND);
   const receipts = records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until).sort(byInstant);
   const proofRecords = entries.filter((record) => (record.at >= from && record.at < until) || String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
   const v1 = receipts.filter((record) => record.payload.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION).map((record) => {
@@ -621,6 +622,87 @@ export async function readObservationDayVerdicts(root: string, day: string): Pro
     records.push(...(await readTelemetryDay(root, new Date(Date.parse(`${day}T00:00:00.000Z`) + offset * 86_400_000).toISOString().slice(0, 10))).records);
   }
   return { ...observationDayVerdicts(records, day, { unreadable: target.problems.length > 0 }), problems: target.problems };
+}
+
+export type ObservationWindowClass = "card" | "rule" | "verify";
+// STORY-454 R3: the channels a record class is judged on. A small card needs retrieval and
+// reference to be observation days on the same day; a rule needs trigger; a verify script,
+// verify check or gate needs verify.
+const OBSERVATION_WINDOW_CHANNELS: Readonly<Record<ObservationWindowClass, readonly string[]>> = Object.freeze({ card: ["retrieval", "reference"], rule: ["trigger"], verify: ["verify"] });
+
+export interface ObservationClassWindow {
+  readonly observationDays: readonly string[];
+  readonly complete: boolean;
+  readonly missingObservationDays: number;
+  readonly windowStart: string;
+  readonly windowEnd: string;
+  readonly records: readonly TelemetryRecord[];
+}
+
+export interface ObservationWindows {
+  readonly windowDays: number;
+  readonly classes: Readonly<Record<ObservationWindowClass, ObservationClassWindow>>;
+  readonly idleDays: readonly string[];
+  readonly unprovenDays: readonly string[];
+  readonly problems: TelemetryReadResult["problems"];
+}
+
+function shiftDay(day: string, offset: number): string {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) + offset * 86_400_000).toISOString().slice(0, 10);
+}
+
+/**
+ * TCRN-CROSS-STORY-454 R1-R4: the last `windowDays` observation days of each record class,
+ * counted backwards from the day before `at`. An observation day is a channel day read as
+ * sealed or observed-zero; idle and unproven days are neither counted nor a break in the
+ * window, and are listed apart. The scan covers at least `windowDays` calendar days and goes
+ * further back only while a class is short and older day files exist. Records after `at` are
+ * not read. Read-only.
+ */
+export async function readObservationWindows(root: string, at: string, windowDays: number): Promise<ObservationWindows> {
+  if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650) fail("TELEMETRY_FILTER_INVALID", "windowDays must be a positive bounded integer");
+  let atValue: bigint;
+  try { atValue = parseStrictInstant(at); } catch { fail("TELEMETRY_FILTER_INVALID", "at is not a strict instant"); }
+  const directory = join(rootDirectory(root), "telemetry");
+  let names: string[] = [];
+  try { names = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isFile() && /^\d{4}-\d{2}-\d{2}\.ndjson$/u.test(entry.name)).map((entry) => entry.name).sort(); }
+  catch (error) { if (errorCode(error) !== "ENOENT") throw error; }
+  const files = new Map<string, { readonly records: readonly TelemetryRecord[]; readonly problems: TelemetryReadResult["problems"] }>();
+  for (const name of names) {
+    const read = await readTelemetryDay(root, name.slice(0, 10));
+    files.set(name.slice(0, 10), { records: read.records.filter((record) => parseStrictInstant(record.at) <= atValue), problems: read.problems });
+  }
+  const earliest = names[0]?.slice(0, 10) ?? null;
+  const days: Record<ObservationWindowClass, string[]> = { card: [], rule: [], verify: [] };
+  const idleDays: string[] = [];
+  const unprovenDays: string[] = [];
+  const yesterday = shiftDay(new Date(at).toISOString().slice(0, 10), -1);
+  for (let scanned = 0; scanned < 3_650; scanned += 1) {
+    const day = shiftDay(yesterday, -scanned);
+    const short = Object.values(days).some((list) => list.length < windowDays);
+    if (scanned >= windowDays && (!short || earliest === null || day < earliest)) break;
+    const around = [-1, 0, 1, 2, 3].flatMap((offset) => files.get(shiftDay(day, offset))?.records ?? []);
+    const verdicts = observationDayVerdicts(around, day, { unreadable: (files.get(day)?.problems.length ?? 0) > 0 });
+    const observed = (channel: string): boolean => ["sealed", "observed-zero"].includes(verdicts.channels.find((entry) => entry.channel === channel)?.verdict ?? "");
+    for (const kind of Object.keys(days) as ObservationWindowClass[]) {
+      if (days[kind].length < windowDays && OBSERVATION_WINDOW_CHANNELS[kind].every(observed)) days[kind].push(day);
+    }
+    if (verdicts.idle) idleDays.push(day);
+    else if (verdicts.channels.some((entry) => entry.verdict === "unproven")) unprovenDays.push(day);
+  }
+  const scannedFrom = idleDays.concat(unprovenDays, ...Object.values(days)).sort()[0] ?? yesterday;
+  const classes = Object.fromEntries((Object.keys(days) as ObservationWindowClass[]).map((kind) => {
+    const observationDays = [...days[kind]].sort();
+    return [kind, {
+      observationDays,
+      complete: observationDays.length >= windowDays,
+      missingObservationDays: Math.max(0, windowDays - observationDays.length),
+      windowStart: `${observationDays[0] ?? scannedFrom}T00:00:00.000Z`,
+      windowEnd: `${observationDays.at(-1) ?? yesterday}T23:59:59.999Z`,
+      records: observationDays.flatMap((day) => (files.get(day)?.records ?? []).filter((record) => record.kind !== "observation-coverage")),
+    }];
+  })) as unknown as Record<ObservationWindowClass, ObservationClassWindow>;
+  return { windowDays, classes, idleDays: idleDays.sort(), unprovenDays: unprovenDays.sort(), problems: [...files.values()].flatMap((entry) => entry.problems) };
 }
 
 export async function readTelemetryObservationWindow(root: string, at: string, windowDays = TELEMETRY_RETENTION_DAYS): Promise<TelemetryObservationWindow> {

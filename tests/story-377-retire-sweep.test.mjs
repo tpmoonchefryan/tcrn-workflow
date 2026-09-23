@@ -426,3 +426,94 @@ test("STORY-452 AC4: self-check records leave every fitness count unchanged", as
   assert.equal(withChecks.windowComplete, true);
   assert.deepEqual(withChecks.records, without.records, "each fitness count is identical with and without self-checks");
 });
+
+// TCRN-CROSS-STORY-454 (SUB-228): the fitness window counts relevant-channel observation
+// days. Each observed day below is sealed by the real per-channel seal from one trusted
+// session covering the whole UTC day; a day with no session and no self-check is idle, and a
+// channel that had a session but no record and no self-check is unproven.
+async function observeDays(fx, offsets, { channels = ["retrieval", "reference", "trigger", "verify"] } = {}) {
+  const { sealObservationDay } = await import("../scripts/knowledge-inject.mjs");
+  const prefix = "telemetry:observation-collector:";
+  for (const offset of [...offsets].sort((left, right) => right - left)) {
+    const day = windowDay(offset).toISOString().slice(0, 10);
+    const after = windowDay(offset - 1).toISOString();
+    // The production session key: the UTC date first, so each day's source identity is its own.
+    const session = `${day.replace(/-/gu, "")}.story-454`;
+    for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
+      const seen = [];
+      if (channels.includes(channel)) {
+        const real = createTelemetryRecord({ at: eventAt(offset, 40), kind: channel, session, payload: { source: `story-454:${channel}`, availability: "available" } });
+        await appendTelemetryRecord(fx.transient, real);
+        seen.push(real);
+      }
+      for (const [phase, at, observed] of [["start", `${day}T00:00:00.000Z`, []], ["stop", after, seen]]) {
+        await appendTelemetryRecord(fx.transient, createTelemetryRecord({
+          at, kind: channel, session,
+          payload: { source: `${prefix}story-454:${session}:${channel}`, availability: "available", phase, sequence: phase === "start" ? 1 : 2, highWaterDay: day, highWaterCount: observed.length, highWaterDigest: canonicalSha256(observed), highWaterAt: observed.at(-1)?.at ?? null },
+        }));
+      }
+    }
+    const sealed = await sealObservationDay(fx.transient, { at: after.replace("00:00:00.000Z", "00:00:01.000Z") });
+    assert.equal(sealed.channels.filter((entry) => entry.ok).length, channels.length, JSON.stringify(sealed.channels));
+  }
+}
+
+function offsets(from, to, skip = []) {
+  const list = [];
+  for (let offset = from; offset <= to; offset += 1) if (!skip.includes(offset)) list.push(offset);
+  return list;
+}
+
+// Ten idle days spread through the hundred days before AT.
+const IDLE_DAYS = [5, 15, 25, 35, 45, 55, 65, 75, 85, 95];
+
+test("STORY-454 AC1: ninety card observation days with ten idle days between them make a complete window", async (t) => {
+  const fx = await fixture(t, "FIXTURE-STORY-454-AC1");
+  const idle = await card(fx, "STORY-454-AC1-IDLE", { occurredAt: "2026-05-01T00:00:00.000Z" });
+  await observeDays(fx, offsets(1, 100, IDLE_DAYS));
+  await appendTelemetryRecord(fx.transient, createTelemetryRecord({ at: eventAt(100, 50), kind: "judge", session: "story-454-ac1", payload: { source: "story-454:judge", availability: "available", candidateIds: [idle.id] } }));
+  const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+  assert.equal(fitness.windows?.card?.complete, true, "idle days neither count nor break the window");
+  assert.equal(fitness.windows.card.observationDays, 90);
+  assert.equal(fitness.windowStart, `${windowDay(100).toISOString().slice(0, 10)}T00:00:00.000Z`, "the window reaches back past the idle days");
+  assert.deepEqual(fitness.idleDays, IDLE_DAYS.map((offset) => windowDay(offset).toISOString().slice(0, 10)).sort());
+  assert.deepEqual(fitness.unprovenDays, []);
+  assert.equal(fitness.records.find((record) => record.id === idle.id).eligible, true, "and the existing small-card rule decides");
+  assert.deepEqual((await retireKnowledgeSweep(fx.workspace, { at: AT })).retired, [idle.id]);
+});
+
+test("STORY-454 AC2: eighty-nine observation days are refused with the one missing day named", async (t) => {
+  const fx = await fixture(t, "FIXTURE-STORY-454-AC2");
+  const idle = await card(fx, "STORY-454-AC2-IDLE", { occurredAt: "2026-05-01T00:00:00.000Z" });
+  // Eleven idle days inside the last hundred: counted as observation days they would fill the window.
+  await observeDays(fx, offsets(1, 100, [...IDLE_DAYS, 50]));
+  await appendTelemetryRecord(fx.transient, createTelemetryRecord({ at: eventAt(100, 50), kind: "judge", session: "story-454-ac2", payload: { source: "story-454:judge", availability: "available", candidateIds: [idle.id] } }));
+  const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+  assert.equal(fitness.windows?.card?.complete, false);
+  assert.equal(fitness.windows.card.missingObservationDays, 1);
+  assert.equal(fitness.records.find((record) => record.id === idle.id).eligible, false);
+  const swept = await retireKnowledgeSweep(fx.workspace, { at: AT });
+  assert.equal(swept.reasonCode, "KNOWLEDGE_RETIRE_SWEEP_REFUSED");
+  assert.deepEqual(swept.refusals, [
+    { class: "card", reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT", observationDays: 89, windowDays: 90, missingObservationDays: 1 },
+    { class: "rule", reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT", observationDays: 89, windowDays: 90, missingObservationDays: 1 },
+    { class: "verify", reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT", observationDays: 89, windowDays: 90, missingObservationDays: 1 },
+  ]);
+  assert.deepEqual(swept.retired, []);
+  assert.equal((await listKnowledgeMetadata(fx.workspace, { at: AT, selection: "all" })).records.find((record) => record.id === idle.id).lifecycle, "active");
+});
+
+test("STORY-454 AC3: an unproven verify channel leaves small cards alone and keeps the verify window short", async (t) => {
+  const fx = await fixture(t, "FIXTURE-STORY-454-AC3");
+  const idle = await card(fx, "STORY-454-AC3-IDLE", { occurredAt: "2026-05-01T00:00:00.000Z" });
+  await observeDays(fx, offsets(1, 90), { channels: ["retrieval", "reference", "trigger"] });
+  await appendTelemetryRecord(fx.transient, createTelemetryRecord({ at: eventAt(90, 50), kind: "judge", session: "story-454-ac3", payload: { source: "story-454:judge", availability: "available", candidateIds: [idle.id] } }));
+  await appendTelemetryRecord(fx.transient, createTelemetryRecord({ at: eventAt(90, 51), kind: "judge", session: "story-454-ac3", payload: { source: "story-454:judge", availability: "available", artifactId: "verify-script:story-454" } }));
+  const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+  assert.equal(fitness.windows?.card?.complete, true);
+  assert.equal(fitness.windows.verify.complete, false);
+  assert.equal(fitness.windows.verify.observationDays, 0);
+  assert.equal(fitness.records.find((record) => record.id === idle.id).eligible, true, "verify has no say over a small card");
+  assert.deepEqual(fitness.proposals.map((proposal) => proposal.id), [idle.id], "and no verify proposal from a short verify window");
+  assert.deepEqual(fitness.refusals, [{ class: "verify", reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT", observationDays: 0, windowDays: 90, missingObservationDays: 90 }]);
+});
