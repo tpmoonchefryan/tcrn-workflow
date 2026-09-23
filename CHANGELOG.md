@@ -3,6 +3,25 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## 1.1.3 — patch candidate
+
+This append-only patch repairs the time-attestation store after the
+cross-project chain crossed its 1 MiB canonical limit (TCRN-CROSS-INC-378,
+with its proof follow-ups TCRN-CROSS-INC-379 and TCRN-CROSS-INC-380): the
+store digest is streamed, segments roll at 1 MiB or 8,192 records, each
+read-modify-write holds a directory lock, and writes that carry
+`--attest-dir` check the store before the lease. The read-only
+`attestation-verify` verb and the `attestation-migrate` `--mode repair` and
+`--mode restore` modes check and repair a store without hand edits. Managed
+hooks now propagate the governed platform root, including the three Codex
+handlers that derived it from their install location. `coreSourceLineCap`
+rises from 23815 to the measured 24126. Known limitations (stale and empty
+attestation locks, and the 10,000-event `validateEventChain` bound on
+snapshot-less replay) are listed in `docs/releases/1.1.3.md`. The immutable
+1.1.2 Engine and 1.0.4 Helper publications remain unchanged; the paired
+1.1.3/1.0.5 release is published only after exact-commit CI and independent
+asset verification.
+
 ## 1.1.2 — patch candidate
 
 This append-only patch closes the optional-article Helper freshness grammar and
