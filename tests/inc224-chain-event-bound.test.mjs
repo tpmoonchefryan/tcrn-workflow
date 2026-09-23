@@ -14,10 +14,23 @@
 // holding rather than about either number's value.
 
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, realpath, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 
-import { PROTOCOL_LIMITS, canonicalJson } from "../dist/build/packages/protocol/src/index.js";
-import { assertWorkspaceRecordCount } from "../dist/build/packages/core/src/index.js";
+import { PROTOCOL_LIMITS, canonicalJson, validateEventChain } from "../dist/build/packages/protocol/src/index.js";
+import {
+  acquireWorkspaceLease,
+  appendEvents,
+  assertWorkspaceRecordCount,
+  buildEventPayload,
+  createWorkspaceSettingRecord,
+  initializeWorkspace,
+  materializeWorkspace,
+  materializeWorkspaceFromGenesis,
+  sortWorkspaceSettings,
+} from "../dist/build/packages/core/src/index.js";
 
 // Red leg: point assertWorkspaceRecordCount back at maxRecords and a chain is capped at
 // the length of a single canonical array again -- which is the state INC-224 measured,
@@ -60,4 +73,67 @@ test("INC-224: the chain bound still refuses past its own ceiling, and refuses n
 test("INC-224: a refused count is reported, not just refused", () => {
   const over = PROTOCOL_LIMITS.maxChainEvents + 7;
   assert.throws(() => assertWorkspaceRecordCount(over), (error) => error?.message === String(over));
+});
+
+// TCRN-CROSS-STORY-451 R1: replay without a snapshot validates the whole chain, and it
+// measured that chain against the per-document bound. A chain one event past
+// maxRecords then read as WORKSPACE_EVENT_CORRUPT on every snapshot-less path. The
+// fixture is one append of many members, because each separate append replays the
+// whole chain (quadratic), and the members alternate one setting value so no view
+// grows with the chain. Red leg: point validateEventChain back at maxRecords.
+test("STORY-451: a chain past the per-document bound replays from genesis without a snapshot", async (context) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s451-replay-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    await mkdir(join(base, kind));
+    roots.push({ kind, path: join(base, kind) });
+  }
+  const workspace = join(base, "workspace");
+  const occurredAt = "2026-09-23T00:00:01Z";
+  await initializeWorkspace({ roots, externalKey: "STORY-451-REPLAY", createdAt: "2026-09-23T00:00:00Z" });
+  const lease = await acquireWorkspaceLease(workspace, { now: occurredAt });
+  const settingDelta = (key, value) => (state) => {
+    const prior = state.settings.find((entry) => entry.key === key);
+    const record = createWorkspaceSettingRecord(key, value, (prior?.revision ?? 0) + 1, occurredAt, workspace);
+    return {
+      payload: buildEventPayload("settings.updated", record),
+      projects: state.projects,
+      work: state.work,
+      settings: sortWorkspaceSettings([...state.settings.filter((entry) => entry.key !== key), record]),
+    };
+  };
+  const events = PROTOCOL_LIMITS.maxRecords + 1;
+  // The largest interval keeps this chain snapshot-less under either snapshot rule. The
+  // 1 MiB segment keeps each segment index (two keys an event) under its own bounds.
+  const deltas = [settingDelta("storage.snapshotEveryEvents", "20000"), settingDelta("storage.segmentBytes", "1048576")];
+  while (deltas.length < events) {
+    deltas.push(settingDelta("injection.budgetBytes", deltas.length % 2 === 0 ? "24576" : "24577"));
+  }
+  try {
+    const committed = await appendEvents(workspace, lease, deltas, { expectedVersion: 0, occurredAt });
+    assert.equal(committed.version, events);
+  } finally {
+    await lease.release();
+  }
+  await assert.rejects(stat(join(workspace, ".tcrn-" + "workflow", "snapshots", "manifest.json")), { code: "ENOENT" },
+    "precondition: no replay snapshot exists, so replay walks the whole chain");
+  const replayed = await materializeWorkspaceFromGenesis(workspace);
+  assert.equal(replayed.version, events);
+  assert.equal((await materializeWorkspace(workspace)).version, events);
+});
+
+// R1 at the protocol layer: the length check runs before any record is read, so a
+// placeholder array isolates it. Past maxRecords but within maxChainEvents the chain
+// reaches per-record validation; past maxChainEvents it is refused by length. Red
+// leg: maxRecords as the bound refuses the first array by length too.
+test("STORY-451: validateEventChain bounds the chain by maxChainEvents, not by maxRecords", () => {
+  assert.throws(() => validateEventChain(Array.from({ length: PROTOCOL_LIMITS.maxRecords + 1 }, () => null)),
+    (error) => error?.reasonCode === "RECORD_MALFORMED",
+    "a chain one past the per-document bound is read record by record");
+  assert.throws(() => validateEventChain(Array.from({ length: PROTOCOL_LIMITS.maxChainEvents + 1 }, () => null)),
+    (error) => error?.reasonCode === "INPUT_OVERSIZED",
+    "a chain past the lifetime bound is still refused by length");
+  assert.throws(() => assertWorkspaceRecordCount(PROTOCOL_LIMITS.maxChainEvents + 1),
+    (error) => error?.reasonCode === "WORKSPACE_RECORD_LIMIT");
 });

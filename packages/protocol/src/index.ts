@@ -19,7 +19,8 @@ export const P3_ACCEPTANCE_MARKER_PATH = ".context/platform/workflow-v3-capabili
 // bounds the shape of a SINGLE document or call -- a canonical array's length, an
 // object's property count, the context record inputs, the exchange entries, the work
 // graph inputs. maxChainEvents bounds what an append-only log accumulates over its
-// lifetime, which is a different quantity with a different failure mode and a different
+// lifetime (validateEventChain and the workspace record count, TCRN-CROSS-STORY-451),
+// which is a different quantity with a different failure mode and a different
 // remedy. A chain holding twelve thousand events after a year has nothing to say about
 // whether one canonical array may hold twelve thousand elements.
 //
@@ -909,7 +910,10 @@ export function validateEventChain(events: readonly EventRecord[]): readonly Eve
   if (!Array.isArray(events)) {
     fail("RECORD_MALFORMED", "Event chain");
   }
-  if (events.length > PROTOCOL_LIMITS.maxRecords) {
+  // TCRN-CROSS-STORY-451: a chain is an append-only log, so its length answers to the
+  // lifetime bound. Measured against maxRecords, snapshot-less replay of a chain past
+  // 10,000 events read as corruption while every write below 20,000 was accepted.
+  if (events.length > PROTOCOL_LIMITS.maxChainEvents) {
     fail("INPUT_OVERSIZED", "Event chain");
   }
   // Each record is rebuilt once and the result kept: the second pass compares against the

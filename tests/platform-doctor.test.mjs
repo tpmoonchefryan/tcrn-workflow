@@ -25,8 +25,8 @@ function test(name, optionsOrBody, maybeBody) {
 import { adapterIdentityObservations, coreExportedSymbols, inspectChainValidation, inspectHostRenderDrift, inspectPlatform } from "../scripts/platform-doctor.mjs";
 import { GUARDED_TREES, HOSTS, claudeHookSettings, codexHookDocument, hookEntriesFor } from "../scripts/host-harness.mjs";
 import { applyHostHarness } from "../scripts/host-harness-apply.mjs";
-import { INSTALL_MANIFEST } from "../dist/build/packages/core/src/index.js";
-import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
+import { INSTALL_MANIFEST, initializeWorkspace, materializeWorkspace, workspaceBudgets } from "../dist/build/packages/core/src/index.js";
+import { PROTOCOL_LIMITS, canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const topology = "## 三、分区拓扑\n";
 const FIXTURE_COMMIT = "f".repeat(40);
@@ -1205,6 +1205,29 @@ test("INC-224: every partition over the trigger is named, largest first", async 
   const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
   assert.equal(leg.ok, false);
   assert.deepEqual(leg.partitions.map((entry) => entry.partition), ["cross-project", "TCRN-AOS"]);
+});
+
+// TCRN-CROSS-STORY-451 R2: status reported the chain budget against the per-document
+// bound (10,000) while this leg measured the same chain against maxChainEvents
+// (20,000), so the two readings of one chain disagreed and 10,000 arrived unwarned.
+// Red leg: report maxRecords as the budget limit again.
+test("STORY-451: the status budget and chainHeadroom report the same chain ceiling", async (context) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-s451-budget-")));
+  context.after(() => rm(base, { recursive: true, force: true }));
+  const roots = [];
+  for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
+    await mkdir(join(base, kind));
+    roots.push({ kind, path: join(base, kind) });
+  }
+  await initializeWorkspace({ roots, externalKey: "STORY-451-BUDGET", createdAt: "2026-09-23T00:00:00Z" });
+  const budgets = workspaceBudgets(await materializeWorkspace(join(base, "workspace")));
+  assert.equal(budgets.events.limit, PROTOCOL_LIMITS.maxChainEvents);
+  assert.equal(budgets.events.headroomEvents, PROTOCOL_LIMITS.maxChainEvents - budgets.events.count);
+  const fixture = await completeInstallFixture(context);
+  const result = await inspectInstallFixture(fixture, { chainEventCounts: { "cross-project": budgets.events.count } });
+  const leg = result.checks.find((entry) => entry.name === "chainHeadroom");
+  assert.equal(leg.ok, true);
+  assert.equal(leg.ceiling, budgets.events.limit, "one chain, one ceiling, whichever reading is consulted");
 });
 
 // TCRN-CROSS-INC-234. The lane could not tell "green" from "nobody looked".
