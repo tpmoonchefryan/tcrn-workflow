@@ -269,6 +269,7 @@ function p8Receipt(sourceFiles) {
     sourceArchive: { reasonCode: "ARCHIVE_VERIFIED", path: "dist/source/tcrn-workflow-source.tar", sha256: sourceDigest, files: sourceFiles.length },
     sbom: { reasonCode: "SBOM_VERIFIED", path: "dist/sbom/sbom.cdx.json", components: 1, directComponents: 1, transitiveComponents: 0, dependencyGraphClosure: "complete", basis: "c".repeat(64) },
     artifacts: P8_RELEASE_ARTIFACTS.map((path) => ({ path: `dist/release/${path}`, size: 1, sha256: "d".repeat(64) })).sort((left, right) => left.path.localeCompare(right.path)),
+    staleReleaseArtifacts: [],
     supportedAosReleases: [],
     network: false,
     mutation: false,
@@ -317,6 +318,37 @@ test("EPIC135: exact P8 archive member paths are typed data, not diagnostics", (
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.reasonCode, "CHILD_TERMINAL_RECEIPT_VALID");
   assert.equal(hasWarningOrError({ stdout: JSON.stringify(p8Receipt(sourceFiles)), stderr: "", exitCode: 0 }, "verify:p8", { sourceFiles }), false);
+});
+
+// TCRN-CROSS-STORY-461 R1 (SUB-240): verify:p8 reports the stale source archives it moved.
+// The push gate reads that list as typed data, and only in the shape the move produces.
+test("STORY-461 SUB-240: stale release moves are typed P8 receipt data", () => {
+  const sourceFiles = ["scripts/task.mjs", "src/ordinary-module.mjs"].sort();
+  const moved = {
+    from: "dist/release/tcrn-workflow-1.1.2-source.tar",
+    to: "dist/stale-release/1.1.2/tcrn-workflow-1.1.2-source.tar",
+    version: "1.1.2",
+    size: 10,
+    sha256: "4".repeat(64),
+  };
+  const inspect = (staleReleaseArtifacts) => inspectStructuredChildOutput({
+    stdout: `${JSON.stringify({ ...p8Receipt(sourceFiles), staleReleaseArtifacts })}\n`,
+    stderr: "",
+    exitCode: 0,
+    signal: null,
+  }, "verify:p8", { sourceFiles });
+  const valid = inspect([moved]);
+  assert.equal(valid.ok, true, JSON.stringify(valid));
+  for (const [label, rows, code] of [
+    ["destination outside the stale directory", [{ ...moved, to: "dist/evidence/tcrn-workflow-1.1.2-source.tar" }], "P8_STALE_RELEASE_RECORD_INVALID"],
+    ["a current artifact reported as stale", [{ ...moved, from: "dist/release/sbom.cdx.json" }], "P8_STALE_RELEASE_RECORD_INVALID"],
+    ["an extra field", [{ ...moved, note: "moved" }], "CHILD_TERMINAL_FIELDS_INVALID"],
+    ["not a list", {}, "P8_STALE_RELEASE_SET_INVALID"],
+  ]) {
+    const result = inspect(rows);
+    assert.equal(result.ok, false, label);
+    assert.ok(result.findings.some((finding) => finding.code === code), `${label}: ${JSON.stringify(result.findings)}`);
+  }
 });
 
 test("EPIC135: exact guard ids are typed data only after count and registry identity match", () => {

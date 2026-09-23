@@ -18,7 +18,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "af711cbcc7b5a631b94367dc53da17cac821e1d47b5dba6b45f01d729ddc0360",
+      "fixtureDigest": "a0198291a2e7782fd2981073f0e2f88fe2f32c32ba6ed6d06de158e6dc236c88",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -56,7 +56,7 @@
         "scripts/lib/local-command.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "ffa524bb66728438d36919689d172858a624dba0ac20fd44a0d8582a1ce3c1a1",
+      "fixtureDigest": "f24e397b98bdf039c44da065046604ce06203bd9e9e4305018905af49d10f453",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -94,7 +94,7 @@
         "tests/offline-boundary.test.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "2759d29e920ac2d27a5556a6b90fe3127975d6cbf22e18c539cc6b63d60e51d9",
+      "fixtureDigest": "8438ed4ea5e30878c4a61086d695c1efe0bb8b51f386bb66202c2a7aa8363bc3",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -176,7 +176,7 @@
         "tests/dependency-policy.test.mjs",
         "README.md"
       ],
-      "fixtureDigest": "6d51ee7fb43501b42988c614260690163bc975350060dc8c35a1c335477f7575",
+      "fixtureDigest": "a4e99c0bf76dfe82546f05d39b4774c6e2d431fbfadf1b13681d2e4ae2b95600",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "2007de1465a11e5b99412190569fcdeafb14e088e7e2f0bd4bad43384b842d53",
+      "fixtureDigest": "e9e869c56116d0f45b2a6d3cbab01be417c87c28f9150deb889c6d15885c49ad",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

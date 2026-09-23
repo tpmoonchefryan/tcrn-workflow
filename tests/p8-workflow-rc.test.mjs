@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -38,10 +38,14 @@ import {
   P8_VERSION,
   assertClosedReleaseArtifactAllowlist,
   buildP8ReleaseArtifacts,
+  moveStaleReleaseArtifacts,
   p8ArtifactRecords,
+  p8ReleaseArtifactSetMatches,
   rebuildP8SourceArchiveInIndependentRoots,
   sanitizedCoreReferenceProjection,
+  staleReleaseArtifactMoves,
 } from "../scripts/lib/p8-workflow-rc.mjs";
+import { withExclusiveOutputSession } from "../scripts/lib/safe-io.mjs";
 
 function fileAuthority(path, bytes) {
   return { expectedCanonicalPath: path, expectedFileSha256: createHash("sha256").update(bytes).digest("hex") };
@@ -158,6 +162,87 @@ test("P8 creates a closed unpublished release candidate without supported AOS re
     () => assertClosedReleaseArtifactAllowlist(new Map([["unexpected.txt", Buffer.from("")]])),
     (error) => error.reasonCode === "P8_RELEASE_ALLOWLIST_MISMATCH",
   );
+});
+
+// TCRN-CROSS-STORY-461 R1 (SUB-240, #232). A temporary repository with an ignored dist tree:
+// the previous version's source archive sits beside the six current artifacts, as it did
+// after the 1.1.3 bump. Red leg: drop the move and the closed artifact set stays red.
+const PREVIOUS_SOURCE_ARCHIVE = "tcrn-workflow-1.1.2-source.tar";
+
+async function staleReleaseFixture(context, releaseNames) {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "tcrn-p8-stale-release-")));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, ".git"));
+  await mkdir(join(root, "dist", "release"), { recursive: true });
+  await mkdir(join(root, "dist", "evidence", "push-gate-children"), { recursive: true });
+  for (const name of releaseNames) await writeFile(join(root, "dist", "release", name), `release artifact ${name}\n`);
+  await writeFile(join(root, "dist", "evidence", "push-gate-children", "verify-p8.json"), '{"reasonCode":"P8_WORKFLOW_RC_VERIFIED"}\n');
+  await writeFile(join(root, "dist", "evidence", "gate-summary.json"), '{"ok":true}\n');
+  return root;
+}
+
+async function treeBytes(root, prefix = "") {
+  const rows = [];
+  for (const entry of (await readdir(join(root, prefix), { withFileTypes: true })).sort((left, right) => compareCanonicalText(left.name, right.name))) {
+    const path = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) rows.push(...await treeBytes(root, path));
+    else rows.push([path, createHash("sha256").update(await readFile(join(root, path))).digest("hex")]);
+  }
+  return rows;
+}
+
+const releaseNames = async (root) => readdir(join(root, "dist", "release"));
+
+test("STORY-461 SUB-240: a previous-version source archive moves to dist/stale-release and the six current artifacts stay", async (context) => {
+  assert.notEqual(P8_VERSION, "1.1.2");
+  const root = await staleReleaseFixture(context, [PREVIOUS_SOURCE_ARCHIVE, ...P8_RELEASE_ARTIFACTS]);
+  const evidenceBefore = await treeBytes(root, "dist/evidence");
+  const previousBytes = await readFile(join(root, "dist", "release", PREVIOUS_SOURCE_ARCHIVE));
+  assert.equal(p8ReleaseArtifactSetMatches(await releaseNames(root)), false, "the #232 state fails the closed artifact set");
+
+  const moved = await withExclusiveOutputSession(root, () => moveStaleReleaseArtifacts(root));
+
+  assert.equal(p8ReleaseArtifactSetMatches(await releaseNames(root)), true, "the closed artifact set holds once the stale archive is moved");
+  assert.deepEqual((await releaseNames(root)).sort(compareCanonicalText), [...P8_RELEASE_ARTIFACTS].sort(compareCanonicalText));
+  assert.deepEqual(moved, [{
+    from: `dist/release/${PREVIOUS_SOURCE_ARCHIVE}`,
+    to: `dist/stale-release/1.1.2/${PREVIOUS_SOURCE_ARCHIVE}`,
+    version: "1.1.2",
+    size: previousBytes.length,
+    sha256: createHash("sha256").update(previousBytes).digest("hex"),
+  }]);
+  assert.deepEqual(await readFile(join(root, "dist", "stale-release", "1.1.2", PREVIOUS_SOURCE_ARCHIVE)), previousBytes);
+  assert.deepEqual(await treeBytes(root, "dist/evidence"), evidenceBefore, "dist/evidence is unchanged byte for byte");
+  assert.deepEqual(await withExclusiveOutputSession(root, () => moveStaleReleaseArtifacts(root)), [], "a second run has nothing left to move");
+});
+
+test("STORY-461 SUB-240: with no stale archive nothing moves and an unknown file is left for the set assertion", async (context) => {
+  const root = await staleReleaseFixture(context, [...P8_RELEASE_ARTIFACTS, "notes.txt"]);
+  const before = await treeBytes(root, "dist");
+  assert.deepEqual(staleReleaseArtifactMoves([...P8_RELEASE_ARTIFACTS, "notes.txt", "tcrn-workflow-source.tar"]), []);
+
+  assert.deepEqual(await withExclusiveOutputSession(root, () => moveStaleReleaseArtifacts(root)), []);
+
+  assert.deepEqual(await treeBytes(root, "dist"), before, "nothing under dist moved or changed");
+  assert.equal(p8ReleaseArtifactSetMatches(await releaseNames(root)), false, "an unknown file still reds the closed artifact set");
+});
+
+test("STORY-461 SUB-240: a stale destination holding other bytes fails closed and keeps both copies", async (context) => {
+  const root = await staleReleaseFixture(context, [PREVIOUS_SOURCE_ARCHIVE, ...P8_RELEASE_ARTIFACTS]);
+  const destination = join(root, "dist", "stale-release", "1.1.2", PREVIOUS_SOURCE_ARCHIVE);
+  await mkdir(join(root, "dist", "stale-release", "1.1.2"), { recursive: true });
+  await writeFile(destination, "an earlier archive with other bytes\n");
+
+  await assert.rejects(
+    withExclusiveOutputSession(root, () => moveStaleReleaseArtifacts(root)),
+    (error) => error.reasonCode === "P8_STALE_RELEASE_DESTINATION_CONFLICT",
+  );
+  assert.ok((await releaseNames(root)).includes(PREVIOUS_SOURCE_ARCHIVE), "the source stays when the move is refused");
+  assert.equal(await readFile(destination, "utf8"), "an earlier archive with other bytes\n");
+
+  await writeFile(destination, await readFile(join(root, "dist", "release", PREVIOUS_SOURCE_ARCHIVE)));
+  assert.equal((await withExclusiveOutputSession(root, () => moveStaleReleaseArtifacts(root))).length, 1, "the same bytes already moved: only the source goes");
+  assert.equal(p8ReleaseArtifactSetMatches(await releaseNames(root)), true);
 });
 
 test("P8 projects the generated eight-profile Core Reference bundle through the closed sanitizer", () => {

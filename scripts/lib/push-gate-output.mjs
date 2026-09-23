@@ -2,14 +2,14 @@
 
 import { isNonBlockingProofBudgetWarning } from "./proof-budget.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
-import { P8_RELEASE_ARTIFACTS, P8_SUPPORTED_AOS_RELEASES, P8_TAG } from "./p8-workflow-rc.mjs";
+import { P8_RELEASE_ARTIFACTS, P8_SUPPORTED_AOS_RELEASES, P8_TAG, staleReleaseArtifactMoves } from "./p8-workflow-rc.mjs";
 import { P1_TASKS } from "../p1-sequence.mjs";
 
 const DIAGNOSTIC_WORD = /(?:^|[^A-Za-z])(?:warning|warn|error|errors|failed|failure|blocked|refused|denied)(?:$|[^A-Za-z])/iu;
 const P8_SUCCESS_FIELDS = Object.freeze([
   "artifacts", "command", "mutation", "network", "ok", "p8BasisCommit", "privacy", "privacySurfaces",
   "publication", "reasonCode", "releaseStatus", "reproducibility", "sbom",
-  "sourceArchive", "supportedAosReleases", "tag", "tests", "trust",
+  "sourceArchive", "staleReleaseArtifacts", "supportedAosReleases", "tag", "tests", "trust",
 ]);
 const P8_ARCHIVE_FIELDS = Object.freeze(["files", "path", "reasonCode", "sha256"]);
 const P8_SBOM_FIELDS = Object.freeze([
@@ -17,6 +17,7 @@ const P8_SBOM_FIELDS = Object.freeze([
   "reasonCode", "transitiveComponents",
 ]);
 const P8_ARTIFACT_FIELDS = Object.freeze(["path", "sha256", "size"]);
+const P8_STALE_RELEASE_FIELDS = Object.freeze(["from", "sha256", "size", "to", "version"]);
 const P8_REPRODUCIBILITY_FIELDS = Object.freeze(["orderedEntries", "rootsIndependent", "sha256", "sourceFiles"]);
 const P8_PRIVACY_SURFACE_FIELDS = Object.freeze([
   "aggregateAlgorithm", "buildOutput", "fullHistory", "releaseArtifacts", "sourceArchive", "trackedSource",
@@ -296,6 +297,21 @@ function inspectP8Receipt(receipt, expectedSourceFiles, expectedBasisCommit, fin
       exactKeys(artifact, P8_ARTIFACT_FIELDS, `$.artifacts[${index}]`, findings);
       if (artifact?.path !== expectedArtifactPaths[index] || !nonNegativeInteger(artifact?.size) || !digestText(artifact?.sha256)) {
         findings.push({ code: "P8_ARTIFACT_RECORD_INVALID", location: `$.artifacts[${index}]`, expectedPath: expectedArtifactPaths[index], actualPath: artifact?.path ?? null });
+      }
+    }
+  }
+
+  // TCRN-CROSS-STORY-461 R1: the stale source archives verify:p8 moved out of dist/release.
+  // Each record must be the move staleReleaseArtifactMoves names for that file.
+  if (!Array.isArray(receipt.staleReleaseArtifacts)) {
+    findings.push({ code: "P8_STALE_RELEASE_SET_INVALID", location: "$.staleReleaseArtifacts" });
+  } else {
+    for (const [index, moved] of receipt.staleReleaseArtifacts.entries()) {
+      exactKeys(moved, P8_STALE_RELEASE_FIELDS, `$.staleReleaseArtifacts[${index}]`, findings);
+      const name = typeof moved?.from === "string" && moved.from.startsWith("dist/release/") ? moved.from.slice("dist/release/".length) : null;
+      const [expected] = name === null ? [] : staleReleaseArtifactMoves([name]);
+      if (expected === undefined || moved.from !== expected.from || moved.to !== expected.to || moved.version !== expected.version || !nonNegativeInteger(moved.size) || !digestText(moved.sha256)) {
+        findings.push({ code: "P8_STALE_RELEASE_RECORD_INVALID", location: `$.staleReleaseArtifacts[${index}]` });
       }
     }
   }

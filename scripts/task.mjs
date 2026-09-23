@@ -38,11 +38,12 @@ import {
 import { privateRuntimeConfig } from "./lib/private-token-roster.mjs";
 import {
   P8_SUPPORTED_AOS_RELEASES,
-  P8_RELEASE_ARTIFACTS,
   P8_TAG,
   P8_VERSION,
   buildP8ReleaseArtifacts,
+  moveStaleReleaseArtifacts,
   p8ArtifactRecords,
+  p8ReleaseArtifactSetMatches,
   rebuildP8SourceArchiveInIndependentRoots,
 } from "./lib/p8-workflow-rc.mjs";
 import { assertP8TagPreconditions, assertReleaseCommitShape } from "./lib/release-tag-gate.mjs";
@@ -658,6 +659,9 @@ async function verifyP8() {
   });
   assertion(sourceBytes.equals(independentlyRebuilt.archive), "P8_ARCHIVE_REPRODUCIBILITY_MISMATCH");
   const artifacts = buildP8ReleaseArtifacts({ sourceArchive: sourceBytes, sbom: sbomBytes });
+  // TCRN-CROSS-STORY-461 R1 (#232): a source archive left by the previous version is moved
+  // to dist/stale-release before the new artifacts are written and the set is asserted.
+  const staleReleaseArtifacts = await moveStaleReleaseArtifacts(repositoryRoot);
   for (const [name, content] of artifacts) await safeWriteOutput(repositoryRoot, `dist/release/${name}`, content);
   const owner = await remoteOwner();
   const privacyFindings = scanPrivacyEntries(
@@ -675,6 +679,7 @@ async function verifyP8() {
     sourceArchive,
     sbom: sbomResult,
     artifacts: p8ArtifactRecords(artifacts),
+    staleReleaseArtifacts,
     supportedAosReleases: P8_SUPPORTED_AOS_RELEASES,
     network: false,
     mutation: false,
@@ -712,6 +717,7 @@ async function verifyReleaseTagPreflight() {
   return success("RELEASE_TAG_PREFLIGHT_VERIFIED", {
     ...tagProof,
     commitShape,
+    staleReleaseArtifacts: p8.staleReleaseArtifacts,
     formatChecked: format.checked,
     publication: false,
     mutation: false,
@@ -984,7 +990,7 @@ async function verifyPrivacy({ requireP8Surfaces = false, historyScope = "head" 
     });
     const buildRecords = await filesForPrivacySurface(buildRoot, "dist/build/");
     const releaseRecords = await filesForPrivacySurface(releaseRoot, "dist/release/");
-    assertion(JSON.stringify(releaseRecords.map((record) => record.path.slice("dist/release/".length)).sort(compareCanonicalText)) === JSON.stringify([...P8_RELEASE_ARTIFACTS].sort(compareCanonicalText)), "P8_PRIVACY_RELEASE_ARTIFACT_SET");
+    assertion(p8ReleaseArtifactSetMatches(releaseRecords.map((record) => record.path.slice("dist/release/".length))), "P8_PRIVACY_RELEASE_ARTIFACT_SET");
     entries.push(...buildRecords.map((record) => ({ label: record.path, kind: "build", content: record.content.toString("utf8") })));
     entries.push({ label: "dist/source/tcrn-workflow-source.tar", kind: "archive", content: sourceArchive.content.toString("utf8") });
     entries.push(...releaseRecords.map((record) => ({ label: record.path, kind: "release", content: record.content.toString("utf8") })));

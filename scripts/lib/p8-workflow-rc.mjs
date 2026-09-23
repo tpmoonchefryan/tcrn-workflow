@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, readFile, realpath, rm, unlink, writeFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 
 import { canonicalJson } from "./canonical-json.mjs";
 import { compareCanonicalText } from "./canonical-order.mjs";
-import { readBoundRegularFile } from "./safe-io.mjs";
+import { readBoundRegularFile, safeWriteOutput } from "./safe-io.mjs";
 
 export const P8_VERSION = "1.1.3";
 export const P8_TAG = "v1.1.3";
@@ -22,6 +22,77 @@ export const P8_RELEASE_ARTIFACTS = Object.freeze([
   "checksums.txt",
   "release-notes.md",
 ]);
+
+// TCRN-CROSS-STORY-461 R1 (#232). After a version bump dist/release can still hold the
+// previous release's source archive beside the six new artifacts, and the closed
+// artifact set (P8_PRIVACY_RELEASE_ARTIFACT_SET) then fails. Stale artifacts go to an
+// ignored directory beside the release directory, never into dist/evidence.
+export const P8_STALE_RELEASE_DIRECTORY = "dist/stale-release";
+const P8_VERSIONED_SOURCE_ARCHIVE = new RegExp(`^${P8_REPOSITORY}-(\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?)-source\\.tar$`, "u");
+
+/**
+ * Name the stale release artifacts in a dist/release listing and where each one goes.
+ * Pure: it reads and moves nothing. Only a source archive carrying a version other than
+ * `version` is stale; every other unexpected name is left for the set assertion.
+ */
+export function staleReleaseArtifactMoves(names, version = P8_VERSION) {
+  assertion(Array.isArray(names) && names.every((name) => typeof name === "string"), "P8_RELEASE_LISTING_INVALID");
+  return [...names].sort(compareCanonicalText).flatMap((name) => {
+    const stale = P8_VERSIONED_SOURCE_ARCHIVE.exec(name)?.[1];
+    return stale === undefined || stale === version ? [] : [{
+      name,
+      version: stale,
+      from: `dist/release/${name}`,
+      to: `${P8_STALE_RELEASE_DIRECTORY}/${stale}/${name}`,
+    }];
+  });
+}
+
+/** The closed comparison P8_PRIVACY_RELEASE_ARTIFACT_SET asserts over the dist/release names. */
+export function p8ReleaseArtifactSetMatches(names) {
+  return Array.isArray(names)
+    && JSON.stringify([...names].sort(compareCanonicalText)) === JSON.stringify([...P8_RELEASE_ARTIFACTS].sort(compareCanonicalText));
+}
+
+/**
+ * Move each stale release artifact inside the caller's exclusive output session. The
+ * copy is written with safeWriteOutput and read back before the source is unlinked; a
+ * destination already holding other bytes fails closed so neither copy is lost.
+ */
+export async function moveStaleReleaseArtifacts(repositoryRoot, { version = P8_VERSION } = {}) {
+  const releaseRoot = resolve(repositoryRoot, "dist/release");
+  let names;
+  try {
+    names = await readdir(releaseRoot);
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const bound = (code) => ({ reasonCode: `P8_STALE_RELEASE_${code}_INVALID`, hardlinkReasonCode: `P8_STALE_RELEASE_${code}_HARDLINK`, pathChangedReasonCode: `P8_STALE_RELEASE_${code}_CHANGED` });
+  const moved = [];
+  for (const move of staleReleaseArtifactMoves(names, version)) {
+    const sourcePath = resolve(repositoryRoot, move.from);
+    const source = await readBoundRegularFile(sourcePath, bound("SOURCE"));
+    const digest = sha256(source.content);
+    const present = await lstat(resolve(repositoryRoot, move.to)).then(() => true, (error) => {
+      if (error?.code === "ENOENT") return false;
+      throw error;
+    });
+    if (present) {
+      const existing = await readBoundRegularFile(resolve(repositoryRoot, move.to), bound("DESTINATION"));
+      assertion(sha256(existing.content) === digest, "P8_STALE_RELEASE_DESTINATION_CONFLICT", move.to);
+    } else {
+      await safeWriteOutput(repositoryRoot, move.to, source.content);
+      const written = await readBoundRegularFile(resolve(repositoryRoot, move.to), bound("DESTINATION"));
+      assertion(sha256(written.content) === digest, "P8_STALE_RELEASE_DESTINATION_CHANGED", move.to);
+    }
+    const current = await lstat(sourcePath);
+    assertion(current.isFile() && current.dev === source.metadata.dev && current.ino === source.metadata.ino, "P8_STALE_RELEASE_SOURCE_CHANGED", move.from);
+    await unlink(sourcePath);
+    moved.push({ from: move.from, to: move.to, version: move.version, size: source.content.length, sha256: digest });
+  }
+  return moved;
+}
 
 export class P8ReleaseError extends Error {
   constructor(reasonCode, message) {
