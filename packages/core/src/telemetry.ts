@@ -447,6 +447,80 @@ function observationCoverageValid(value: TelemetryPayload, entries: readonly Tel
   return canonicalJson(Object.keys(proofs).sort()) === canonicalJson([...OBSERVATION_CHANNELS].sort()) && OBSERVATION_CHANNELS.every((channel) => observationCoverageChannelValid(value, entries, channel, from, until));
 }
 
+// TCRN-CROSS-STORY-452: a collector self-check records that a channel's own write path ran
+// on a day, which is what lets a day with no real record read as an observed zero rather
+// than as unknown. It may come only from the write path of that channel's real records;
+// this table is the one place that says which path that is, and the writers read it.
+export const COLLECTOR_SELF_CHECK_KIND = "collector-self-check";
+export const COLLECTOR_SELF_CHECK_SOURCES: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  retrieval: Object.freeze(["knowledge-inject:retrieval"]),
+  reference: Object.freeze(["knowledge-inject:reference"]),
+  trigger: Object.freeze(["knowledge-inject:trigger"]),
+  verify: Object.freeze(["cli:gate-result", "final-gate-plan:batch-verify"]),
+});
+const SELF_CHECK_FIELDS = JSON.stringify(["availability", "channel", "host", "reasonCode", "source", "verdict"]);
+
+/** Null for a valid self-check; otherwise the reason code it is refused under. */
+export function collectorSelfCheckProblem(record: TelemetryRecord): string | null {
+  const value = record.payload;
+  const reasonValid = value.verdict === "ok" ? value.reasonCode === null : value.verdict === "failed" && typeof value.reasonCode === "string" && /^[A-Z][A-Z0-9_]{0,127}$/u.test(value.reasonCode);
+  if (record.kind !== COLLECTOR_SELF_CHECK_KIND || JSON.stringify(Object.keys(value).sort()) !== SELF_CHECK_FIELDS || value.availability !== "available" || typeof value.host !== "string" || !OBSERVATION_CHANNELS.includes(value.channel as string) || !reasonValid) return "TELEMETRY_SELF_CHECK_INVALID";
+  return (COLLECTOR_SELF_CHECK_SOURCES[value.channel as string] ?? []).includes(value.source as string) ? null : "TELEMETRY_SELF_CHECK_SOURCE_INVALID";
+}
+
+export interface ObservationChannelDay {
+  readonly channel: string;
+  readonly day: string;
+  readonly reading: "records" | "observed-zero" | "broken" | "unknown";
+  readonly availability: TelemetryAvailability;
+  readonly count: number | null;
+  readonly selfChecks: { readonly ok: number; readonly failed: number };
+  readonly reasonCodes: readonly string[];
+}
+
+export interface ObservationChannelDays {
+  readonly day: string;
+  readonly channels: readonly ObservationChannelDay[];
+  readonly refusedSelfChecks: readonly { readonly id: string; readonly channel: string | null; readonly reasonCode: string }[];
+}
+
+/** R2: records, an observed zero (an ok self-check and no real record), broken (failed self-checks only), or unknown (no self-check). */
+export function classifyObservationChannelDays(records: readonly TelemetryRecord[], day: string): ObservationChannelDays {
+  const inDay = records.filter((record) => new Date(record.at).toISOString().slice(0, 10) === day);
+  const checks = inDay.filter((record) => record.kind === COLLECTOR_SELF_CHECK_KIND);
+  const refusedSelfChecks = checks.flatMap((record) => { const reasonCode = collectorSelfCheckProblem(record); return reasonCode === null ? [] : [{ id: record.id, channel: typeof record.payload.channel === "string" ? record.payload.channel : null, reasonCode }]; });
+  const channels = OBSERVATION_CHANNELS.map((channel): ObservationChannelDay => {
+    const count = inDay.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).length;
+    const valid = checks.filter((record) => record.payload.channel === channel && collectorSelfCheckProblem(record) === null);
+    const ok = valid.filter((record) => record.payload.verdict === "ok").length;
+    const reasonCodes = [...new Set(valid.filter((record) => record.payload.verdict === "failed").map((record) => String(record.payload.reasonCode)))].sort();
+    const reading: ObservationChannelDay["reading"] = count > 0 ? "records" : ok > 0 ? "observed-zero" : reasonCodes.length > 0 ? "broken" : "unknown";
+    return { channel, day, reading, availability: reading === "broken" ? "unavailable" : reading === "unknown" ? "unknown" : "available", count: reading === "records" || reading === "observed-zero" ? count : null, selfChecks: { ok, failed: valid.length - ok }, reasonCodes };
+  });
+  return { day, channels, refusedSelfChecks };
+}
+
+async function readTelemetryDay(root: string, day: string): Promise<{ readonly records: readonly TelemetryRecord[]; readonly problems: TelemetryReadResult["problems"] }> {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00.000Z`)) || new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) !== day) fail("TELEMETRY_FILTER_INVALID", "day must be a UTC calendar date");
+  const path = join(rootDirectory(root), "telemetry", `${day}.ndjson`);
+  let source = "";
+  try { await regularFileIfPresent(path); source = await readFile(path, "utf8"); } catch (error) { if (errorCode(error) !== "ENOENT") throw error; }
+  const records: TelemetryRecord[] = [];
+  const problems: { path: string; line: number; reasonCode: string }[] = [];
+  for (const [index, line] of source.split("\n").entries()) {
+    if (line.length === 0) continue;
+    const parsed = lineRecord(path, line, index + 1);
+    if (parsed.problem) problems.push(parsed.problem); else if (parsed.record) records.push(parsed.record);
+  }
+  return { records, problems };
+}
+
+/** Read-only: one UTC day's four channel readings; it writes nothing and backfills nothing (R4). */
+export async function readObservationChannelDays(root: string, day: string): Promise<ObservationChannelDays & { readonly problems: TelemetryReadResult["problems"] }> {
+  const { records, problems } = await readTelemetryDay(root, day);
+  return { ...classifyObservationChannelDays(records, day), problems };
+}
+
 export async function readTelemetryObservationWindow(root: string, at: string, windowDays = TELEMETRY_RETENTION_DAYS): Promise<TelemetryObservationWindow> {
   if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650) fail("TELEMETRY_FILTER_INVALID", "windowDays must be a positive bounded integer");
   try { parseStrictInstant(at); } catch { fail("TELEMETRY_FILTER_INVALID", "at is not a strict instant"); }

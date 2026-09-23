@@ -42,7 +42,7 @@ import type { KnowledgeExpansions, KnowledgeLanguageProvider } from "./knowledge
 import { activeBinding, activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 import { SETTINGS_CATALOG, resolveKnowledgeArticlesPath } from "./settings.js";
-import { readTelemetryObservationWindow } from "./telemetry.js";
+import { COLLECTOR_SELF_CHECK_KIND, readTelemetryObservationWindow } from "./telemetry.js";
 import type { TelemetryRecord } from "./telemetry.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
@@ -2673,6 +2673,8 @@ function fitnessRows(records: readonly TelemetryRecord[], metadata: readonly Kno
     }
   }
   for (const record of records) {
+    // TCRN-CROSS-STORY-452 R3: a self-check observes a write path, never a card.
+    if (record.kind === COLLECTOR_SELF_CHECK_KIND) continue;
     const ids = telemetryIds(record);
     const payload = record.payload as Readonly<Record<string, unknown>>;
     const field = record.kind === "retrieval-hit" ? "retrievalCount"

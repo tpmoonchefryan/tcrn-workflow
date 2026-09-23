@@ -23,6 +23,7 @@ import {
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { runTelemetryHook } from "../scripts/dispatch-telemetry-hook.mjs";
 import { readTelemetryObservationWindow } from "../dist/build/packages/core/src/telemetry.js";
+import * as telemetryCore from "../dist/build/packages/core/src/telemetry.js";
 import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 import { OBSERVATION_BOUNDARY_PREFIX, OBSERVATION_CHANNELS, recordObservationBoundary, sealObservationDay } from "../scripts/knowledge-inject.mjs";
 
@@ -700,4 +701,91 @@ test("STORY-393: partial, gapped, and reverse-phase upstream coverage never seal
     assert.deepEqual(sealed.invalidChannels, ["retrieval", "reference", "trigger", "verify"], name);
     assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, false, name);
   }
+});
+
+// TCRN-CROSS-STORY-452 (SUB-224): the read side of the collector self-check. Every
+// reading below is taken from one UTC day file; the self-checks carry the source of the
+// channel's own write path, which is the only place a self-check may come from.
+const SELF_CHECK_DAY = "2026-09-12";
+
+function selfCheck({ channel, verdict = "ok", reasonCode = null, source, host = "claude", at = `${SELF_CHECK_DAY}T08:00:00.000Z`, session = "self-check-session" }) {
+  return createTelemetryRecord({
+    at,
+    kind: "collector-self-check",
+    session,
+    payload: { source: source ?? telemetryCore.COLLECTOR_SELF_CHECK_SOURCES?.[channel]?.[0], channel, host, verdict, reasonCode, availability: "available" },
+  });
+}
+
+function channelReading(read, channel) {
+  return read.channels.find((entry) => entry.channel === channel);
+}
+
+test("STORY-452 AC1-AC3: a channel day reads as records, an observed zero, broken with its reason, or unknown", async (t) => {
+  const root = await scratch("tcrn-telemetry-self-check-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await appendTelemetryRecord(root, createTelemetryRecord({ at: `${SELF_CHECK_DAY}T09:00:00.000Z`, kind: "retrieval-hit", session: "real", payload: { source: "knowledge-inject:retrieval", availability: "available", candidateCount: 0 } }));
+  await appendTelemetryRecord(root, selfCheck({ channel: "retrieval" }));
+  await appendTelemetryRecord(root, selfCheck({ channel: "reference" }));
+  await appendTelemetryRecord(root, selfCheck({ channel: "trigger", verdict: "failed", reasonCode: "RECALL_UNAVAILABLE" }));
+  const read = await telemetryCore.readObservationChannelDays(root, SELF_CHECK_DAY);
+  assert.deepEqual(read.channels.map((entry) => entry.channel), OBSERVATION_CHANNELS);
+  assert.deepEqual(channelReading(read, "retrieval"), { channel: "retrieval", day: SELF_CHECK_DAY, reading: "records", availability: "available", count: 1, selfChecks: { ok: 1, failed: 0 }, reasonCodes: [] });
+  assert.deepEqual(channelReading(read, "reference"), { channel: "reference", day: SELF_CHECK_DAY, reading: "observed-zero", availability: "available", count: 0, selfChecks: { ok: 1, failed: 0 }, reasonCodes: [] },
+    "an ok self-check with no real record is an observed zero");
+  assert.deepEqual(channelReading(read, "trigger"), { channel: "trigger", day: SELF_CHECK_DAY, reading: "broken", availability: "unavailable", count: null, selfChecks: { ok: 0, failed: 1 }, reasonCodes: ["RECALL_UNAVAILABLE"] },
+    "only failed self-checks: the channel is broken and says why");
+  assert.deepEqual(channelReading(read, "verify"), { channel: "verify", day: SELF_CHECK_DAY, reading: "unknown", availability: "unknown", count: null, selfChecks: { ok: 0, failed: 0 }, reasonCodes: [] },
+    "no self-check is unknown, never zero");
+  assert.deepEqual(read.refusedSelfChecks, []);
+  assert.deepEqual(read.problems, []);
+});
+
+test("STORY-452 AC5: a self-check from outside its channel's write path is refused, reported, and changes nothing", async (t) => {
+  const root = await scratch("tcrn-telemetry-self-check-refused-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const wrongPath = selfCheck({ channel: "reference", source: "knowledge-inject:trigger" });
+  const malformed = selfCheck({ channel: "verify", verdict: "maybe" });
+  const reasonless = selfCheck({ channel: "retrieval", verdict: "failed", reasonCode: null });
+  for (const record of [wrongPath, malformed, reasonless]) await appendTelemetryRecord(root, record);
+  const read = await telemetryCore.readObservationChannelDays(root, SELF_CHECK_DAY);
+  for (const channel of OBSERVATION_CHANNELS) assert.equal(channelReading(read, channel).reading, "unknown", channel);
+  assert.deepEqual(read.refusedSelfChecks.map(({ id, reasonCode }) => [id, reasonCode]).sort(), [
+    [wrongPath.id, "TELEMETRY_SELF_CHECK_SOURCE_INVALID"],
+    [malformed.id, "TELEMETRY_SELF_CHECK_INVALID"],
+    [reasonless.id, "TELEMETRY_SELF_CHECK_INVALID"],
+  ].sort());
+  // Each channel names only its own write path; the verify channel has two.
+  assert.deepEqual(Object.keys(telemetryCore.COLLECTOR_SELF_CHECK_SOURCES).sort(), [...OBSERVATION_CHANNELS].sort());
+  assert.deepEqual(telemetryCore.COLLECTOR_SELF_CHECK_SOURCES.verify, ["cli:gate-result", "final-gate-plan:batch-verify"]);
+});
+
+test("STORY-452 AC6 and R3: a day from before self-checks existed reads unknown, reading writes nothing, and a self-check is not a real record", async (t) => {
+  const root = await scratch("tcrn-telemetry-self-check-history-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await checkpoints(root, "2026-09-10");
+  const directory = join(root, "telemetry");
+  const before = await readFile(join(directory, "2026-09-10.ndjson"), "utf8");
+  const read = await telemetryCore.readObservationChannelDays(root, "2026-09-10");
+  for (const channel of OBSERVATION_CHANNELS) assert.equal(channelReading(read, channel).reading, "records", channel);
+  const empty = await telemetryCore.readObservationChannelDays(root, "2026-09-09");
+  for (const channel of OBSERVATION_CHANNELS) assert.equal(channelReading(empty, channel).reading, "unknown", channel);
+  assert.equal(await readFile(join(directory, "2026-09-10.ndjson"), "utf8"), before, "reading appends nothing");
+  await assert.rejects(readFile(join(directory, "2026-09-09.ndjson"), "utf8"), { code: "ENOENT" }, "and backfills nothing");
+
+  // R3: an ok self-check never stands in for the real record a v1 seal needs.
+  const sealRoot = await scratch("tcrn-telemetry-self-check-seal-");
+  t.after(() => rm(sealRoot, { recursive: true, force: true }));
+  await unionCheckpoints(sealRoot, [["session-a", "2026-09-09T23:59:59.000Z", "2026-09-11T00:00:00.000Z"]]);
+  const verifyActual = (await readTelemetryRecords(sealRoot, { kind: "verify", limit: 100 })).records.find((record) => record.payload.source === "union-actual:verify");
+  assert.ok(verifyActual);
+  const withoutVerify = await scratch("tcrn-telemetry-self-check-seal-noverify-");
+  t.after(() => rm(withoutVerify, { recursive: true, force: true }));
+  for (const record of (await readTelemetryRecords(sealRoot, { limit: Number.MAX_SAFE_INTEGER })).records) {
+    if (record.id !== verifyActual.id) await appendTelemetryRecord(withoutVerify, record);
+  }
+  await appendTelemetryRecord(withoutVerify, selfCheck({ channel: "verify", at: "2026-09-10T10:00:00.000Z" }));
+  const sealed = await sealObservationDay(withoutVerify, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(sealed.ok, false);
+  assert.ok(sealed.invalidChannels.includes("verify"), JSON.stringify(sealed));
 });

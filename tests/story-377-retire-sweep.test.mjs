@@ -390,3 +390,39 @@ test("STORY-377: concurrent sweeps converge without a second retirement", async 
   assert.ok(retiredCount <= 1, "concurrent sweeps must not report a duplicate retirement");
   assert.equal((await listKnowledgeMetadata(fx.workspace, { at: AT, selection: "all" })).records.find((record) => record.id === target.id).lifecycle, "retired");
 });
+
+// TCRN-CROSS-STORY-452 AC4 / R3 (SUB-224): a collector self-check says a channel's write
+// path ran; it is not an observation of any card, so fitness counts it nowhere. The second
+// self-check carries a card id on purpose: exclusion is by record class, not by the luck
+// of a payload that happens to name nothing. Red leg: drop the exclusion in fitnessRows
+// and the card gains an observed event.
+test("STORY-452 AC4: self-check records leave every fitness count unchanged", async (t) => {
+  const counts = async (withSelfChecks) => {
+    const fx = await fixture(t, `FIXTURE-STORY-452-AC4-${withSelfChecks ? "WITH" : "WITHOUT"}`);
+    const idle = await card(fx, "STORY-452-AC4-IDLE");
+    await fillWindow(fx, 90, [
+      { offset: 90, kind: "judge", payload: { candidateIds: [idle.id] } },
+      { offset: 45, kind: "retrieval-hit", payload: { candidateIds: [] } },
+    ], false);
+    if (withSelfChecks) {
+      for (const [index, channel] of ["retrieval", "reference", "trigger", "verify"].entries()) {
+        await appendTelemetryRecord(fx.transient, createTelemetryRecord({
+          at: eventAt(10 + index), kind: "collector-self-check", session: `story-452-self-check-${channel}`,
+          payload: { source: { retrieval: "knowledge-inject:retrieval", reference: "knowledge-inject:reference", trigger: "knowledge-inject:trigger", verify: "cli:gate-result" }[channel], channel, host: "claude", verdict: "ok", reasonCode: null, availability: "available" },
+        }));
+      }
+      await appendTelemetryRecord(fx.transient, createTelemetryRecord({
+        at: eventAt(20), kind: "collector-self-check", session: "story-452-self-check-named",
+        payload: { source: "knowledge-inject:retrieval", channel: "retrieval", host: "claude", verdict: "ok", reasonCode: null, availability: "available", candidateIds: [idle.id] },
+      }));
+    }
+    await sealWindow(fx, 90);
+    const fitness = await evaluateKnowledgeFitness(fx.workspace, { at: AT });
+    return { windowComplete: fitness.windowComplete, records: fitness.records.map((record) => ({ ...record, baseDigest: record.artifactKind === "telemetry-only" ? null : record.baseDigest })) };
+  };
+  const without = await counts(false);
+  const withChecks = await counts(true);
+  assert.equal(without.windowComplete, true);
+  assert.equal(withChecks.windowComplete, true);
+  assert.deepEqual(withChecks.records, without.records, "each fitness count is identical with and without self-checks");
+});
