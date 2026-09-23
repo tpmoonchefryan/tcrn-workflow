@@ -13,6 +13,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildContainedExecutionPlan } from "./lib/push-gate-children.mjs";
+import { HOSTS, hookEntriesFor } from "./host-harness.mjs";
 import {
   buildDynamicGatePlan,
   createGateReceiptAuthority,
@@ -155,6 +156,19 @@ function currentSourceDigest(files, { baselineCommit = PACK_SOURCE_BASELINE_COMM
 const GOVERNED_WRITE_COMMAND = /(?:tcrn-workflow\.mjs|tcrn-workflow\/scripts\/[^\s]+\.mjs).*\b(?:artifact-put|conference-(?:append-position|cancel|close|open)|dispatch-(?:classes-set|mode-set|tiers-set)|gate-(?:create|delete|transition)|knowledge-(?:article-create|article-refresh|batch|bodies-migrate|capture|checkpoint|create|init|promote|rebase|recover|retire|reverify)|lease-(?:break|recovery-break)|machine-settings-(?:remove|set)|migration-execute|project-(?:create|delete|update)|recover|retire-sweep|settings-(?:remove|set)|snapshot-replay-rebuild|template-admit|work-(?:annotate|batch|create|delete|transition))\b/iu;
 const RELATIVE_REPOSITORY_COMMAND = /(?:^|\s)(?:node|pnpm)(?:\s+[^\s]+)*\s+(?:scripts\/|tools\/|packages\/|tests\/)/u;
 
+// TCRN-CROSS-STORY-460 R3 (#240): user-level hooks run this working tree's own scripts, so a
+// hook process's command line holds the engine's absolute path. The script names are derived
+// from the registry the host renderer uses (host-harness hookEntriesFor, both hosts), not
+// copied here; the one addition is the injection child the knowledge hooks start, which
+// carries their own --hook-input or --observation-boundary argument.
+const HOOK_HANDLER_NAMES = new Set(HOSTS.flatMap((host) => hookEntriesFor(host).map((entry) => entry.handler.split("/").at(-1))));
+const HOOK_INJECTION_CHILD = /--(?:hook-input|observation-boundary)(?:\s|=|$)/u;
+
+function hostHookProcess(command) {
+  const script = /(?:^|[/\s"'])([A-Za-z0-9._-]+\.mjs)(?=[\s"']|$)/u.exec(command)?.[1];
+  return script !== undefined && (HOOK_HANDLER_NAMES.has(script) || script === "knowledge-inject.mjs" && HOOK_INJECTION_CHILD.test(command));
+}
+
 function classifyProcess(row, { selfPid = process.pid, selfPgid = null } = {}) {
   const command = text(row.command);
   const state = text(row.state).trim();
@@ -185,6 +199,11 @@ function classifyProcess(row, { selfPid = process.pid, selfPgid = null } = {}) {
     role = "host-service";
     active = false;
     scopeBasis = "host-service";
+  } else if (absoluteRepository && hostHookProcess(command)) {
+    scope = "unrelated";
+    role = "host-hook";
+    active = false;
+    scopeBasis = "registered-host-hook";
   } else if (taskRole && inRepository) {
     scope = /(?:review|acceptance|astra)/iu.test(command) ? "review" : "implementation";
     role = scope;
@@ -217,13 +236,17 @@ function processSnapshot() {
     return match === null ? null : { pid: Number(match[1]), ppid: Number(match[2]), pgid: Number(match[3]), state: match[4], command: match[5] };
   }).filter(Boolean);
   const selfPgid = rows.find((row) => row.pid === process.pid)?.pgid ?? null;
-  const classified = rows.map((row) => classifyProcess(row, { selfPid: process.pid, selfPgid }));
-  const agentRows = classified.filter((row) => row.pid !== process.pid && row.scope !== "unrelated" && row.scope !== "unknown");
+  return { ok: true, ...summarizeProcesses(rows, { selfPid: process.pid, selfPgid }) };
+}
+
+/** The classification a process snapshot reports, from its rows; shared by processSnapshot and its tests. */
+function summarizeProcesses(rows, { selfPid = process.pid, selfPgid = null } = {}) {
+  const classified = rows.map((row) => classifyProcess(row, { selfPid, selfPgid }));
+  const agentRows = classified.filter((row) => row.pid !== selfPid && row.scope !== "unrelated" && row.scope !== "unknown");
   const unknownRows = classified.filter((row) => row.scope === "unknown");
   const writeRows = classified.filter((row) => row.scope !== "unrelated" && (GOVERNED_WRITE_COMMAND.test(row.command) || row.likelyGovernedWrite === true));
   const unrelated = classified.filter((row) => row.scope === "unrelated");
   return {
-    ok: true,
     observedAt: new Date().toISOString(),
     source: "code-owned-ps-host-snapshot",
     agents: { observed: true, digest: digestValue(agentRows), records: agentRows, unknown: unknownRows, unrelatedCount: unrelated.length },
@@ -443,7 +466,7 @@ function readStdin() {
   try { return JSON.parse(readFileSync(0, "utf8")); } catch { return {}; }
 }
 
-export { classifyProcess, processSnapshot, observeHostRuntime, candidateSnapshot, archiveSourceIdentity, codeOwnedImpact, rootInvocation, writeRunnerReceipt };
+export { classifyProcess, summarizeProcesses, processSnapshot, observeHostRuntime, candidateSnapshot, archiveSourceIdentity, codeOwnedImpact, rootInvocation, writeRunnerReceipt };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const result = await executeProductionBatch(readStdin());

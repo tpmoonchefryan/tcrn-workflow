@@ -16,6 +16,7 @@ import {
 } from "../scripts/review-evidence.mjs";
 import { assessEvidenceReuse, assessDynamicEvidenceReuse, buildDevelopmentPlan, buildDynamicGatePlan, buildFinalGatePlan, buildGateImpactMap, createGateReceiptAuthority, DEVELOPMENT_CHECK_COMMANDS, executeSelectedRoots, issueGateReceipt, queryGateReceipt, recordExecution } from "../scripts/final-gate-plan.mjs";
 import { classifyProcess } from "../scripts/operational-batch-entry.mjs";
+import * as operationalBatchEntry from "../scripts/operational-batch-entry.mjs";
 import { appendProgressEvent, readProgressDelta, summarizeProgress, waitForProgress } from "../scripts/lib/incremental-output.mjs";
 import { runCli } from "../dist/build/packages/cli/src/index.js";
 import { initializeWorkspace } from "../dist/build/packages/core/src/index.js";
@@ -467,4 +468,28 @@ test("STORY-414: progress waits report cursor deltas, unchanged polls, and termi
   const malformed = await waitForProgress(join(root, "malformed.ndjson"), { timeoutMs: 100, pollMs: 5 });
   assert.equal(malformed.status, "failed");
   assert.equal(malformed.reasonCode, "PROGRESS_EVENT_INVALID");
+});
+
+// TCRN-CROSS-STORY-460 R3 (SUB-238): user-level Claude hooks run the engine working tree's
+// own scripts, so in a live session the batch entry saw hook processes whose command line
+// holds the engine's absolute path and counted them as running agents. A process running a
+// registered hook handler (host-harness is the registry) or the injection child it starts
+// is a host hook, not an agent; real agents are still seen. Red leg: drop the distinction.
+test("STORY-460 AC4: running hook processes are host hooks, not running agents, and real agents still count", () => {
+  const summarize = operationalBatchEntry.summarizeProcesses ?? ((rows) => ({ agents: { records: rows.map((row) => classifyProcess(row, { selfPid: 1 })).filter((row) => row.scope !== "unrelated" && row.scope !== "unknown") } }));
+  const hooks = [
+    `node ${REPOSITORY_ROOT}/scripts/knowledge-inject-hook.mjs --container-root /container --host claude`,
+    `node ${REPOSITORY_ROOT}/scripts/ssh-write-observer.mjs`,
+    `node ${REPOSITORY_ROOT}/scripts/knowledge-capture-hook.mjs --container-root /container --host claude`,
+    `node ${REPOSITORY_ROOT}/scripts/agents-zero-hook.mjs`,
+    `node ${REPOSITORY_ROOT}/scripts/dispatch-telemetry-hook.mjs --host codex`,
+    `${process.execPath} ${REPOSITORY_ROOT}/scripts/knowledge-inject.mjs --hook-input {} --container-root /container --host claude`,
+  ].map((command, index) => ({ pid: 200 + index, ppid: 1, pgid: 200 + index, state: "S", command }));
+  const hookSummary = summarize(hooks, { selfPid: 1, selfPgid: null });
+  assert.deepEqual(hookSummary.agents.records, [], "no hook process is a running agent");
+  for (const row of hooks) assert.equal(classifyProcess(row, { selfPid: 1 }).role, "host-hook", row.command);
+  const agent = { pid: 300, ppid: 1, pgid: 300, state: "S", command: `node ${REPOSITORY_ROOT}/scripts/tcrn-workflow.mjs work-create --workspace /tmp/workspace` };
+  const task = { pid: 301, ppid: 1, pgid: 301, state: "S", command: `codex exec luna implement TCRN-CROSS-STORY-460 in ${REPOSITORY_ROOT}` };
+  const withAgents = summarize([...hooks, agent, task], { selfPid: 1, selfPgid: null });
+  assert.deepEqual(withAgents.agents.records.map((row) => row.pid).sort(), [300, 301], "a real agent is still seen");
 });
