@@ -130,7 +130,7 @@ export interface AttestationLockHolder {
 }
 
 export interface AttestationLockState {
-  readonly state: "live" | "stale" | "unreadable";
+  readonly state: "live" | "stale" | "unparseable";
   readonly holder: AttestationLockHolder | null;
   readonly staleReason: "holder-not-running" | "holder-pid-reused" | "unparseable-expired" | null;
   readonly ageMs: number;
@@ -193,7 +193,7 @@ export async function assessAttestationLock(path: string): Promise<AttestationLo
   }
   const ageMs = Math.max(0, Date.now() - modified);
   const holder = parseAttestationLock(text);
-  if (holder === null) return { state: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "stale" : "unreadable", holder, staleReason: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "unparseable-expired" : null, ageMs, text };
+  if (holder === null) return { state: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "stale" : "unparseable", holder, staleReason: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "unparseable-expired" : null, ageMs, text };
   if (!processIsAlive(holder.pid)) return { state: "stale", holder, staleReason: "holder-not-running", ageMs, text };
   if (holder.start !== null) {
     const start = holder.pid === process.pid ? await ownProcessStart() : await processStart(holder.pid);
@@ -569,7 +569,7 @@ export async function checkAttestationStore(directory: string, timeoutMs = ATTES
   // STORY-457: the same judgement the writers use; a stale lock is not someone mid-rewrite.
   const held = async (): Promise<boolean> => {
     const state = (await assessAttestationLock(lock))?.state;
-    return state === "live" || state === "unreadable";
+    return state === "live" || state === "unparseable";
   };
   for (let waited = 0; ; waited += ATTESTATION_LOCK_POLL_MS) {
     if (!(await held())) {

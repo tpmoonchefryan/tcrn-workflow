@@ -56,6 +56,7 @@ export { SegmentedBackend, SEGMENTED_BACKEND_PROFILE } from "./segmented-backend
 export type { SegmentIndexDocument, SegmentIndexEntry, SegmentManifest, SegmentManifestEntry, SegmentedBackendProfile } from "./segmented-backend.js";
 export {
   ATTESTATION_MANIFEST_VERSION,
+  assessAttestationLock,
   attestationRecordsDigest,
   backupAttestationStore,
   checkAttestationStore,

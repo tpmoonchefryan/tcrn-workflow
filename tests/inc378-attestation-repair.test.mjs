@@ -6,10 +6,10 @@
 // v1.1.2 left cross-project after event 8249.
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { appendFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -115,7 +115,10 @@ test("INC-378 verify reports a consistent store without taking the lock or writi
   const read = await verify(fx);
   assert.equal(read.ok, true, JSON.stringify(read));
   assert.ok(Date.now() - started < 5_000, "verify did not wait for the lock");
-  assert.equal(read.value.lock, String(holder.pid));
+  // TCRN-CROSS-STORY-457 R3: the lock is read as a structured state, not as raw text.
+  assert.equal(read.value.lock?.state, "live");
+  assert.equal(read.value.lock.holderPid, holder.pid);
+  assert.equal(read.value.lock.staleReason, null);
   assert.deepEqual(await digests(fx.attestDir), locked, "the lock was left exactly as it was");
   holder.kill("SIGKILL");
   await once(holder, "exit");
@@ -338,4 +341,46 @@ test("INC-378 a relocation receipt in the directory is listed by verify and left
   assert.equal((await restore(fx, backupDir)).ok, true);
   assert.equal(await readFile(join(fx.attestDir, name), "utf8"), bytes);
   assert.deepEqual((await verify(fx)).value.otherFiles.map((file) => file.name), [name]);
+});
+
+// TCRN-CROSS-STORY-457 R3 (SUB-232): attestation-verify reads the lock as a state -- live,
+// stale with its reason, or unparseable -- with the holder's pid, recorded start time and
+// placement time, still without waiting for the lock, taking it or writing a byte, and
+// without moving the consistent verdict. No clearing verb: every path that meets a stale
+// lock takes it over or reads past it (SUB-231), so a stale lock blocks nothing.
+test("STORY-457 R3: attestation-verify reports the lock state, the holder and the stale reason", async (context) => {
+  const fx = await fixture(context);
+  await segmentedStore(fx, 2);
+  const lock = join(fx.attestDir, "attestation.lock");
+  const holder = spawn(process.execPath, ["--eval", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
+  context.after(() => holder.kill("SIGKILL"));
+  await new Promise((settle) => setTimeout(settle, 100));
+  const start = execFileSync("ps", ["-o", "lstart=", "-p", String(holder.pid)], { encoding: "utf8" }).trim();
+  const lockLine = (pid, recorded) => `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid, schemaVersion: "tcrn.attestation-lock.v1", start: recorded })}\n`;
+  const readLock = async () => {
+    const before = await digests(fx.attestDir);
+    const result = await verify(fx);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.value.consistent, true, "the lock never moves the consistent verdict");
+    assert.deepEqual(await digests(fx.attestDir), before, "verify wrote nothing");
+    const { ageMs, ...rest } = result.value.lock;
+    assert.ok(Number.isSafeInteger(ageMs) && ageMs >= 0);
+    return rest;
+  };
+  await writeFile(lock, lockLine(holder.pid, start), "utf8");
+  assert.deepEqual(await readLock(), { state: "live", holderPid: holder.pid, start, createdAt: "2026-09-23T00:00:00.000Z", staleReason: null });
+  await writeFile(lock, lockLine(holder.pid, "Thu Jan  1 00:00:00 1970"), "utf8");
+  assert.deepEqual(await readLock(), { state: "stale", holderPid: holder.pid, start: "Thu Jan  1 00:00:00 1970", createdAt: "2026-09-23T00:00:00.000Z", staleReason: "holder-pid-reused" });
+  await writeFile(lock, "", "utf8");
+  assert.deepEqual(await readLock(), { state: "unparseable", holderPid: null, start: null, createdAt: null, staleReason: null });
+  const old = new Date(Date.now() - 10 * 60_000);
+  await utimes(lock, old, old);
+  assert.deepEqual(await readLock(), { state: "stale", holderPid: null, start: null, createdAt: null, staleReason: "unparseable-expired" });
+  holder.kill("SIGKILL");
+  await once(holder, "exit");
+  await writeFile(lock, `${holder.pid}\n`, "utf8");
+  assert.deepEqual(await readLock(), { state: "stale", holderPid: holder.pid, start: null, createdAt: null, staleReason: "holder-not-running" }, "the pre-STORY-457 form is read too");
+  await rm(lock);
+  const cleared = await verify(fx);
+  assert.equal(cleared.value.lock, null);
 });

@@ -56,6 +56,7 @@ import {
   restoreAttestationStore,
   rewriteAttestationStore,
   withAttestationLock,
+  assessAttestationLock,
   workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
@@ -1007,7 +1008,15 @@ function identifyExtraRecords(lines: AttestationLines, files: readonly { readonl
 // segment; otherwise every segment the manifest names must match it (records, bytes,
 // sha-256, count, streamed digest), hold canonical lines in rising eventHash order, and
 // have an index that points at exactly its lines.
-function assessAttestationStore(contents: AttestationContents, chain: AttestationChain): { readonly consistent: boolean; readonly problems: readonly string[]; readonly report: Readonly<Record<string, unknown>> } {
+// TCRN-CROSS-STORY-457 R3: the lock as a state -- live, stale with its reason, or
+// unparseable -- with the holder's pid, the start time and placement time it recorded, and
+// its age. Read-only; it never moves the consistent verdict.
+async function attestationLockReadout(directory: string): Promise<Readonly<Record<string, unknown>> | null> {
+  const lock = await assessAttestationLock(join(directory, "attestation.lock"));
+  return lock === undefined ? null : { state: lock.state, holderPid: lock.holder?.pid ?? null, start: lock.holder?.start ?? null, createdAt: lock.holder?.createdAt ?? null, staleReason: lock.staleReason, ageMs: Math.floor(lock.ageMs) };
+}
+
+function assessAttestationStore(contents: AttestationContents, chain: AttestationChain, lock: Readonly<Record<string, unknown>> | null = null): { readonly consistent: boolean; readonly problems: readonly string[]; readonly report: Readonly<Record<string, unknown>> } {
   const problems: string[] = [];
   let manifest: AttestationManifestDocument | null = null;
   if (contents.manifest !== null) {
@@ -1057,7 +1066,7 @@ function assessAttestationStore(contents: AttestationContents, chain: Attestatio
       extraRecords,
       legacyFiles: contents.legacy.length,
       otherFiles: contents.other.map((file) => ({ name: file.name, bytes: file.bytes?.length ?? null, sha256: file.bytes === null ? null : sha256Hex(file.bytes) })),
-      lock: contents.lock === null ? null : contents.lock.toString("utf8").trim(),
+      lock,
       temporaryFiles: contents.temporary.map((file) => file.name),
       chainHead: { version: chain.version, headEventHash: head, receiptPresent },
     },
@@ -1596,7 +1605,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (insideWorkspace(workspace, resolve(values["attest-dir"] ?? ""))) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
     const directory = await existingAttestationDirectory(values["attest-dir"] ?? "", false);
     const chain = await materializeWorkspace(workspace);
-    io.write(canonicalJson(assessAttestationStore(await readAttestationDirectory(directory), chain).report));
+    io.write(canonicalJson(assessAttestationStore(await readAttestationDirectory(directory), chain, await attestationLockReadout(directory)).report));
     return;
   }
   if (command === "profile-generate") {

@@ -265,8 +265,16 @@ writes no byte, and exits 0 whenever the directory can be read, printing
   segments;
 - `extraRecords`: `none` when those segments hold as many lines as the manifest
   counts, otherwise `resolved` or `unresolved` as described below;
-- `legacyFiles`, `otherFiles` (each `name`, `bytes`, `sha256`), `lock` (the lock
-  file's content, trimmed, or null) and `temporaryFiles` (write residue);
+- `legacyFiles`, `otherFiles` (each `name`, `bytes`, `sha256`) and
+  `temporaryFiles` (write residue);
+- `lock` (TCRN-CROSS-STORY-457): null without a lock, otherwise its `state`
+  (`live`, `stale` or `unparseable`, judged as in Directory lock), `holderPid`,
+  the `start` time and `createdAt` it recorded (null when the lock does not carry
+  them), `staleReason` (`holder-not-running`, `holder-pid-reused`,
+  `unparseable-expired`, or null) and `ageMs`. The lock never moves `consistent`.
+  There is no verb that clears a lock: every path that meets a stale one takes it
+  over (writers, repair, restore) or reads past it (the store check before a
+  lease), so a stale lock blocks nothing and a live holder's lock is never removed;
 - `chainHead`: the workspace `version`, `headEventHash`, and `receiptPresent`
   (a record for the head is in the segments the manifest names or, in a directory
   with no manifest, a legacy file is named for it).
@@ -285,7 +293,8 @@ resolves inside the workspace root (`CLI_ARGUMENT_MALFORMED`), or the workspace
 cannot be read.
 
 Tests: `INC-378 verify reports a consistent store without taking the lock or
-writing a byte`; `INC-378 repair puts back the record a sorted write left outside
+writing a byte`; `STORY-457 R3: attestation-verify reports the lock state, the
+holder and the stale reason`; `INC-378 repair puts back the record a sorted write left outside
 its manifest, and restore undoes it`; `INC-378 repair at the one-MiB edge splits
 the store in two, and restore removes the second segment again`; `INC-378 repair
 takes back a record appended after the last segment and keeps the store in
