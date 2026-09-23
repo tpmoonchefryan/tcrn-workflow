@@ -253,15 +253,24 @@ test("INC-378 two processes released together lose no receipt", async (context) 
   ].join("\n");
   const coreUrl = new URL("../dist/build/packages/core/src/index.js", import.meta.url).href;
   const protocolUrl = new URL("../dist/build/packages/protocol/src/index.js", import.meta.url).href;
-  const children = ["left", "right"].map((tag) => spawn(process.execPath, ["--input-type=module", "--eval", writer, coreUrl, protocolUrl, directory, tag, "20"], { stdio: ["pipe", "pipe", "inherit"] }));
+  // The test controller refuses inherited stdio, and "ignore" would drop a writer's error output,
+  // so each writer's stderr is piped, kept, and shown in both failure messages once "close" has drained it.
+  const children = ["left", "right"].map((tag) => spawn(process.execPath, ["--input-type=module", "--eval", writer, coreUrl, protocolUrl, directory, tag, "20"], { stdio: ["pipe", "pipe", "pipe"] }));
   context.after(() => { for (const child of children) child.kill("SIGKILL"); });
+  const stderrChunks = children.map((child) => {
+    const chunks = [];
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => chunks.push(chunk));
+    return chunks;
+  });
+  const writerStderr = () => ["left", "right"].map((tag, index) => `${tag} stderr: ${stderrChunks[index].join("") || "(empty)"}`).join("\n");
   await Promise.all(children.map((child) => new Promise((resolve, reject) => {
     child.stdout.once("data", resolve);
-    child.once("exit", (code) => reject(new Error(`writer exited with ${code} before it was ready`)));
+    child.once("close", (code) => reject(new Error(`writer exited with ${code} before it was ready\n${writerStderr()}`)));
   })));
-  const exits = children.map((child) => once(child, "exit"));
+  const exits = children.map((child) => once(child, "close"));
   for (const child of children) child.stdin.end("go\n");
-  assert.deepEqual((await Promise.all(exits)).map(([code]) => code), [0, 0], "both writers finish cleanly");
+  assert.deepEqual((await Promise.all(exits)).map(([code]) => code), [0, 0], `both writers finish cleanly\n${writerStderr()}`);
   const written = ["left", "right"].flatMap((tag) => Array.from({ length: 20 }, (_, index) => syntheticReceipt(syntheticHash(tag, index))));
   const store = await readStore(directory);
   assert.equal(store.manifest.count, stored.length + written.length);
