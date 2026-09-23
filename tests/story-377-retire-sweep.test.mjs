@@ -2,12 +2,13 @@
 // TCRN-CROSS-STORY-377 — fitness, read-only removal proposals, and bounded retirement.
 
 import assert from "node:assert/strict";
-import { appendFile, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import test from "node:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runCli } from "../dist/build/packages/cli/src/index.js";
+import { pruneTelemetryRecords } from "../dist/build/packages/core/src/telemetry.js";
 import {
   appendTelemetryRecord,
   acquireWorkspaceLease,
@@ -431,7 +432,7 @@ test("STORY-452 AC4: self-check records leave every fitness count unchanged", as
 // days. Each observed day below is sealed by the real per-channel seal from one trusted
 // session covering the whole UTC day; a day with no session and no self-check is idle, and a
 // channel that had a session but no record and no self-check is unproven.
-async function observeDays(fx, offsets, { channels = ["retrieval", "reference", "trigger", "verify"] } = {}) {
+async function observeDays(fx, offsets, { channels = ["retrieval", "reference", "trigger", "verify"], before = {} } = {}) {
   const { sealObservationDay } = await import("../scripts/knowledge-inject.mjs");
   const prefix = "telemetry:observation-collector:";
   for (const offset of [...offsets].sort((left, right) => right - left)) {
@@ -439,13 +440,17 @@ async function observeDays(fx, offsets, { channels = ["retrieval", "reference", 
     const after = windowDay(offset - 1).toISOString();
     // The production session key: the UTC date first, so each day's source identity is its own.
     const session = `${day.replace(/-/gu, "")}.story-454`;
+    const extra = before[offset] ?? [];
+    for (const record of extra) await appendTelemetryRecord(fx.transient, record);
+    const channelOf = { "retrieval-hit": "retrieval", retrieval: "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify", "gate-result": "verify" };
     for (const channel of ["retrieval", "reference", "trigger", "verify"]) {
-      const seen = [];
+      const seen = extra.filter((record) => channelOf[record.kind] === channel);
       if (channels.includes(channel)) {
         const real = createTelemetryRecord({ at: eventAt(offset, 40), kind: channel, session, payload: { source: `story-454:${channel}`, availability: "available" } });
         await appendTelemetryRecord(fx.transient, real);
         seen.push(real);
       }
+      seen.sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
       for (const [phase, at, observed] of [["start", `${day}T00:00:00.000Z`, []], ["stop", after, seen]]) {
         await appendTelemetryRecord(fx.transient, createTelemetryRecord({
           at, kind: channel, session,
@@ -516,4 +521,43 @@ test("STORY-454 AC3: an unproven verify channel leaves small cards alone and kee
   assert.equal(fitness.records.find((record) => record.id === idle.id).eligible, true, "verify has no say over a small card");
   assert.deepEqual(fitness.proposals.map((proposal) => proposal.id), [idle.id], "and no verify proposal from a short verify window");
   assert.deepEqual(fitness.refusals, [{ class: "verify", reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT", observationDays: 0, windowDays: 90, missingObservationDays: 90 }]);
+});
+
+// TCRN-CROSS-STORY-454 AC4 (SUB-229): a window counted in observation days can reach past the
+// 90-day raw telemetry retention. The seal keeps a per-day summary outside the pruned day files,
+// so fitness recomputed after pruning equals fitness before it. Red leg: without the summaries
+// the pruned days cannot count and the window is refused.
+test("STORY-454 AC4: a 120-day window survives the 90-day retention through the per-day summaries", async (t) => {
+  const idleOffsets = offsets(1, 120).filter((offset) => offset % 4 === 0);
+  const evaluate = async (prune) => {
+    const fx = await fixture(t, `FIXTURE-STORY-454-AC4-${prune ? "PRUNED" : "KEPT"}`);
+    const idle = await card(fx, "STORY-454-AC4-IDLE", { occurredAt: "2026-04-01T00:00:00.000Z" });
+    const busy = await card(fx, "STORY-454-AC4-BUSY", { occurredAt: "2026-04-01T00:00:00.000Z" });
+    const judge = (offset, ids) => createTelemetryRecord({ at: eventAt(offset, 50), kind: "judge", session: "story-454-ac4", payload: { source: "story-454:judge", availability: "available", candidateIds: ids } });
+    const hit = (offset) => createTelemetryRecord({ at: eventAt(offset, 51), kind: "retrieval-hit", session: "story-454-ac4", payload: { source: "story-454:retrieval-hit", availability: "available", candidateIds: [busy.id] } });
+    await observeDays(fx, offsets(1, 120, idleOffsets), { before: { 119: [judge(119, [idle.id, busy.id]), hit(119)], 101: [hit(101)], 30: [hit(30)] } });
+    let pruned = [];
+    if (prune) {
+      const directory = join(fx.transient, "telemetry");
+      const files = (await readdir(directory)).filter((name) => /^\d{4}-\d{2}-\d{2}\.ndjson$/u.test(name)).sort();
+      await writeFile(join(directory, "manifest.json"), JSON.stringify({ schemaVersion: "tcrn.telemetry-manifest.v1", days: files.map((file) => ({ file, closedAt: new Date(Date.parse(`${file.slice(0, 10)}T00:00:00.000Z`) + 86_400_000).toISOString() })) }));
+      pruned = (await pruneTelemetryRecords(fx.transient, { now: AT, retentionDays: 90 })).deleted;
+    }
+    return { fx, idle, pruned, fitness: await evaluateKnowledgeFitness(fx.workspace, { at: AT }) };
+  };
+  const kept = await evaluate(false);
+  const pruned = await evaluate(true);
+  assert.ok(pruned.pruned.length >= 25, `the retention removed the oldest raw day files (${pruned.pruned.length})`);
+  assert.equal(kept.fitness.windows.card.complete, true);
+  assert.equal(kept.fitness.windowStart, `${windowDay(119).toISOString().slice(0, 10)}T00:00:00.000Z`, "the window spans 119 calendar days");
+  for (const field of ["windows", "records", "proposals", "windowStart", "windowEnd", "windowComplete"]) {
+    assert.deepEqual(pruned.fitness[field], kept.fitness[field], `${field} is recomputed from the summaries exactly`);
+  }
+  assert.equal(pruned.fitness.records.find((record) => record.id === pruned.idle.id).eligible, true);
+
+  await rm(join(pruned.fx.transient, "telemetry", "summaries"), { recursive: true, force: true });
+  const withoutSummaries = await evaluateKnowledgeFitness(pruned.fx.workspace, { at: AT });
+  assert.equal(withoutSummaries.windows.card.complete, false, "without the summaries the pruned days cannot count");
+  assert.ok(withoutSummaries.refusals.some((refusal) => refusal.class === "card" && refusal.missingObservationDays > 0));
+  assert.equal(withoutSummaries.records.find((record) => record.id === pruned.idle.id).eligible, false);
 });

@@ -731,21 +731,33 @@ export async function sealObservationDay(root, { at = new Date().toISOString(), 
   const problems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
   const sourceDigest = canonicalSha256(entries);
   const channels = await sealObservationChannels(core, root, read.records, { at, from, until, entries, proofEntries, unreadable: problems.length > 0 });
-  if (problems.length > 0 || entries.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until, missingChannels, invalidChannels, recordCount: entries.length, sourceDigest, channels };
+  const summary = channels.some((entry) => entry.ok) ? await sealDaySummary(root, from.slice(0, 10)) : null;
+  if (problems.length > 0 || entries.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until, missingChannels, invalidChannels, recordCount: entries.length, sourceDigest, channels, summary };
   const existing = read.records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until && record.payload.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION);
   const matching = existing.find((record) => record.payload.sourceDigest === sourceDigest && record.payload.recordCount === entries.length);
-  if (matching !== undefined) return { ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: true, record: matching, channels };
-  if (existing.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, channels };
+  if (matching !== undefined) return { ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: true, record: matching, channels, summary };
+  if (existing.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, channels, summary };
   const receipt = await core.appendTelemetryRecord(root, core.createTelemetryRecord({
     at,
     kind: "observation-coverage",
     session: `observation-seal-${from.slice(0, 10)}`,
     payload: { source: "telemetry:observation-collector", availability: "available", coverageVersion: "tcrn.telemetry-observation-coverage.v1", coveredFrom: from, coveredUntil: until, channels: ["retrieval", "reference", "trigger", "verify"], channelCheckpoints, recordCount: entries.length, sourceDigest, collectionErrors: 0 },
   }));
-  return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record, channels };
+  return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record, channels, summary };
 }
 
 const OBSERVATION_CHANNEL_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v2";
+
+// TCRN-CROSS-STORY-454 R5: a sealed day keeps its fitness summary beyond raw retention. Only
+// this seal path writes it; it fails open like every other telemetry write here.
+async function sealDaySummary(root, day) {
+  try {
+    const knowledge = await import(resolve(SCRIPT_DIRECTORY, "../dist/build/packages/core/src/knowledge-core.js"));
+    return typeof knowledge.sealFitnessDaySummary === "function" ? await knowledge.sealFitnessDaySummary(root, day) : null;
+  } catch (error) {
+    return { reasonCode: "TELEMETRY_SUMMARY_UNAVAILABLE", error: String(error?.reasonCode ?? error?.message ?? error) };
+  }
+}
 
 // TCRN-CROSS-STORY-453 R1/R2/R4: every channel is judged alone and sealed on its own v2
 // receipt, so one missing channel blocks no other. Inside a channel the v1 rules stand

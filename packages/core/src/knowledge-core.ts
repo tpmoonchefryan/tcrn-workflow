@@ -42,8 +42,8 @@ import type { KnowledgeExpansions, KnowledgeLanguageProvider } from "./knowledge
 import { activeBinding, activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 import { SETTINGS_CATALOG, resolveKnowledgeArticlesPath } from "./settings.js";
-import { COLLECTOR_SELF_CHECK_KIND, readObservationWindows } from "./telemetry.js";
-import type { ObservationWindowClass } from "./telemetry.js";
+import { COLLECTOR_SELF_CHECK_KIND, readObservationDayVerdicts, readObservationWindows, readTelemetryDay, writeObservationDaySummary } from "./telemetry.js";
+import type { FitnessSummaryRow, ObservationWindowClass } from "./telemetry.js";
 import type { TelemetryRecord } from "./telemetry.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
@@ -2676,16 +2676,60 @@ function workspaceArtifactDigest(id: string, workspace: WorkspaceState): string 
   return artifact === undefined ? null : canonicalSha256(artifact as unknown as JsonValue);
 }
 
-function fitnessRows(records: readonly TelemetryRecord[], metadata: readonly KnowledgeUnitMetadata[], windowComplete: boolean, minEvents: number, windowStart: string, workspace: WorkspaceState): readonly KnowledgeFitnessRecord[] {
-  const byId = new Map<string, { retrievalCount: number; referenceCount: number; triggerCount: number; verifyFailureCount: number; observedEvents: number; firstObservedAt: string | null; lastActiveAt: string | null }>();
-  const touch = (id: string, record: TelemetryRecord, field: "retrievalCount" | "referenceCount" | "triggerCount" | "verifyFailureCount" | null): void => {
-    const current = byId.get(id) ?? { retrievalCount: 0, referenceCount: 0, triggerCount: 0, verifyFailureCount: 0, observedEvents: 0, firstObservedAt: null, lastActiveAt: null };
-    current.observedEvents += 1;
-    current.firstObservedAt = current.firstObservedAt === null || record.at < current.firstObservedAt ? record.at : current.firstObservedAt;
-    current.lastActiveAt = current.lastActiveAt === null || record.at > current.lastActiveAt ? record.at : current.lastActiveAt;
-    if (field !== null) current[field] += 1;
-    byId.set(id, current);
-  };
+interface FitnessCounts { retrievalCount: number; referenceCount: number; triggerCount: number; verifyFailureCount: number; observedEvents: number; firstObservedAt: string | null; lastActiveAt: string | null }
+
+function emptyFitnessCounts(): FitnessCounts {
+  return { retrievalCount: 0, referenceCount: 0, triggerCount: 0, verifyFailureCount: 0, observedEvents: 0, firstObservedAt: null, lastActiveAt: null };
+}
+
+function addFitnessCounts(into: Map<string, FitnessCounts>, id: string, counts: FitnessCounts): void {
+  const current = into.get(id) ?? emptyFitnessCounts();
+  current.retrievalCount += counts.retrievalCount;
+  current.referenceCount += counts.referenceCount;
+  current.triggerCount += counts.triggerCount;
+  current.verifyFailureCount += counts.verifyFailureCount;
+  current.observedEvents += counts.observedEvents;
+  if (counts.firstObservedAt !== null && (current.firstObservedAt === null || counts.firstObservedAt < current.firstObservedAt)) current.firstObservedAt = counts.firstObservedAt;
+  if (counts.lastActiveAt !== null && (current.lastActiveAt === null || counts.lastActiveAt > current.lastActiveAt)) current.lastActiveAt = counts.lastActiveAt;
+  into.set(id, current);
+}
+
+// Fitness counts per raw telemetry id, before any card link: the same accounting whether the
+// records are read raw or summed from a retained per-day summary (STORY-454 R5).
+function rawFitnessCounts(records: readonly TelemetryRecord[], into = new Map<string, FitnessCounts>()): Map<string, FitnessCounts> {
+  for (const record of records) {
+    // TCRN-CROSS-STORY-452 R3: a self-check observes a write path, never a card.
+    if (record.kind === COLLECTOR_SELF_CHECK_KIND) continue;
+    const payload = record.payload as Readonly<Record<string, unknown>>;
+    const field = record.kind === "retrieval-hit" ? "retrievalCount"
+      : record.kind === "pull" || record.kind === "reference" ? "referenceCount"
+        : record.kind === "trigger" || record.kind === "rule-trigger" ? "triggerCount"
+          : record.kind === "verify" && payload.passed === false ? "verifyFailureCount" : null;
+    for (const id of telemetryIds(record)) {
+      const counts = { ...emptyFitnessCounts(), observedEvents: 1, firstObservedAt: record.at, lastActiveAt: record.at };
+      if (field !== null) counts[field] = 1;
+      addFitnessCounts(into, id, counts);
+    }
+  }
+  return into;
+}
+
+function summaryFitnessCounts(rows: Readonly<Record<string, FitnessSummaryRow>>, into: Map<string, FitnessCounts>): Map<string, FitnessCounts> {
+  for (const [id, [retrievalCount, referenceCount, triggerCount, verifyFailureCount, observedEvents, firstObservedAt, lastActiveAt]] of Object.entries(rows)) {
+    addFitnessCounts(into, id, { retrievalCount, referenceCount, triggerCount, verifyFailureCount, observedEvents, firstObservedAt, lastActiveAt });
+  }
+  return into;
+}
+
+/** STORY-454 R5, called by the seal path only: keep the day's fitness summary beyond raw retention. */
+export async function sealFitnessDaySummary(telemetryRoot: string, day: string): Promise<{ readonly reasonCode: string }> {
+  const verdicts = await readObservationDayVerdicts(telemetryRoot, day);
+  const counts = rawFitnessCounts((await readTelemetryDay(telemetryRoot, day)).records.filter((record) => record.kind !== "observation-coverage"));
+  const rows = Object.fromEntries([...counts.entries()].sort(([left], [right]) => compareCanonicalText(left, right)).map(([id, entry]): [string, FitnessSummaryRow] => [id, [entry.retrievalCount, entry.referenceCount, entry.triggerCount, entry.verifyFailureCount, entry.observedEvents, entry.firstObservedAt, entry.lastActiveAt]]));
+  return writeObservationDaySummary(telemetryRoot, { schemaVersion: "tcrn.telemetry-fitness-summary.v1", day, channels: Object.fromEntries(verdicts.channels.map((entry) => [entry.channel, entry.verdict])), rows });
+}
+
+function fitnessRows(rawCounts: ReadonlyMap<string, FitnessCounts>, metadata: readonly KnowledgeUnitMetadata[], windowComplete: boolean, minEvents: number, windowStart: string, workspace: WorkspaceState): readonly KnowledgeFitnessRecord[] {
   const linkedIds = new Map<string, string[]>();
   for (const entry of metadata) {
     for (const linkedId of [entry.id, ...entry.linkedWorkIds, ...entry.linkedDecisionIds, ...entry.linkedGateIds, ...entry.linkedEvidenceIds]) {
@@ -2694,24 +2738,14 @@ function fitnessRows(records: readonly TelemetryRecord[], metadata: readonly Kno
       linkedIds.set(linkedId, owners);
     }
   }
-  for (const record of records) {
-    // TCRN-CROSS-STORY-452 R3: a self-check observes a write path, never a card.
-    if (record.kind === COLLECTOR_SELF_CHECK_KIND) continue;
-    const ids = telemetryIds(record);
-    const payload = record.payload as Readonly<Record<string, unknown>>;
-    const field = record.kind === "retrieval-hit" ? "retrievalCount"
-      : record.kind === "pull" || record.kind === "reference" ? "referenceCount"
-        : record.kind === "trigger" || record.kind === "rule-trigger" ? "triggerCount"
-          : record.kind === "verify" && payload.passed === false ? "verifyFailureCount" : null;
-    for (const id of ids) {
-      const targets = new Set([id, ...(linkedIds.get(id) ?? [])]);
-      for (const target of targets) touch(target, record, field);
-    }
+  const byId = new Map<string, FitnessCounts>();
+  for (const [id, counts] of rawCounts) {
+    for (const target of new Set([id, ...(linkedIds.get(id) ?? [])])) addFitnessCounts(byId, target, counts);
   }
   const metadataById = new Map(metadata.map((entry) => [entry.id, entry]));
   const ids = new Set([...metadataById.keys(), ...byId.keys()]);
   return [...ids].sort(compareCanonicalText).map((id) => {
-    const counts = byId.get(id) ?? { retrievalCount: 0, referenceCount: 0, triggerCount: 0, verifyFailureCount: 0, observedEvents: 0, firstObservedAt: null, lastActiveAt: null };
+    const counts = byId.get(id) ?? emptyFitnessCounts();
     const entry = metadataById.get(id);
     const smallCard = entry !== undefined && entry.lifecycle === "active" && ["fact", "guide", "summary"].includes(entry.kind) && entry.retrievalDisposition === "default";
     const observationStart = entry === undefined ? counts.firstObservedAt
@@ -2838,8 +2872,11 @@ export async function evaluateKnowledgeFitness(workspaceRoot: string, input: { r
   // observation days; idle and unproven days are neither counted nor a break in the window.
   const observation = await readObservationWindows(telemetryRoot, input.at, windowDays);
   const metadata = scan.units.map((unit) => unit.metadata);
-  const rows = (kind: ObservationWindowClass): readonly KnowledgeFitnessRecord[] => fitnessRows(observation.classes[kind].records, kind === "card" ? metadata : [], observation.classes[kind].complete, minEvents, observation.classes[kind].windowStart, scan.workspace)
-    .filter((record) => windowClassOf(record.id) === kind);
+  const rows = (kind: ObservationWindowClass): readonly KnowledgeFitnessRecord[] => {
+    const window = observation.classes[kind];
+    const counts = window.summaries.reduce((into, summary) => summaryFitnessCounts(summary.rows, into), rawFitnessCounts(window.records));
+    return fitnessRows(counts, kind === "card" ? metadata : [], window.complete, minEvents, window.windowStart, scan.workspace).filter((record) => windowClassOf(record.id) === kind);
+  };
   const records = [...rows("card"), ...rows("rule"), ...rows("verify")].sort((left, right) => compareCanonicalText(left.id, right.id));
   const windows = Object.fromEntries(classes.map((kind) => {
     const window = observation.classes[kind];

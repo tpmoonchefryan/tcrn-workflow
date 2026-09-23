@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import { appendFile, lstat, mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { appendFile, lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 
 import { canonicalJson, canonicalSha256, parseStrictInstant } from "../../protocol/src/index.js";
@@ -541,7 +541,7 @@ export async function appendCollectorSelfCheck(root: string, input: { readonly a
   return { reasonCode: receipt.duplicate ? "TELEMETRY_SELF_CHECK_ALREADY_RECORDED" : "TELEMETRY_SELF_CHECK_RECORDED", id: receipt.record.id };
 }
 
-async function readTelemetryDay(root: string, day: string): Promise<{ readonly records: readonly TelemetryRecord[]; readonly problems: TelemetryReadResult["problems"] }> {
+export async function readTelemetryDay(root: string, day: string): Promise<{ readonly records: readonly TelemetryRecord[]; readonly problems: TelemetryReadResult["problems"] }> {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00.000Z`)) || new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) !== day) fail("TELEMETRY_FILTER_INVALID", "day must be a UTC calendar date");
   const path = join(rootDirectory(root), "telemetry", `${day}.ndjson`);
   let source = "";
@@ -624,6 +624,67 @@ export async function readObservationDayVerdicts(root: string, day: string): Pro
   return { ...observationDayVerdicts(records, day, { unreadable: target.problems.length > 0 }), problems: target.problems };
 }
 
+// TCRN-CROSS-STORY-454 R5: the per-day fitness summary the seal keeps outside the day files
+// retention prunes (telemetry/summaries/<day>.json). It carries the day's channel verdicts at
+// seal time and, per raw telemetry id, [retrieval, reference, trigger, verifyFailure, observed
+// events, first instant, last instant] -- what the fitness counts are summed from. A summary
+// past the canonical bounds (1 MiB, 10,000 ids) is not written, so that day cannot count
+// once its raw file is gone: a missing summary is never read as zero.
+const FITNESS_SUMMARY_VERSION = "tcrn.telemetry-fitness-summary.v1";
+const OBSERVATION_VERDICTS = Object.freeze(["sealed", "observed-zero", "idle", "unproven"]);
+export type FitnessSummaryRow = readonly [number, number, number, number, number, string | null, string | null];
+export interface ObservationDaySummary {
+  readonly schemaVersion: typeof FITNESS_SUMMARY_VERSION;
+  readonly day: string;
+  readonly channels: Readonly<Record<string, ObservationDayVerdict["verdict"]>>;
+  readonly rows: Readonly<Record<string, FitnessSummaryRow>>;
+}
+
+function validObservationDaySummary(value: unknown, day: string): value is ObservationDaySummary {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const entry = value as Record<string, unknown>;
+  const channels = entry.channels as Record<string, unknown> | null;
+  const rows = entry.rows as Record<string, unknown> | null;
+  const count = (item: unknown): boolean => Number.isSafeInteger(item) && Number(item) >= 0;
+  const instant = (item: unknown): boolean => item === null || (typeof item === "string" && !Number.isNaN(Date.parse(item)));
+  return JSON.stringify(Object.keys(entry).sort()) === JSON.stringify(["channels", "day", "rows", "schemaVersion"]) && entry.schemaVersion === FITNESS_SUMMARY_VERSION && entry.day === day
+    && channels !== null && typeof channels === "object" && JSON.stringify(Object.keys(channels).sort()) === JSON.stringify([...OBSERVATION_CHANNELS].sort()) && Object.values(channels).every((verdict) => OBSERVATION_VERDICTS.includes(verdict as string))
+    && rows !== null && typeof rows === "object" && !Array.isArray(rows) && Object.values(rows).every((row) => Array.isArray(row) && row.length === 7 && row.slice(0, 5).every(count) && instant(row[5]) && instant(row[6]));
+}
+
+/** Written by the seal path only (never a backfill); replaced atomically when the same day is sealed again. */
+export async function writeObservationDaySummary(root: string, summary: ObservationDaySummary): Promise<{ readonly reasonCode: string }> {
+  if (!validObservationDaySummary(summary, summary.day)) return { reasonCode: "TELEMETRY_SUMMARY_INVALID" };
+  let text: string;
+  try { text = canonicalJson(summary as unknown as import("../../protocol/src/index.js").JsonValue); } catch { return { reasonCode: "TELEMETRY_SUMMARY_OVERSIZED" }; }
+  const base = rootDirectory(root);
+  const directory = join(base, "telemetry", "summaries");
+  await regularDirectory(base, true);
+  await regularDirectory(join(base, "telemetry"), true);
+  await regularDirectory(directory, true);
+  const path = join(directory, `${summary.day}.json`);
+  await regularFileIfPresent(path);
+  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(temporary, text, { mode: 0o600, flag: "wx" });
+  await rename(temporary, path);
+  return { reasonCode: "TELEMETRY_SUMMARY_RECORDED" };
+}
+
+async function readObservationDaySummaries(root: string): Promise<Map<string, ObservationDaySummary>> {
+  const directory = join(rootDirectory(root), "telemetry", "summaries");
+  const summaries = new Map<string, ObservationDaySummary>();
+  let names: string[] = [];
+  try { names = (await readdir(directory, { withFileTypes: true })).filter((entry) => entry.isFile() && /^\d{4}-\d{2}-\d{2}\.json$/u.test(entry.name)).map((entry) => entry.name); }
+  catch (error) { if (errorCode(error) !== "ENOENT") throw error; }
+  for (const name of names) {
+    try {
+      const value: unknown = JSON.parse(await readFile(join(directory, name), "utf8"));
+      if (validObservationDaySummary(value, name.slice(0, 10))) summaries.set(name.slice(0, 10), value);
+    } catch { /* an unreadable summary is absent: its day cannot count */ }
+  }
+  return summaries;
+}
+
 export type ObservationWindowClass = "card" | "rule" | "verify";
 // STORY-454 R3: the channels a record class is judged on. A small card needs retrieval and
 // reference to be observation days on the same day; a rule needs trigger; a verify script,
@@ -637,6 +698,8 @@ export interface ObservationClassWindow {
   readonly windowStart: string;
   readonly windowEnd: string;
   readonly records: readonly TelemetryRecord[];
+  // Observation days whose raw day file is gone are counted from their summaries.
+  readonly summaries: readonly ObservationDaySummary[];
 }
 
 export interface ObservationWindows {
@@ -672,7 +735,8 @@ export async function readObservationWindows(root: string, at: string, windowDay
     const read = await readTelemetryDay(root, name.slice(0, 10));
     files.set(name.slice(0, 10), { records: read.records.filter((record) => parseStrictInstant(record.at) <= atValue), problems: read.problems });
   }
-  const earliest = names[0]?.slice(0, 10) ?? null;
+  const summaries = await readObservationDaySummaries(root);
+  const earliest = [names[0]?.slice(0, 10), ...summaries.keys()].filter((day): day is string => day !== undefined).sort()[0] ?? null;
   const days: Record<ObservationWindowClass, string[]> = { card: [], rule: [], verify: [] };
   const idleDays: string[] = [];
   const unprovenDays: string[] = [];
@@ -681,8 +745,11 @@ export async function readObservationWindows(root: string, at: string, windowDay
     const day = shiftDay(yesterday, -scanned);
     const short = Object.values(days).some((list) => list.length < windowDays);
     if (scanned >= windowDays && (!short || earliest === null || day < earliest)) break;
+    const summary = files.has(day) ? undefined : summaries.get(day);
     const around = [-1, 0, 1, 2, 3].flatMap((offset) => files.get(shiftDay(day, offset))?.records ?? []);
-    const verdicts = observationDayVerdicts(around, day, { unreadable: (files.get(day)?.problems.length ?? 0) > 0 });
+    const verdicts = summary === undefined
+      ? observationDayVerdicts(around, day, { unreadable: (files.get(day)?.problems.length ?? 0) > 0 })
+      : { day, idle: Object.values(summary.channels).every((verdict) => verdict === "idle"), channels: OBSERVATION_CHANNELS.map((channel) => ({ channel, verdict: summary.channels[channel]!, receipts: [] })) };
     const observed = (channel: string): boolean => ["sealed", "observed-zero"].includes(verdicts.channels.find((entry) => entry.channel === channel)?.verdict ?? "");
     for (const kind of Object.keys(days) as ObservationWindowClass[]) {
       if (days[kind].length < windowDays && OBSERVATION_WINDOW_CHANNELS[kind].every(observed)) days[kind].push(day);
@@ -700,6 +767,7 @@ export async function readObservationWindows(root: string, at: string, windowDay
       windowStart: `${observationDays[0] ?? scannedFrom}T00:00:00.000Z`,
       windowEnd: `${observationDays.at(-1) ?? yesterday}T23:59:59.999Z`,
       records: observationDays.flatMap((day) => (files.get(day)?.records ?? []).filter((record) => record.kind !== "observation-coverage")),
+      summaries: observationDays.filter((day) => !files.has(day)).flatMap((day) => summaries.get(day) ?? []),
     }];
   })) as unknown as Record<ObservationWindowClass, ObservationClassWindow>;
   return { windowDays, classes, idleDays: idleDays.sort(), unprovenDays: unprovenDays.sort(), problems: [...files.values()].flatMap((entry) => entry.problems) };
