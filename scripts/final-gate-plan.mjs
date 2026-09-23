@@ -168,7 +168,31 @@ function runnerGovernanceNotices(result) {
 }
 
 /** Issue and register one receipt from the code-owned runner. */
-export function issueGateReceipt(authority, { entry, result, inputs, invocation } = {}) {
+/**
+ * TCRN-CROSS-STORY-460 R2 (#240 B2): a roster root that ended red is judged against its own
+ * group's acceptedExceptions. It passes only when its JSON result names failing checks and
+ * every one of them carries a reason code that group accepts; any other red, an unreadable
+ * result, or another group's exception fails it. The accepted codes are returned so the
+ * receipt says what was accepted. The roster is the checked-in acceptance-gate-groups.json
+ * unless a caller passes one explicitly (tests).
+ */
+export function applyRosterExceptions(gateId, result, roster = readRosterForExceptions()) {
+  if (result?.ok === true) return { result, acceptedExceptions: [] };
+  const accepted = new Set((roster?.groups?.find((group) => group?.id === gateId)?.acceptedExceptions ?? []).map((exception) => exception?.reasonCode).filter((code) => typeof code === "string" && code.length > 0));
+  if (accepted.size === 0) return { result, acceptedExceptions: [] };
+  let report;
+  try { report = JSON.parse(String(result?.stdout ?? "").trim()); } catch { return { result, acceptedExceptions: [] }; }
+  const failing = Array.isArray(report?.checks) ? report.checks.filter((check) => check?.ok !== true) : [];
+  if (failing.length === 0 || !failing.every((check) => accepted.has(check?.reasonCode))) return { result, acceptedExceptions: [] };
+  return { result: { ...result, ok: true }, acceptedExceptions: [...new Set(failing.map((check) => check.reasonCode))].sort() };
+}
+
+function readRosterForExceptions() {
+  try { return JSON.parse(readFileSync(defaultRosterPath, "utf8")); } catch { return null; }
+}
+
+export function issueGateReceipt(authority, { entry, result: rawResult, inputs, invocation, roster } = {}) {
+  const { result, acceptedExceptions } = rawResult && typeof rawResult === "object" && entry && typeof entry.id === "string" ? applyRosterExceptions(entry.id, rawResult, roster === undefined ? readRosterForExceptions() : roster) : { result: rawResult, acceptedExceptions: [] };
   const state = receiptAuthorityState(authority);
   if (state === null) throw planError("GATE_RECEIPT_AUTHORITY_REQUIRED", "a code-owned receipt authority is required");
   if (!entry || typeof entry.id !== "string" || entry.id.trim().length === 0) throw planError("GATE_RECEIPT_ENTRY_INVALID", "gate entry id");
@@ -181,7 +205,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
   if (officialInvocation !== null && invocationKey(boundInvocation) !== invocationKey(officialInvocation)) throw planError("GATE_RECEIPT_INVOCATION_MISMATCH", "runner invocation is not the code-owned relative command for this gate");
   const phase = entry.phase ?? "candidate-final";
   const exitCode = Number.isSafeInteger(result.exitCode) ? result.exitCode : Number.isSafeInteger(result.status) ? result.status : null;
-  const status = result.ok === true && exitCode === 0 ? "completed" : "failed";
+  const status = result.ok === true && (exitCode === 0 || acceptedExceptions.length > 0) ? "completed" : "failed";
   const reasonCode = result.reasonCode ?? (/PROOF_BUDGET_EXCEEDED/u.test(`${result.stdout ?? ""}\n${result.stderr ?? ""}`) ? "PROOF_BUDGET_EXCEEDED" : null);
   const governanceNotices = runnerGovernanceNotices(result);
   const document = {
@@ -202,6 +226,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
     stdoutSha256: sha256(String(result.stdout ?? "")),
     stderrSha256: sha256(String(result.stderr ?? "")),
     ...(governanceNotices.length === 0 ? {} : { governanceNotices }),
+    ...(acceptedExceptions.length === 0 ? {} : { acceptedExceptions }),
   };
   const bytes = Buffer.from(`${JSON.stringify(document, null, 2)}\n`, "utf8");
   const path = resolve(state.storeRoot, `${entry.id}-${state.records.size + 1}.json`);
@@ -217,6 +242,7 @@ export function issueGateReceipt(authority, { entry, result, inputs, invocation 
     phase: document.phase,
     reasonCode,
     ...(governanceNotices.length === 0 ? {} : { governanceNotices }),
+    ...(acceptedExceptions.length === 0 ? {} : { acceptedExceptions }),
     inputs: document.inputs,
     terminalEvidence: {
       id: `${RECEIPT_RUNNER_VERSION}:${entry.id}`,
@@ -542,7 +568,9 @@ function defaultGateForEntry(entry) {
     return null;
   }
   if (entry.category === "dependency") return "engine-release";
-  const knownEnginePath = path.startsWith("packages/") || path.startsWith("scripts/") || path.startsWith("tests/") || path.startsWith("tools/") || path.startsWith("portal/") || path.startsWith("docs/") || path.startsWith(".github/") || path.startsWith("fixtures/") || path === "verification-map.yaml" || ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "package.json", "pnpm-lock.yaml", "tsconfig.json"].includes(path);
+  // TCRN-CROSS-STORY-460 R1 (#240 B1): specs/, schemas/ and extensions/ are rc1 inputs and part
+  // of the engine-release face; unmapped, one changed spec made the whole plan unknown impact.
+  const knownEnginePath = path.startsWith("packages/") || path.startsWith("scripts/") || path.startsWith("tests/") || path.startsWith("tools/") || path.startsWith("portal/") || path.startsWith("docs/") || path.startsWith("specs/") || path.startsWith("schemas/") || path.startsWith("extensions/") || path.startsWith(".github/") || path.startsWith("fixtures/") || path === "verification-map.yaml" || ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "LICENSE", "package.json", "pnpm-lock.yaml", "tsconfig.json"].includes(path);
   return knownEnginePath ? "engine-release" : null;
 }
 
