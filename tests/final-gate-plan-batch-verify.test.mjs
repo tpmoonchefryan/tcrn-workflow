@@ -13,6 +13,8 @@ import {
   readTelemetryRecords,
 } from "../dist/build/packages/core/src/index.js";
 import { executeQualifiedBatch, qualifyBatch } from "../scripts/final-gate-plan.mjs";
+import * as finalGatePlan from "../scripts/final-gate-plan.mjs";
+import * as telemetryCore from "../dist/build/packages/core/src/telemetry.js";
 
 const createdAt = "2026-08-19T18:00:00Z";
 const boundaryPrefix = "telemetry:observation-collector:";
@@ -109,4 +111,24 @@ test("missing or unusable workspace leaves the qualified batch result unchanged"
   );
   assert.equal(nonexistent.status, "completed");
   assert.equal(nonexistent.reasonCode, "BATCH_FORMAL_GATE_COMPLETED");
+});
+
+// TCRN-CROSS-STORY-452 R1 (SUB-225): the verify channel's self-check comes from the batch
+// entry's own verify emitter, in a mode that runs no gate and writes no verify record. Red
+// leg: no self-check mode, or one that writes a passing verify record instead.
+test("STORY-452 SUB-225: the batch verify emitter self-checks the verify channel without running a gate", async (context) => {
+  const fixture = await workspace("batch-verify-self-check");
+  context.after(() => rm(fixture.base, { recursive: true, force: true }));
+  const state = await materializeWorkspace(fixture.root);
+  const transient = activeBinding(state.metadata).find((entry) => entry.kind === "transient").path;
+  for (const expected of ["TELEMETRY_SELF_CHECK_RECORDED", "TELEMETRY_SELF_CHECK_ALREADY_RECORDED"]) {
+    const receipt = await finalGatePlan.emitBatchVerifyTelemetry?.({ root: transient, sessionId: "self-check-session", selfCheck: { host: "claude" } });
+    assert.equal(receipt?.reasonCode, expected, "one ok self-check per session, UTC day and channel");
+  }
+  assert.deepEqual(await nonBoundaryVerifyRecords(fixture), [], "a self-check is not a verify record");
+  const checks = (await readTelemetryRecords(transient, { kind: "collector-self-check", limit: 10 })).records;
+  assert.equal(checks.length, 1);
+  assert.deepEqual({ ...checks[0].payload }, { source: "final-gate-plan:batch-verify", channel: "verify", host: "claude", verdict: "ok", reasonCode: null, availability: "available" });
+  const reading = (await telemetryCore.readObservationChannelDays(transient, checks[0].at.slice(0, 10))).channels.find((entry) => entry.channel === "verify");
+  assert.equal(reading.reading, "observed-zero");
 });

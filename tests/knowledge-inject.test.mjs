@@ -14,8 +14,9 @@ import { mkdir, mkdtemp, realpath, rm, writeFile, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  extractQueryTokens, promptTriggers, matchedTriggerKeywords, parseInjectionProtocol, runInjection, serializeInjectionProtocol, truncateToBudget
+  extractQueryTokens, promptTriggers, matchedTriggerKeywords, parseInjectionProtocol, recordObservationBoundary, runInjection, runSessionInjection, serializeInjectionProtocol, truncateToBudget
 } from "../scripts/knowledge-inject.mjs";
+import * as telemetryCore from "../dist/build/packages/core/src/telemetry.js";
 import { filterCandidatesByDispatchContext, normalizeDispatchContext } from "../scripts/injection-session.mjs";
 import {
   acquireWorkspaceLease,
@@ -23,6 +24,8 @@ import {
   createProject,
   initializeKnowledgeStore,
   initializeWorkspace,
+  materializeWorkspace,
+  readTelemetryRecords,
   transitionKnowledgePromotion,
 } from "../dist/build/packages/core/src/index.js";
 import { canonicalSha256, deriveStableId } from "../dist/build/packages/protocol/src/index.js";
@@ -250,4 +253,52 @@ test("STORY-419 protocol truncation is explicit and never looks like delivered c
   assert.equal(parsed.value.ok, false);
   assert.equal(parsed.value.reasonCode, "INJECT_OUTPUT_TRUNCATED");
   assert.equal(parsed.value.injected, undefined);
+});
+
+// TCRN-CROSS-STORY-452 R1-R3 (SUB-225): each channel's self-check is written by the write path
+// of that channel's real records, in the hook event that carries them, at most once per
+// session, UTC day and channel (a failed one once per reason code). A host that never
+// delivers an event never gets that channel's self-check. Red leg: no writer emits one.
+test("STORY-452 SUB-225: each channel self-checks through its own write path and only in its own hook event", async (t) => {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-self-check-writers-")));
+  t.after(() => rm(base, { recursive: true, force: true }));
+  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => ({ kind, path: join(base, kind) }));
+  for (const root of roots) await mkdir(root.path, { recursive: true });
+  await initializeWorkspace({ roots, externalKey: "STORY-452-WRITERS", createdAt: "2026-09-01T00:00:00Z" });
+  const transient = join(base, "transient");
+  const workspaceState = await materializeWorkspace(join(base, "workspace"));
+  const candidate = { id: "knowledge:000000000000000000000452", kind: "card", key: "K452", status: "active", title: "Self-check", summary: "Self-check" };
+  const common = { stateDirectory: join(transient, "session-state"), workspaceState, settings: [], budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false, host: "claude" };
+  const checks = async () => (await readTelemetryRecords(transient, { kind: "collector-self-check", limit: 100 })).records
+    .map((record) => `${record.session}|${record.payload.channel}|${record.payload.verdict}|${record.payload.reasonCode ?? ""}|${record.payload.source}`).sort();
+
+  const found = async () => ({ ok: true, result: { records: [candidate] } });
+  await runSessionInjection({ ...common, prompt: "self-check prompt", sessionId: "s452", event: "UserPromptSubmit", recall: found });
+  await runSessionInjection({ ...common, prompt: "another self-check prompt", sessionId: "s452", event: "UserPromptSubmit", recall: found });
+  assert.deepEqual(await checks(), [
+    "s452|retrieval|ok||knowledge-inject:retrieval",
+    "s452|trigger|ok||knowledge-inject:trigger",
+  ], "a prompt self-checks retrieval and trigger, once per session and day");
+
+  await runSessionInjection({ ...common, prompt: "", sessionId: "s452", event: "PostToolUse", hookInput: { tool_name: "work-show", tool_response: "{}" } });
+  assert.ok((await checks()).includes("s452|reference|ok||knowledge-inject:reference"), "PostToolUse self-checks reference");
+  assert.equal((await checks()).length, 3);
+
+  await recordObservationBoundary({ sessionId: "s452", host: "claude", phase: "start", workspaceState });
+  assert.ok((await checks()).includes("s452|verify|ok||final-gate-plan:batch-verify"), "a session boundary self-checks verify through the batch verify emitter");
+
+  const unavailable = async () => ({ ok: false, reasonCode: "RECALL_UNAVAILABLE" });
+  await runSessionInjection({ ...common, prompt: "failing self-check prompt", sessionId: "s452-failed", event: "UserPromptSubmit", recall: unavailable });
+  await runSessionInjection({ ...common, prompt: "failing self-check prompt again", sessionId: "s452-failed", event: "UserPromptSubmit", recall: unavailable });
+  const failed = (await checks()).filter((entry) => entry.startsWith("s452-failed|"));
+  assert.deepEqual(failed, [
+    "s452-failed|retrieval|failed|RECALL_UNAVAILABLE|knowledge-inject:retrieval",
+    "s452-failed|trigger|ok||knowledge-inject:trigger",
+  ], "a failed retrieval says why, once per reason code");
+
+  const day = (await readTelemetryRecords(transient, { kind: "collector-self-check", limit: 1 })).records[0].at.slice(0, 10);
+  const read = await telemetryCore.readObservationChannelDays(transient, day);
+  assert.deepEqual(read.refusedSelfChecks, [], "every written self-check passes the read-side check");
+  assert.equal(read.channels.find((entry) => entry.channel === "verify").reading, "observed-zero");
+  assert.deepEqual(read.channels.find((entry) => entry.channel === "retrieval").selfChecks, { ok: 1, failed: 1 });
 });

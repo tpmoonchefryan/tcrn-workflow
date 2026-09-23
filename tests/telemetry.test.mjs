@@ -409,11 +409,14 @@ test("TCRN-CROSS-SUB-153 D4: an overlong Stop resumes all channels at the real i
   assert.equal(records.filter((record) => record.kind === "observation-coverage").length, 0, "a gap never seals coverage");
   const resumed = boundaries.filter((record) => record.at === "2026-09-05T12:00:00.000Z" && record.payload.phase === "start");
   assert.deepEqual(new Set(resumed.map((record) => record.kind)), new Set(OBSERVATION_CHANNELS));
+  // TCRN-CROSS-STORY-452: the Start boundary also self-checks the verify channel, on its own day.
+  assert.deepEqual(records.filter((record) => record.kind === "collector-self-check").map((record) => `${record.at}|${record.payload.channel}`), ["2026-09-01T00:00:00.000Z|verify"]);
+  const beforeRetry = records.length;
 
   const retry = await recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId: "stale-session", host: "claude", phase: "stop", at: "2026-09-05T12:00:00.000Z", workspaceState: fixture.state });
   assert.deepEqual(retry, { ...gap, count: 0, duplicate: true }, "an identical resume is a deterministic no-op");
   records = (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records;
-  assert.equal(records.length, boundaries.length, "an identical resume appends nothing");
+  assert.equal(records.length, beforeRetry, "an identical resume appends nothing");
 
   for (const channel of OBSERVATION_CHANNELS) {
     const kind = { retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" }[channel];

@@ -300,6 +300,26 @@ async function languageModule() {
   return coreLanguageModule;
 }
 
+let coreTelemetryModule;
+async function telemetryModule() {
+  if (coreTelemetryModule !== undefined) return coreTelemetryModule;
+  try {
+    coreTelemetryModule = await import(resolve(SCRIPT_DIRECTORY, "../dist/build/packages/core/src/telemetry.js"));
+  } catch {
+    coreTelemetryModule = null;
+  }
+  return coreTelemetryModule;
+}
+
+// TCRN-CROSS-STORY-452 R1: a channel's self-check is written where that channel's real
+// records are written, by the same writer, under the source the core table names for the
+// channel. A writer without the method (a test double, an unavailable root) writes none.
+async function emitSelfCheck(writer, channel, { host, verdict = "ok", reasonCode = null } = {}) {
+  if (typeof writer?.selfCheck !== "function") return null;
+  const code = verdict === "failed" && !/^[A-Z][A-Z0-9_]{0,127}$/u.test(String(reasonCode)) ? `${channel.toUpperCase()}_FAILED` : reasonCode;
+  return writer.selfCheck(channel, { host: dispatchHostName(host), verdict, reasonCode: code });
+}
+
 export const OBSERVATION_CHANNELS = Object.freeze(["retrieval", "reference", "trigger", "verify"]);
 export const OBSERVATION_BOUNDARY_PREFIX = "telemetry:observation-collector:";
 const OBSERVATION_CHANNEL_BY_KIND = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify", "gate-result": "verify" });
@@ -323,7 +343,7 @@ async function telemetryWriter(partition, containerRoot, sessionId, suppliedStat
     ? null
     : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
   if (root === null) return null;
-  return async ({ kind, payload, observationPhase, observationSource }) => {
+  const write = async ({ kind, payload, observationPhase, observationSource }) => {
     try {
       const source = observationSource ?? `knowledge-inject:${kind}`;
       const sequence = observationPhase === "start" || observationPhase === "stop"
@@ -346,6 +366,17 @@ async function telemetryWriter(partition, containerRoot, sessionId, suppliedStat
       return { availability: "unavailable", id: null };
     }
   };
+  write.selfCheck = async (channel, { host, verdict, reasonCode }) => {
+    try {
+      const telemetry = await telemetryModule();
+      const source = telemetry?.COLLECTOR_SELF_CHECK_SOURCES?.[channel]?.[0];
+      if (typeof telemetry?.appendCollectorSelfCheck !== "function" || source === undefined) return null;
+      return await telemetry.appendCollectorSelfCheck(root, { at: new Date().toISOString(), session: sessionId, channel, host: String(host ?? "unknown-host"), source, verdict, reasonCode });
+    } catch {
+      return null;
+    }
+  };
+  return write;
 }
 
 function safeObservationPart(value, fallback) {
@@ -645,6 +676,12 @@ export async function recordObservationBoundary({
       receipts.push(receipt);
       if (!receipt.duplicate) records.push(record);
     }
+    // TCRN-CROSS-STORY-452 R1: the verify channel's self-check comes from the batch entry's
+    // own verify emitter in its self-check mode; no gate runs. It fails open.
+    try {
+      const { emitBatchVerifyTelemetry } = await import("./final-gate-plan.mjs");
+      await emitBatchVerifyTelemetry({ root, sessionId: String(sessionId), at, selfCheck: { host: dispatchHostName(host) } });
+    } catch { /* an unavailable emitter leaves the verify channel unknown, never zero */ }
     const coverage = phase === "stop" ? await sealObservationDay(root, { at }) : null;
     return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.some((receipt) => receipt.duplicate), ...(coverage === null ? {} : { coverage }) };
   } catch (error) {
@@ -858,6 +895,7 @@ export async function runInjection({
   const call = await invokeRecall(query);
   if (!call.ok) {
     await emitTelemetry(telemetry, { kind: "retrieval", observationPhase: "stop", observationSource: retrievalSource, payload: { stage: "stop" } });
+    await emitSelfCheck(telemetry, "retrieval", { host, verdict: "failed", reasonCode: call.reasonCode });
     return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
   }
   let payload = recallPayload(call);
@@ -894,6 +932,7 @@ export async function runInjection({
       queryTranslations,
     },
   });
+  await emitSelfCheck(telemetry, "retrieval", { host });
   const lines = [];
   for (const candidate of candidates) {
     // The kind and the key are spoken because the answer now spans three record
@@ -1130,6 +1169,7 @@ export async function runSessionInjection({
     if (dispatch.ok === true && event === "PostToolUse") {
       const referenceSource = "knowledge-inject:reference";
       await emitTelemetry(telemetry, { kind: "reference", observationPhase: "start", observationSource: referenceSource, payload: { stage: "start" } });
+      await emitSelfCheck(telemetry, "reference", { host });
       const correlation = pullCorrelation(hookInput, lease.session.emittedIds, lease.session.pulledIds);
       if (correlation !== null) {
         lease.session.pulledIds.push(correlation.id);
@@ -1147,6 +1187,7 @@ export async function runSessionInjection({
         decisionReason = parts.length > 0 ? "BUDGET_SATURATED_L0_ONLY" : "BUDGET_SATURATED";
       } else {
         await emitTelemetry(telemetry, { kind: "trigger", observationPhase: "start", observationSource: "knowledge-inject:trigger", payload: { event: "UserPromptSubmit", stage: "start" } });
+        await emitSelfCheck(telemetry, "trigger", { host });
         try {
           recallResult = await runInjection({
             prompt,

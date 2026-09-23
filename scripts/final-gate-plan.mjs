@@ -2165,27 +2165,42 @@ function scopedBudgetNativeProblems(input, acquired) {
   return [];
 }
 
+/**
+ * The batch entry's verify emitter: one passing verify record after a formal run. With
+ * `selfCheck` it writes the verify channel's collector self-check through this same function
+ * instead, and runs no gate (TCRN-CROSS-STORY-452 R1); a session boundary calls it that way
+ * with the telemetry root it already holds. Telemetry never changes the batch result.
+ */
+export async function emitBatchVerifyTelemetry({ workspace = null, root = null, sessionId = null, selfCheck = null, at = new Date().toISOString() } = {}) {
+  try {
+    const session = typeof sessionId === "string" && sessionId.length > 0 ? sessionId : "unknown-batch-session";
+    const core = await import("../dist/build/packages/core/src/index.js");
+    let telemetryRoot = root;
+    if (telemetryRoot === null) {
+      if (typeof workspace !== "string" || workspace.trim().length === 0) return null;
+      const state = await core.materializeWorkspace(workspace);
+      telemetryRoot = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
+      if (telemetryRoot === null) return null;
+    }
+    if (selfCheck !== null) {
+      const telemetry = await import("../dist/build/packages/core/src/telemetry.js");
+      return await telemetry.appendCollectorSelfCheck(telemetryRoot, { at, session, channel: "verify", host: String(selfCheck.host ?? "unknown-host"), source: "final-gate-plan:batch-verify", verdict: "ok", reasonCode: null });
+    }
+    const record = core.createTelemetryRecord({
+      at,
+      kind: "verify",
+      session,
+      payload: { source: "final-gate-plan:batch-verify", availability: "available", passed: true },
+    });
+    return await core.appendTelemetryRecord(telemetryRoot, record);
+  } catch {
+    return null;
+  }
+}
+
 /** Execute the only formal batch entry point after a fresh qualification. */
 export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}) {
   const initial = qualifyBatch(qualificationRequest(input));
-  async function emitBatchVerifyTelemetry(input, qualification, result) {
-    if (typeof input?.workspace !== "string" || input.workspace.trim().length === 0) return;
-    try {
-      const core = await import("../dist/build/packages/core/src/index.js");
-      const state = await core.materializeWorkspace(input.workspace);
-      const transient = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient");
-      if (transient === undefined) return;
-      const record = core.createTelemetryRecord({
-        at: new Date().toISOString(),
-        kind: "verify",
-        session: typeof input.sessionId === "string" && input.sessionId.length > 0 ? input.sessionId : "unknown-batch-session",
-        payload: { source: "final-gate-plan:batch-verify", availability: "available", passed: true },
-      });
-      await core.appendTelemetryRecord(transient.path, record);
-    } catch {
-      return;
-    }
-  }
   if (initial.formalGateAllowed !== true || initial.eligible !== true || initial.status === "idempotent") return { ...initial, executed: [], formalGateExecutions: 0 };
   if (typeof recheck === "function") {
     let refreshed;
@@ -2222,7 +2237,7 @@ export async function executeQualifiedBatch(input = {}, runner, { recheck } = {}
     if (after.eligible !== true || after.formalGateAllowed !== true) return { ...initial, status: "failed", reasonCode: "BATCH_RECHECK_NOT_ELIGIBLE", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: [after.reasons?.join("; ") || "full qualification vetoed the result after execution"] };
     if (after.idempotencyKey !== initial.idempotencyKey) return { ...initial, status: "failed", reasonCode: "BATCH_INPUT_DRIFT", formalGateAllowed: false, executed: [{ ...(result ?? {}), ok: false, invalidated: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["batch qualification drifted during formal execution"] };
   }
-  await emitBatchVerifyTelemetry(input, initial, result);
+  if (typeof input?.workspace === "string" && input.workspace.trim().length > 0) await emitBatchVerifyTelemetry({ workspace: input.workspace, sessionId: input.sessionId });
   return { ...initial, status: "completed", reasonCode: "BATCH_FORMAL_GATE_COMPLETED", formalGateAllowed: false, executed: [result ?? { ok: true }], formalGateExecutions: 1, result: result ?? null, reasons: ["formal batch runner completed once"] };
 }
 

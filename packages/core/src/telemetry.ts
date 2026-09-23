@@ -500,6 +500,21 @@ export function classifyObservationChannelDays(records: readonly TelemetryRecord
   return { day, channels, refusedSelfChecks };
 }
 
+/**
+ * SUB-225: one self-check from a channel's write path. Its id is the dedupe key (session,
+ * UTC day, channel, verdict, reason), so the telemetry writer lock keeps it to one ok per
+ * session, day and channel and one failed per reason code, also across concurrent hooks.
+ */
+export async function appendCollectorSelfCheck(root: string, input: { readonly at: string; readonly session: string; readonly channel: string; readonly host: string; readonly source: string; readonly verdict: "ok" | "failed"; readonly reasonCode?: string | null }): Promise<{ readonly reasonCode: string; readonly id: string | null }> {
+  const reasonCode = input.reasonCode ?? null;
+  const key = { schemaVersion: TELEMETRY_SCHEMA_VERSION, kind: COLLECTOR_SELF_CHECK_KIND, day: new Date(input.at).toISOString().slice(0, 10), session: input.session, channel: input.channel, verdict: input.verdict, reasonCode };
+  const record = createTelemetryRecord({ id: `telemetry:${canonicalSha256(key).slice(0, 24)}`, at: input.at, kind: COLLECTOR_SELF_CHECK_KIND, session: input.session, payload: { source: input.source, channel: input.channel, host: input.host, verdict: input.verdict, reasonCode, availability: "available" } });
+  const problem = collectorSelfCheckProblem(record);
+  if (problem !== null) return { reasonCode: problem, id: null };
+  const receipt = await appendTelemetryRecord(root, record);
+  return { reasonCode: receipt.duplicate ? "TELEMETRY_SELF_CHECK_ALREADY_RECORDED" : "TELEMETRY_SELF_CHECK_RECORDED", id: receipt.record.id };
+}
+
 async function readTelemetryDay(root: string, day: string): Promise<{ readonly records: readonly TelemetryRecord[]; readonly problems: TelemetryReadResult["problems"] }> {
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00.000Z`)) || new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) !== day) fail("TELEMETRY_FILTER_INVALID", "day must be a UTC calendar date");
   const path = join(rootDirectory(root), "telemetry", `${day}.ndjson`);
