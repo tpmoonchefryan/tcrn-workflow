@@ -3,6 +3,22 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## Unreleased
+
+The offline vulnerability policy snapshot was refreshed on 2026-09-23 after a
+real advisory check of the complete frozen dependency graph (25 packages, 4
+direct and 21 transitive): the repository's Dependabot alerts (8, all fixed,
+none open), `pnpm audit`, and the GitHub advisory database queried per exact
+package version found no known vulnerability, so `knownVulnerabilities` is
+unchanged and `fast-uri` stays at the patched 3.1.6 (TCRN-CROSS-STORY-450).
+`evaluateVulnerabilityPolicyFreshness` counts whole UTC days and fails closed
+once the age exceeds `maxAgeDays` (30): the governance check shows the
+seven-day `VULNERABILITY_POLICY_EXPIRING` notice from 2026-10-16T00:00:00Z and
+reports `VULNERABILITY_POLICY_STALE` from 2026-10-24T00:00:00Z, the 31st UTC
+day after the check, unless the snapshot is refreshed again before then. The
+next version is Engine 1.2.0; its release commit folds this section into the
+1.2.0 section and into `docs/releases/1.2.0.md`.
+
 ## 1.1.3 — patch candidate
 
 This append-only patch repairs the time-attestation store after the

@@ -112,6 +112,23 @@ test("vulnerability policy gives seven days of visible notice before failing clo
   );
 });
 
+test("the committed vulnerability snapshot is current on 2026-09-29 and the 2026-08-29 snapshot is stale", async () => {
+  // TCRN-CROSS-STORY-450: the governance leg reads this file with the wall clock. The
+  // clock below is the day the 2026-08-29 snapshot would have turned the leg red.
+  const policy = JSON.parse(
+    await readFile(new URL("../scripts/policy/vulnerability-policy.json", import.meta.url), "utf8"),
+  );
+  const clock = Date.parse("2026-09-29T00:00:00Z");
+  const expectedAgeDays = Math.floor((clock - Date.parse(`${policy.snapshotDate}T00:00:00Z`)) / 86_400_000);
+  const freshness = evaluateVulnerabilityPolicyFreshness(policy, clock);
+  assert.equal(freshness.ageDays, expectedAgeDays);
+  assert.equal(freshness.daysRemaining, policy.maxAgeDays - expectedAgeDays);
+  assert.throws(
+    () => evaluateVulnerabilityPolicyFreshness({ ...policy, snapshotDate: "2026-08-29" }, clock),
+    (error) => error instanceof DependencyGraphError && error.reasonCode === "VULNERABILITY_POLICY_STALE",
+  );
+});
+
 test("a scoped lock identity parses through its surrounding pnpm quotes", async () => {
   const inputs = await dependencyInputs();
   // pnpm quotes every lock key beginning with "@". Before the identity match stripped
