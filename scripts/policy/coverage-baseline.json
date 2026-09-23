@@ -960,8 +960,8 @@
       ]
     },
     "tests/p3-file-engine.test.mjs": {
-      "testCount": 34,
-      "assertionCount": 168,
+      "testCount": 38,
+      "assertionCount": 186,
       "testNames": [
         "Workspace metadata schema, five-root initialization, CLI readback, and standalone boundary are exact",
         "Workspace root entries have exact Ajv/runtime field and type parity",
@@ -972,6 +972,10 @@
         "WSB-1: mutation responses carry the created/mutated record identity",
         "WSE-4: --attest-dir writes one deterministic advisory receipt outside the workspace, opt-in and clock-gated",
         "WSE-4: --attest-dir fails closed inside the workspace root and with no injected clock, writing nothing",
+        "INC-378 every mutating verb that takes --attest-dir refuses an inconsistent store before the lease and changes nothing",
+        "INC-378 work-batch refuses an inconsistent store before the lease and changes nothing",
+        "INC-378 a consistent store still takes the receipt and it reads back by eventHash",
+        "INC-378 a receipt that fails after the commit reports committed, the version and the new head",
         "WSE-4: export and archive bytes are identical with and without attestation receipts",
         "WSB-4: work-create --parent-id '-' yields a null parent byte-identical to omitting the flag",
         "WSB-7: --expected-version head derives the current version under the lease; numeric CAS still fails closed",

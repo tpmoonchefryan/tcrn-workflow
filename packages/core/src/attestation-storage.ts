@@ -112,16 +112,21 @@ async function atomicWrite(path: string, content: string | Buffer): Promise<void
   }
 }
 
-// The pid a lock file names, or null when it is absent or does not name one yet.
-async function lockHolder(path: string): Promise<number | null> {
+// The pid a lock file names: undefined when there is no lock file, null while its creator
+// has not yet written its pid.
+async function lockHolder(path: string): Promise<number | null | undefined> {
   let text: string;
   try {
     text = await readFile(path, "utf8");
   } catch (error) {
-    if ((error as { code?: string }).code === "ENOENT") return null;
+    if ((error as { code?: string }).code === "ENOENT") return undefined;
     throw error;
   }
   return /^[1-9]\d*\n$/u.test(text) ? Number(text) : null;
+}
+
+async function pause(): Promise<void> {
+  await new Promise((settle) => setTimeout(settle, ATTESTATION_LOCK_POLL_MS));
 }
 
 // Another waiter may have taken the same stale lock over and written its own between our
@@ -158,15 +163,15 @@ async function withAttestationLock<T>(directory: string, operation: () => Promis
       if ((error as { code?: string }).code !== "EEXIST") throw error;
     }
     const holder = await lockHolder(path);
-    if (holder !== null && !processIsAlive(holder)) {
+    if (typeof holder === "number" && !processIsAlive(holder)) {
       await removeStaleLock(path, holder);
       continue;
     }
     if (waited >= timeoutMs) {
-      const by = holder === null ? "" : ` by process ${holder}`;
+      const by = typeof holder === "number" ? ` by process ${holder}` : "";
       throw Object.assign(new Error(`ATTESTATION_LOCKED: ${ATTESTATION_LOCK_NAME} is still held${by} after ${timeoutMs} ms`), { reasonCode: "ATTESTATION_LOCKED" });
     }
-    await new Promise((settle) => setTimeout(settle, ATTESTATION_LOCK_POLL_MS));
+    await pause();
   }
   try {
     return await operation();
@@ -292,6 +297,36 @@ async function writeSegments(directory: string, records: readonly AttestationFil
   const kept = new Set(files.map((file) => file.name));
   for (const name of await readdir(directory)) {
     if (segmentFileName(name) && !kept.has(name)) await rm(resolve(directory, name), { force: true });
+  }
+}
+
+// R3 (problems #205, #209): what a mutating verb reads before it takes the workspace lease.
+// It takes no lock and writes nothing. A directory with no manifest -- absent, or still in
+// the legacy one-file-per-receipt layout -- is consistent; otherwise every segment must
+// match the manifest in bytes, sha-256 and record count, and the streamed digest must match.
+// A live lock means a writer is mid-rewrite, so the check waits for it; a lock still held at
+// the timeout is itself the answer, since nothing consistent could be read. Returns null
+// when consistent, else what is wrong.
+export async function checkAttestationStore(directory: string, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS): Promise<string | null> {
+  const lock = resolve(directory, ATTESTATION_LOCK_NAME);
+  const held = async (): Promise<boolean> => {
+    const holder = await lockHolder(lock);
+    return holder === null || (holder !== undefined && processIsAlive(holder));
+  };
+  for (let waited = 0; ; waited += ATTESTATION_LOCK_POLL_MS) {
+    if (!(await held())) {
+      try {
+        const manifest = await readManifest(directory);
+        if (manifest !== null) await readSegmentRecords(directory, manifest);
+        return null;
+      } catch (error) {
+        // A writer that took the lock after the look above may be halfway through a rewrite;
+        // its store is waited for, not reported.
+        if (!(await held())) return String((error as { message?: unknown }).message ?? error);
+      }
+    }
+    if (waited >= timeoutMs) return `${ATTESTATION_LOCK_NAME} was still held after ${timeoutMs} ms`;
+    await pause();
   }
 }
 

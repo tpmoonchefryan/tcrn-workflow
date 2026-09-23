@@ -14,9 +14,12 @@ try {
   });
 } catch (error) {
   const reasonCode = typeof error?.reasonCode === "string" ? error.reasonCode : "CLI_INTERNAL_ERROR";
+  // TCRN-CROSS-INC-378: committed, version and headEventHash tell a caller that the event
+  // landed although its time-attestation receipt was not written.
+  const stringDetails = ["required", "actual", "committed", "version", "headEventHash"];
   const details = error?.details !== null && typeof error?.details === "object"
     ? Object.fromEntries(Object.entries(error.details).filter(([key, value]) =>
-      ((key === "required" || key === "actual") && typeof value === "string") ||
+      (stringDetails.includes(key) && typeof value === "string") ||
       (key === "allowedValues" && Array.isArray(value) && value.every((entry) => typeof entry === "string"))))
     : {};
   process.stderr.write(`${JSON.stringify({ ok: false, reasonCode, ...details, error: String(error?.message ?? error) })}\n`);

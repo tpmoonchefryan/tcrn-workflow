@@ -7,6 +7,7 @@ import {
   activeBinding,
   applyMachineSettingRemove,
   applyMachineSettingSet,
+  checkAttestationStore,
   deleteLegacyAttestations,
   breakWorkspaceLease,
   breakWorkspaceRecoveryClaim,
@@ -172,11 +173,15 @@ export function missingReleaseArguments(
 
 export class WorkflowCliError extends Error {
   readonly reasonCode: string;
+  // TCRN-CROSS-INC-378: string facts a caller needs beside the code, such as whether the
+  // event was committed; the bin prints the keys it allows on stderr.
+  readonly details: Readonly<Record<string, string>> | undefined;
 
-  constructor(reasonCode: string, message: string) {
+  constructor(reasonCode: string, message: string, details?: Readonly<Record<string, string>>) {
     super(message);
     this.name = "WorkflowCliError";
     this.reasonCode = reasonCode;
+    this.details = details;
   }
 }
 
@@ -714,28 +719,50 @@ function buildTimeAttestationReceipt(eventHash: string, occurredAt: string, obse
   return canonicalJson({ schemaVersion: "tcrn.time-attestation.v1", eventHash, observedAt, occurredAt });
 }
 
-// WSE-4: opt-in advisory time attestation. Runs AFTER a successful mutation. When
-// --attest-dir is absent this is a no-op, so every legacy invocation stays exactly
-// byte-identical to rc.4 (the engine never sees a clock). When set: fail closed if
-// no clock was injected (never an implicit Date), fail closed if the directory
-// resolves inside the workspace root, then write one canonical receipt named
-// <eventHash>.json. The write is best-effort local-clock evidence outside the
-// lease/mutation claim: the event is already committed, so a failure here loses only
-// the advisory receipt, never workspace state.
-async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, string>>, headEventHash: string | null): Promise<void> {
+// WSE-4: where an opt-in advisory time attestation goes, or null when --attest-dir is
+// absent -- then no clock is read and every legacy invocation stays byte-identical to
+// rc.4 (the engine never sees a clock). With the flag: fail closed if no clock was
+// injected (never an implicit Date), and if the directory resolves inside the workspace.
+function attestationTarget(io: CliIo, values: Readonly<Record<string, string>>): { readonly directory: string; readonly clock: () => string } | null {
   const attestDir = values["attest-dir"];
-  if (attestDir === undefined) return;
+  if (attestDir === undefined) return null;
   if (io.clock === undefined) fail("CLI_ARGUMENT_MISSING", "--attest-dir requires an injected clock; refusing an implicit local Date");
-  const workspaceRoot = resolve(values.workspace ?? "");
   const directory = resolve(attestDir);
-  if (insideWorkspace(workspaceRoot, directory)) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
-  // headEventHash is null only on a workspace whose chain holds no events; every
-  // caller here runs after a committed mutation, so the head is always a digest.
-  // Retained as an explicit closed failure with the same reason code and message
-  // the digest-shape check below would have produced, keeping behaviour unchanged.
-  if (headEventHash === null) fail("CLI_ARGUMENT_MALFORMED", "time-attestation eventHash is not a sha-256 digest");
-  const receipt = buildTimeAttestationReceipt(headEventHash, values.at ?? "", io.clock());
-  await writeAttestationReceipt(directory, receipt);
+  if (insideWorkspace(resolve(values.workspace ?? ""), directory)) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
+  return { directory, clock: io.clock };
+}
+
+// TCRN-CROSS-INC-378 R3 (problems #205, #209): every mutating verb that takes --attest-dir
+// calls this after its own argument checks and before it takes the workspace lease, so a
+// refusal the receipt would meet -- no clock, a directory inside the workspace, a store that
+// is not consistent -- leaves the chain where it was. All three used to surface only after
+// the commit, which appended an event with no receipt and reported the command as failed.
+async function assertAttestationWritable(io: CliIo, values: Readonly<Record<string, string>>): Promise<void> {
+  const target = attestationTarget(io, values);
+  if (target === null) return;
+  const problem = await checkAttestationStore(target.directory);
+  if (problem !== null) fail("ATTESTATION_STORE_INCONSISTENT", `the --attest-dir store is not consistent, so nothing was written: ${problem}`);
+}
+
+// WSE-4: the receipt, written after the mutation committed and outside the lease and the
+// mutation claim, as best-effort local-clock evidence named by <eventHash>. Whatever fails
+// from here fails after the commit and says so (TCRN-CROSS-INC-378):
+// ATTESTATION_RECEIPT_UNWRITTEN carries committed, the committed version and the new head,
+// so a landed write with a missing receipt cannot pass for a write that never happened.
+async function emitTimeAttestation(io: CliIo, values: Readonly<Record<string, string>>, state: { readonly version: number; readonly headEventHash: string | null }): Promise<void> {
+  if (values["attest-dir"] === undefined) return;
+  try {
+    const target = attestationTarget(io, values);
+    // headEventHash is null only on a chain with no events, which no committed mutation
+    // leaves; the digest-shape check refuses it like any other malformed hash.
+    if (target !== null) await writeAttestationReceipt(target.directory, buildTimeAttestationReceipt(state.headEventHash ?? "", values.at ?? "", target.clock()));
+  } catch (error) {
+    throw new WorkflowCliError(
+      "ATTESTATION_RECEIPT_UNWRITTEN",
+      `the event is committed at version ${state.version}, but its time-attestation receipt was not written: ${String((error as { message?: unknown }).message ?? error)}`,
+      { committed: "true", version: String(state.version), headEventHash: state.headEventHash ?? "" },
+    );
+  }
 }
 
 interface AttestationMigrationTarget {
@@ -1435,6 +1462,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const template = await readTemplateDocumentFile(values.template ?? "");
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => admitTemplateInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -1442,7 +1470,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ownerId: values.owner ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeTemplateAdmissionState(io, state, template.id, template.version);
     return;
   }
@@ -1549,6 +1577,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, ...extra]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => {
       const expectedVersion = await resolveExpectedVersion(values, workspace);
       const current = await materializeWorkspace(workspace);
@@ -1570,7 +1599,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
         ...(values.actor ? { actorId: values.actor } : {}),
       });
     });
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     io.write(canonicalJson({
       reasonCode: "DISPATCH_CONFIG_WRITE_COMMITTED",
       workspaceId: state.metadata.workspaceId,
@@ -1586,10 +1615,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "key"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => removeWorkspaceSetting(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, key: values.key ?? "", ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeSettingsState(io, state, values.key ?? "");
     return;
   }
@@ -1612,6 +1642,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       // stable reason code rather than whichever check happened to be reached first.
       await assertGeneratedArtifactsRoot(workspace, validateSettingValue(values.key, values.value ?? "", workspace));
     }
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => setWorkspaceSetting(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -1619,7 +1650,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       value: values.value ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeSettingsState(io, state, values.key ?? "");
     return;
   }
@@ -2175,10 +2206,11 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "actor"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => enableActorAttestation(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, actorId: values.actor ?? "",
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state);
     return;
   }
@@ -2187,12 +2219,13 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "external-key", "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => createProject(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, externalKey: values["external-key"] ?? "", name: values.name ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     const id = deriveStableId("project", canonicalExternalKey(values["external-key"] ?? ""));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === id)!));
     return;
   }
@@ -2201,11 +2234,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "id", "name"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => updateProject(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", name: values.name ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
@@ -2214,11 +2248,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => deleteProject(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, projectSummary(state.projects.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
@@ -2237,6 +2272,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => createWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -2254,7 +2290,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
     const id = deriveStableId("work", canonicalExternalKey(values["external-key"] ?? ""));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === id)!));
     return;
   }
@@ -2273,6 +2309,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       fail("WORK_BATCH_MALFORMED", `${values["from-file"] ?? ""}: ${(error as { message?: string }).message ?? "unreadable"}`);
     }
     const members = Array.isArray((document as { members?: unknown }).members) ? (document as { members: unknown[] }).members.length : 0;
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => applyWorkBatch(workspace, lease, document, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -2280,7 +2317,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     // One attestation for the batch, not one per member: the specification defines the
     // receipt per mutation, and a batch is one mutation.
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, workBatchReceipt(state, members));
     return;
   }
@@ -2290,13 +2327,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (values.status !== undefined && !isWorkStatus(values.status)) fail("CLI_ARGUMENT_MALFORMED", `status=${values.status}`);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => transitionWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "", status: values.status as WorkStatus,
       ...(values.summary !== undefined ? { summary: values.summary } : {}),
       ...(values.evidence !== undefined ? { evidence: values.evidence } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     const transitioned = state.work.find((entry) => entry.id === (values.id ?? ""))!;
     writeState(io, state, workSummary(transitioned));
     return;
@@ -2312,6 +2350,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (values.scope === undefined && values["decided-by"] === undefined && values.verify === undefined && values.result === undefined && values.sprint === undefined && values.title === undefined && values.summary === undefined && values.labels === undefined) fail("CLI_ARGUMENT_MALFORMED", "annotation-field");
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => annotateWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
       ...(values.scope !== undefined ? { scope: values.scope } : {}),
@@ -2324,7 +2363,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(values.labels !== undefined ? { labels: listValue(values.labels) } : {}),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
@@ -2333,11 +2372,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => deleteWork(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace), occurredAt: at, id: values.id ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeState(io, state, workSummary(state.work.find((entry) => entry.id === (values.id ?? ""))!));
     return;
   }
@@ -2538,6 +2578,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "external-key", "project-id", "type", "title", "work-ids", "desired-outcome", "participant-ids"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => openConferenceInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -2550,7 +2591,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       participantIds: listValue(values["participant-ids"]),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeExtensionState(io, state, deriveStableId("conference", canonicalExternalKey(values["external-key"] ?? "")));
     return;
   }
@@ -2565,6 +2606,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "conference-id", "external-key", "actor-id", "position", "risks", "recommendations", "evidence-ids"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => appendConferencePositionInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -2578,7 +2620,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       evidenceIds: listValue(values["evidence-ids"]),
       actorId: values.actor ?? values["actor-id"] ?? "",
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeExtensionState(io, state, deriveStableId("position", canonicalExternalKey(values["external-key"] ?? "")));
     return;
   }
@@ -2603,6 +2645,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const minutesId = deriveStableId("minutes", canonicalExternalKey(values["minutes-external-key"] ?? ""));
     const distill = booleanValue(values.distill, "distill");
     const distillProviders = languageProvidersFor(values["language-bundle"]);
+    await assertAttestationWritable(io, values);
     const outcome = await withLease(workspace, at, async (lease) => {
       // Read the knowledge marker version BEFORE the close, while the store's
       // high-water still equals the workspace head — a missing/invalid store then
@@ -2655,7 +2698,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       }
       return { state, knowledgeUnitIds };
     });
-    await emitTimeAttestation(io, values, outcome.state.headEventHash);
+    await emitTimeAttestation(io, values, outcome.state);
     if (outcome.knowledgeUnitIds === undefined) {
       writeExtensionState(io, outcome.state, minutesId);
       return;
@@ -2675,13 +2718,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "conference-id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => cancelConferenceInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
       conferenceId: values["conference-id"] ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeExtensionState(io, state, values["conference-id"] ?? "");
     return;
   }
@@ -2726,6 +2770,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     assertMintableOutcomeClass("gate-create", values["outcome-class"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => createGateInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -2736,7 +2781,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       outcomeClass: values["outcome-class"] as GateRecord["outcomeClass"],
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeExtensionState(io, state, deriveStableId("gate", canonicalExternalKey(values["external-key"] ?? "")));
     return;
   }
@@ -2761,6 +2806,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     const identityAuthority = identityIdentity === undefined
       ? undefined
       : await readGateIdentityAuthority(values["identity-authority"] ?? "", identityIdentity);
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => transitionGateInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
@@ -2772,7 +2818,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       ...(identityAuthority === undefined ? {} : { identityAuthority }),
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     const gate = state.gates.find((entry) => entry.id === (values.id ?? ""));
     await appendCliTelemetry(state, "gate-result", {
       gateId: values.id ?? "",
@@ -2790,13 +2836,14 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     required(values, [...requiredShared, "id"]);
     const workspace = values.workspace ?? "";
     const at = values.at ?? "";
+    await assertAttestationWritable(io, values);
     const state = await withLease(workspace, at, async (lease) => deleteGateInWorkspace(workspace, lease, {
       expectedVersion: await resolveExpectedVersion(values, workspace),
       occurredAt: at,
       id: values.id ?? "",
       ...(values.actor ? { actorId: values.actor } : {}),
     }));
-    await emitTimeAttestation(io, values, state.headEventHash);
+    await emitTimeAttestation(io, values, state);
     writeExtensionState(io, state, values.id ?? "");
     return;
   }
