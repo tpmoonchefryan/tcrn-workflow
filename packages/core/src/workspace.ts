@@ -4019,8 +4019,11 @@ function backendKindForState(state: WorkspaceState): "file" | "file-segmented" {
   fail("WORKSPACE_SCHEMA_INVALID", `storage.backend has an unsupported value ${configured}`);
 }
 
-async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBackend, force = false): Promise<void> {
-  if ((!force && (state.version < 1 || state.version % snapshotIntervalForState(state) !== 0)) || backend.backendKind === "pg") return;
+// TCRN-CROSS-STORY-451 R3: an append checks once, at its end, so the checkpoint is due when
+// the append crossed an interval multiple, not only when it stopped on one; a single-event
+// append (priorVersion = version - 1) behaves exactly as the old modulo rule.
+async function writeReplaySnapshot(state: WorkspaceState, backend: StorageBackend, force = false, priorVersion = state.version - 1): Promise<void> {
+  if ((!force && (state.version < 1 || Math.floor(priorVersion / snapshotIntervalForState(state)) >= Math.floor(state.version / snapshotIntervalForState(state)))) || backend.backendKind === "pg") return;
   await backend.ensureControlDirectory(WORKSPACE_REPLAY_SNAPSHOT_DIRECTORY);
   const segmentEntries: ReplaySnapshotSegmentDigest[] = [];
   for (const name of await backend.listSegmentNames()) {
@@ -4272,7 +4275,7 @@ export async function appendEvents(
         fail("WORKSPACE_EVENT_CORRUPT", `segment ${write.index} readback mismatch`);
       }
     }
-    await writeReplaySnapshot(current, backend);
+    await writeReplaySnapshot(current, backend, false, state.version);
     try {
       await writeViewDocuments(workspace.root, documents, options.crashAt);
     } catch (error) {
