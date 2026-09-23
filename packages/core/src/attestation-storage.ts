@@ -2,18 +2,31 @@
 // INIT-048 / STORY-340: local time-attestation receipts. Legacy receipts remain
 // readable until the migration's delete step; once a directory has a manifest,
 // new receipts use the same segmented NDJSON/index layout.
+//
+// TCRN-CROSS-INC-378: no code in this file takes one canonical document over the whole
+// record list any more. The list digest is streamed (R1); segments roll over before a
+// segment or its index could outgrow one canonical document, and every byte is computed
+// before the first write (R2); every read-modify-write holds the directory lock (R5).
 
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { mkdir, open, readFile, readdir, rename, rm } from "node:fs/promises";
+import { link, mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-import { assertCanonicalJson, canonicalJson, canonicalSha256, compareCanonicalText } from "../../protocol/src/index.js";
+import { PROTOCOL_LIMITS, assertCanonicalJson, canonicalJson, compareCanonicalText } from "../../protocol/src/index.js";
 import type { JsonValue } from "../../protocol/src/index.js";
+import { processIsAlive } from "./knowledge-core.js";
 
 export const ATTESTATION_MANIFEST_VERSION = "tcrn.attestation-manifest.v1" as const;
 export const ATTESTATION_INDEX_VERSION = "tcrn.attestation-index.v1" as const;
-export const ATTESTATION_SEGMENT_BYTES = 16_777_216 as const;
+// A segment and the index beside it must each fit one canonical document. One MiB bounds
+// the segment; 8,192 records bound the index, whose entries run to about 124 bytes, under
+// both one MiB and the 10,000-key object limit whatever size the records are.
+export const ATTESTATION_SEGMENT_BYTES = PROTOCOL_LIMITS.maxCanonicalBytes;
+export const ATTESTATION_SEGMENT_RECORDS = 8_192;
+const ATTESTATION_LOCK_NAME = "attestation.lock";
+const ATTESTATION_LOCK_TIMEOUT_MS = 10_000;
+const ATTESTATION_LOCK_POLL_MS = 10;
 
 export interface AttestationFileRecord {
   readonly name: string;
@@ -50,7 +63,7 @@ interface AttestationManifest {
 
 let temporarySequence = 0;
 
-function sha256(bytes: Buffer): string {
+function sha256(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
@@ -68,6 +81,11 @@ function segmentName(index: number): string {
 
 function indexName(index: number): string {
   return `${String(index).padStart(6, "0")}.idx`;
+}
+
+// The only names the segment writer creates, and so the only names it may ever remove.
+function segmentFileName(name: string): boolean {
+  return /^\d{6}\.(?:ndjson|idx)$/u.test(name);
 }
 
 function manifestPath(directory: string): string {
@@ -91,6 +109,69 @@ async function atomicWrite(path: string, content: string | Buffer): Promise<void
   } finally {
     await handle?.close();
     await rm(temporary, { force: true });
+  }
+}
+
+// The pid a lock file names, or null when it is absent or does not name one yet.
+async function lockHolder(path: string): Promise<number | null> {
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return null;
+    throw error;
+  }
+  return /^[1-9]\d*\n$/u.test(text) ? Number(text) : null;
+}
+
+// Another waiter may have taken the same stale lock over and written its own between our
+// read and the rename; a moved lock that names anyone but the dead holder is put back.
+async function removeStaleLock(path: string, holder: number): Promise<void> {
+  const aside = `${path}.${process.pid}-${temporarySequence += 1}.stale`;
+  try {
+    await rename(path, aside);
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") return;
+    throw error;
+  }
+  if (await lockHolder(aside) !== holder) {
+    await link(aside, path).catch((error: unknown) => {
+      if ((error as { code?: string }).code !== "EEXIST") throw error;
+    });
+  }
+  await rm(aside, { force: true });
+}
+
+// R5 (problem #206): receipts are written after the workspace lease is released, so two
+// writers could each read the store and the later rename would silently drop the earlier
+// receipt. Every read-modify-write therefore holds one lock file in the directory, created
+// exclusively and naming its holder's pid. A lock whose holder no longer exists is stale
+// and is taken over; a live holder is waited for until the timeout, which refuses with
+// ATTESTATION_LOCKED before the operation has written anything.
+async function withAttestationLock<T>(directory: string, operation: () => Promise<T>, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS): Promise<T> {
+  const path = resolve(directory, ATTESTATION_LOCK_NAME);
+  for (let waited = 0; ; waited += ATTESTATION_LOCK_POLL_MS) {
+    try {
+      await writeFile(path, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
+      break;
+    } catch (error) {
+      if ((error as { code?: string }).code !== "EEXIST") throw error;
+    }
+    const holder = await lockHolder(path);
+    if (holder !== null && !processIsAlive(holder)) {
+      await removeStaleLock(path, holder);
+      continue;
+    }
+    if (waited >= timeoutMs) {
+      const by = holder === null ? "" : ` by process ${holder}`;
+      throw Object.assign(new Error(`ATTESTATION_LOCKED: ${ATTESTATION_LOCK_NAME} is still held${by} after ${timeoutMs} ms`), { reasonCode: "ATTESTATION_LOCKED" });
+    }
+    await new Promise((settle) => setTimeout(settle, ATTESTATION_LOCK_POLL_MS));
+  }
+  try {
+    return await operation();
+  } finally {
+    await rm(path, { force: true });
   }
 }
 
@@ -140,24 +221,82 @@ async function readSegmentRecords(directory: string, manifest: AttestationManife
     if (bytes.length !== segment.bytes || sha256(bytes) !== segment.sha256 || !bytes.toString("utf8").endsWith("\n")) {
       throw new Error(`ATTESTATION_SEGMENT_INVALID: ${segment.name}`);
     }
-    let offset = 0;
-    for (const line of bytes.toString("utf8").split("\n").slice(0, -1)) {
+    const lines = bytes.toString("utf8").split("\n").slice(0, -1);
+    if (lines.length !== segment.records) throw new Error(`ATTESTATION_SEGMENT_INVALID: ${segment.name}`);
+    for (const line of lines) {
       const value = assertCanonicalJson(`${line}\n`);
       if (!isObject(value) || typeof value.eventHash !== "string") throw new Error(`ATTESTATION_RECORD_INVALID: ${segment.name}`);
-      const length = Buffer.byteLength(`${line}\n`, "utf8");
       records.push({ name: `${value.eventHash}.json`, bytes: Buffer.from(line, "utf8"), value });
-      offset += length;
     }
-    void offset;
   }
-  if (records.length !== manifest.count || canonicalSha256(records.map((record) => record.value)) !== manifest.recordsDigest) {
+  if (records.length !== manifest.count || recordsDigest(records) !== manifest.recordsDigest) {
     throw new Error("ATTESTATION_MANIFEST_INVALID");
   }
   return records;
 }
 
+// R1: the digest of a record list is the sha-256 of exactly the bytes canonicalSha256
+// would hash for the array -- "[", each record's canonical line without its LF, joined by
+// ",", then "]\n" -- fed to the hash one record at a time. It has no count or byte
+// ceiling, and below one MiB it equals canonicalSha256 of the array, which is what every
+// existing manifest recorded, so none of them has to be migrated.
 function recordsDigest(records: readonly AttestationFileRecord[]): string {
-  return canonicalSha256(records.map((record) => record.value));
+  const hash = createHash("sha256").update("[");
+  for (const [index, record] of records.entries()) {
+    const line = canonicalJson(record.value);
+    hash.update(`${index === 0 ? "" : ","}${line.slice(0, -1)}`);
+  }
+  return hash.update("]\n").digest("hex");
+}
+
+// R2: every byte of the new store -- segments, their indexes and the manifest -- is
+// computed before the first write, so a size or canonical-form refusal changes nothing on
+// disk. Segments roll over at a record boundary once the next record would take one past
+// segmentBytes or past ATTESTATION_SEGMENT_RECORDS. The manifest is written last, and only
+// then are segment and index files it no longer names removed; no other file in the
+// directory (legacy receipts, relocation receipts, the lock) is ever touched here. A store
+// smaller than one segment is still the single 000001 segment, byte-identical to v1.1.2.
+async function writeSegments(directory: string, records: readonly AttestationFileRecord[], segmentBytes: number): Promise<void> {
+  const chunks: { readonly eventHash: string; readonly line: string }[][] = [];
+  let chunkBytes = 0;
+  for (const record of records) {
+    const entry = { eventHash: record.value.eventHash as string, line: canonicalJson(record.value) };
+    const lineBytes = Buffer.byteLength(entry.line, "utf8");
+    const current = chunks.at(-1);
+    if (current === undefined || chunkBytes + lineBytes > segmentBytes || current.length === ATTESTATION_SEGMENT_RECORDS) {
+      chunks.push([entry]);
+      chunkBytes = lineBytes;
+    } else {
+      current.push(entry);
+      chunkBytes += lineBytes;
+    }
+  }
+  const files: { readonly name: string; readonly content: string }[] = [];
+  const segments: AttestationManifestSegment[] = [];
+  for (const [index, chunk] of chunks.entries()) {
+    const name = segmentName(index + 1);
+    const content = chunk.map((entry) => entry.line).join("");
+    const locations: Record<string, AttestationLocation> = {};
+    let offset = 0;
+    for (const entry of chunk) {
+      const length = Buffer.byteLength(entry.line, "utf8");
+      locations[entry.eventHash] = { segment: name, offset, length };
+      offset += length;
+    }
+    files.push({ name, content }, { name: indexName(index + 1), content: canonicalJson({ schemaVersion: ATTESTATION_INDEX_VERSION, entries: locations }) });
+    segments.push({ name, bytes: Buffer.byteLength(content, "utf8"), records: chunk.length, sha256: sha256(content) });
+  }
+  const manifest = canonicalJson({ schemaVersion: ATTESTATION_MANIFEST_VERSION, segments, count: records.length, recordsDigest: recordsDigest(records) });
+  for (const file of files) await atomicWrite(resolve(directory, file.name), file.content);
+  await atomicWrite(manifestPath(directory), manifest);
+  const kept = new Set(files.map((file) => file.name));
+  for (const name of await readdir(directory)) {
+    if (segmentFileName(name) && !kept.has(name)) await rm(resolve(directory, name), { force: true });
+  }
+}
+
+function sameNames(current: readonly string[], baseline: readonly string[]): boolean {
+  return Array.isArray(baseline) && current.length === baseline.length && current.every((name, index) => name === baseline[index]);
 }
 
 export async function reportAttestationDirectory(directory: string): Promise<AttestationDirectoryReport> {
@@ -171,40 +310,14 @@ export async function reportAttestationDirectory(directory: string): Promise<Att
 }
 
 export async function migrateAttestationDirectory(directory: string, segmentBytes = ATTESTATION_SEGMENT_BYTES): Promise<AttestationDirectoryReport> {
-  if (!Number.isSafeInteger(segmentBytes) || segmentBytes < 4096) throw new Error("ATTESTATION_SEGMENT_BYTES_INVALID");
+  if (!Number.isSafeInteger(segmentBytes) || segmentBytes < 4096 || segmentBytes > ATTESTATION_SEGMENT_BYTES) throw new Error("ATTESTATION_SEGMENT_BYTES_INVALID");
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  const existingManifest = await readManifest(directory);
-  const records = existingManifest === null ? await readLegacy(directory) : await readSegmentRecords(directory, existingManifest);
-  const chunks: AttestationFileRecord[][] = [];
-  let chunk: AttestationFileRecord[] = [];
-  let bytes = 0;
-  for (const record of records) {
-    const lineBytes = Buffer.byteLength(canonicalJson(record.value), "utf8");
-    if (chunk.length > 0 && bytes + lineBytes > segmentBytes) {
-      chunks.push(chunk);
-      chunk = [];
-      bytes = 0;
-    }
-    chunk.push(record);
-    bytes += lineBytes;
-  }
-  if (chunk.length > 0) chunks.push(chunk);
-  const manifestSegments: AttestationManifestSegment[] = [];
-  for (const [index, part] of chunks.entries()) {
-    const content = Buffer.from(part.map((record) => canonicalJson(record.value)).join(""), "utf8");
-    await atomicWrite(resolve(directory, segmentName(index + 1)), content);
-    const locations: Record<string, AttestationLocation> = {};
-    let offset = 0;
-    for (const record of part) {
-      const length = Buffer.byteLength(canonicalJson(record.value), "utf8");
-      locations[record.value.eventHash as string] = { segment: segmentName(index + 1), offset, length };
-      offset += length;
-    }
-    await atomicWrite(resolve(directory, indexName(index + 1)), canonicalJson({ schemaVersion: ATTESTATION_INDEX_VERSION, entries: locations }));
-    manifestSegments.push({ name: segmentName(index + 1), bytes: content.length, records: part.length, sha256: sha256(content) });
-  }
-  await atomicWrite(manifestPath(directory), canonicalJson({ schemaVersion: ATTESTATION_MANIFEST_VERSION, segments: manifestSegments, count: records.length, recordsDigest: recordsDigest(records) }));
-  return reportAttestationDirectory(directory);
+  return withAttestationLock(directory, async () => {
+    const existingManifest = await readManifest(directory);
+    const records = existingManifest === null ? await readLegacy(directory) : await readSegmentRecords(directory, existingManifest);
+    await writeSegments(directory, records, segmentBytes);
+    return reportAttestationDirectory(directory);
+  });
 }
 
 export async function readAttestationReceipt(directory: string, eventHash: string): Promise<string> {
@@ -230,39 +343,36 @@ export async function readAttestationReceipt(directory: string, eventHash: strin
 }
 
 export async function deleteLegacyAttestations(directory: string, baseline: AttestationDirectoryReport): Promise<AttestationDirectoryReport> {
-  const current = await reportAttestationDirectory(directory);
-  if (current.legacyFiles !== baseline.legacyFiles || current.legacyBytes !== baseline.legacyBytes || current.recordsDigest !== baseline.recordsDigest || canonicalJson(current.records) !== canonicalJson(baseline.records)) {
-    throw new Error("ATTESTATION_BASELINE_MISMATCH");
-  }
-  const manifest = await readManifest(directory);
-  if (manifest === null || manifest.count !== current.legacyFiles || manifest.recordsDigest !== current.recordsDigest) throw new Error("ATTESTATION_MIGRATION_UNVERIFIED");
-  const migrated = await readSegmentRecords(directory, manifest);
-  if (canonicalJson(migrated.map((record) => record.value)) !== canonicalJson((await readLegacy(directory)).map((record) => record.value))) throw new Error("ATTESTATION_VALUE_MISMATCH");
-  for (const name of current.records) await rm(resolve(directory, name));
-  return { legacyFiles: 0, legacyBytes: 0, recordsDigest: current.recordsDigest, records: [] };
+  return withAttestationLock(directory, async () => {
+    const current = await reportAttestationDirectory(directory);
+    if (current.legacyFiles !== baseline.legacyFiles || current.legacyBytes !== baseline.legacyBytes || current.recordsDigest !== baseline.recordsDigest || !sameNames(current.records, baseline.records)) {
+      throw new Error("ATTESTATION_BASELINE_MISMATCH");
+    }
+    const manifest = await readManifest(directory);
+    if (manifest === null || manifest.count !== current.legacyFiles || manifest.recordsDigest !== current.recordsDigest) throw new Error("ATTESTATION_MIGRATION_UNVERIFIED");
+    const migrated = await readSegmentRecords(directory, manifest);
+    const legacy = await readLegacy(directory);
+    if (migrated.length !== legacy.length || migrated.some((record, index) => canonicalJson(record.value) !== canonicalJson(legacy[index]?.value))) {
+      throw new Error("ATTESTATION_VALUE_MISMATCH");
+    }
+    for (const name of current.records) await rm(resolve(directory, name));
+    return { legacyFiles: 0, legacyBytes: 0, recordsDigest: current.recordsDigest, records: [] };
+  });
 }
 
-export async function writeAttestationReceipt(directory: string, receipt: string): Promise<void> {
+export async function writeAttestationReceipt(directory: string, receipt: string, options: { readonly lockTimeoutMs?: number } = {}): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const value = assertCanonicalJson(receipt);
   if (!isObject(value) || typeof value.eventHash !== "string" || !/^[a-f0-9]{64}$/u.test(value.eventHash)) throw new Error("ATTESTATION_RECORD_INVALID");
-  const manifest = await readManifest(directory);
-  if (manifest === null) {
-    await atomicWrite(resolve(directory, `${value.eventHash}.json`), receipt);
-    return;
-  }
-  const records = [...await readSegmentRecords(directory, manifest), { name: `${value.eventHash}.json`, bytes: Buffer.from(receipt, "utf8"), value }]
-    .sort((left, right) => compareCanonicalText(left.name, right.name));
-  const chunks: AttestationFileRecord[][] = [records];
-  const content = Buffer.from(chunks[0]!.map((record) => canonicalJson(record.value)).join(""), "utf8");
-  await atomicWrite(resolve(directory, segmentName(1)), content);
-  const locations: Record<string, AttestationLocation> = {};
-  let offset = 0;
-  for (const record of records) {
-    const length = Buffer.byteLength(canonicalJson(record.value), "utf8");
-    locations[record.value.eventHash as string] = { segment: segmentName(1), offset, length };
-    offset += length;
-  }
-  await atomicWrite(resolve(directory, indexName(1)), canonicalJson({ schemaVersion: ATTESTATION_INDEX_VERSION, entries: locations }));
-  await atomicWrite(manifestPath(directory), canonicalJson({ schemaVersion: ATTESTATION_MANIFEST_VERSION, segments: [{ name: segmentName(1), bytes: content.length, records: records.length, sha256: sha256(content) }], count: records.length, recordsDigest: recordsDigest(records) }));
+  const eventHash = value.eventHash;
+  await withAttestationLock(directory, async () => {
+    const manifest = await readManifest(directory);
+    if (manifest === null) {
+      await atomicWrite(resolve(directory, `${eventHash}.json`), receipt);
+      return;
+    }
+    const records = [...await readSegmentRecords(directory, manifest), { name: `${eventHash}.json`, bytes: Buffer.from(receipt, "utf8"), value }]
+      .sort((left, right) => compareCanonicalText(left.name, right.name));
+    await writeSegments(directory, records, ATTESTATION_SEGMENT_BYTES);
+  }, options.lockTimeoutMs);
 }

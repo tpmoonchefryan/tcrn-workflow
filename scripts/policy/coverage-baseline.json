@@ -1720,11 +1720,18 @@
       ]
     },
     "tests/story-340-attestation-migration.test.mjs": {
-      "testCount": 2,
-      "assertionCount": 11,
+      "testCount": 9,
+      "assertionCount": 45,
       "testNames": [
         "STORY-340 attestation migration preserves full values, supports point lookup, and deletes only after baseline proof",
-        "STORY-340 attestation migration has a fail-closed full-value comparison"
+        "STORY-340 attestation migration has a fail-closed full-value comparison",
+        "INC-378 a store at the edge of one canonical MiB accepts the next receipt and rolls into a second segment",
+        "INC-378 a store smaller than one segment keeps the exact bytes the previous writer produced",
+        "INC-378 more than ten thousand receipts migrate and accept a write with every segment and index inside one canonical document",
+        "INC-378 rewriting a multi-segment store leaves no unreferenced segment or index and never touches other files",
+        "INC-378 twelve writes started together in one process lose no receipt",
+        "INC-378 two processes released together lose no receipt",
+        "INC-378 a lock held by a live process is refused without a byte changed, and a lock left by a dead process is taken over"
       ]
     },
     "tests/story-341-knowledge-body-migration.test.mjs": {

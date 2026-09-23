@@ -1528,7 +1528,7 @@ async function releaseMutationClaim(storeRoot: string, claim: ExclusiveFile & { 
   await syncDirectory(storeRoot);
 }
 
-function processIsAlive(pid: number): boolean {
+export function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
