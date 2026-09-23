@@ -20,6 +20,7 @@ import {
   pullCorrelation,
   statusChangeSequences,
 } from "../scripts/injection-session.mjs";
+import * as injectionSession from "../scripts/injection-session.mjs";
 import { parseArgv, parseInjectionProtocol, runInjection, runSessionInjection, serializeInjectionProtocol } from "../scripts/knowledge-inject.mjs";
 import {
   InjectionPlacementManifest,
@@ -905,4 +906,48 @@ test("STORY-459 AC3: a failing judge leaves the injected bytes exactly as a succ
   assert.deepEqual(outputs.failed.map((result) => [result.injection, result.decision]), outputs.ok.map((result) => [result.injection, result.decision]));
   const judgments = new InjectionSessionStore({ directory: failing }).readSession("judge-parity").judgments;
   assert.deepEqual([...new Set(judgments.map((entry) => entry.reasonCode))], ["UNINJECTED_MODEL_FAILED"]);
+});
+
+// TCRN-CROSS-STORY-459 R2 (SUB-236). Reproduced once each (evidence directory): the judge's
+// `claude -p --bare` exits 1 with "Not logged in" on this machine whichever CLI runs it --
+// --bare reads only ANTHROPIC_API_KEY or an apiKeyHelper, never OAuth -- and the PATH CLI
+// 2.1.266 also does not recognize claude-opus-5-5 while the host's own 2.1.280 does. So the
+// call now runs the host's CLI when CLAUDE_CODE_EXECPATH names an executable, falls back to
+// the PATH CLI otherwise, and names an authentication failure as such, with the CLI's own
+// words (it prints them on stdout) in the failure detail.
+async function executableFile(context) {
+  const directory = await mkdtemp(join(tmpdir(), "s236-cli-"));
+  context.after(() => rm(directory, { recursive: true, force: true }));
+  const path = join(directory, "claude");
+  await writeFile(path, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  return path;
+}
+
+test("STORY-459 R2: the judge resolves the host CLI from CLAUDE_CODE_EXECPATH and falls back to the PATH CLI", async (context) => {
+  const host = await executableFile(context);
+  const resolveModelCli = injectionSession.resolveModelCli ?? (() => null);
+  assert.deepEqual(resolveModelCli("claude", { CLAUDE_CODE_EXECPATH: host }), { executable: host, source: "host" });
+  assert.deepEqual(resolveModelCli("claude", { CLAUDE_CODE_EXECPATH: join(host, "missing") }), { executable: "claude", source: "path" });
+  assert.deepEqual(resolveModelCli("claude", {}), { executable: "claude", source: "path" });
+  assert.deepEqual(resolveModelCli("codex", { CLAUDE_CODE_EXECPATH: host }), { executable: "codex", source: "path" });
+  const seen = [];
+  const call = new UninjectedModelCall({ model: "economy", cwd: tmpdir(), env: { CLAUDE_CODE_EXECPATH: host }, spawnImpl: (executable, args, options) => { seen.push({ executable, args, env: options.env }); return mockChild({ output: "true" }); } });
+  assert.equal((await call.observeCandidates("prompt", ["row"])).judgment, true);
+  assert.equal(seen[0].executable, host, "the host's own CLI runs the judge");
+  assert.deepEqual(seen[0].args.slice(0, 4), ["-p", "--bare", "--model", "economy"]);
+});
+
+test("STORY-459 R2: an authentication failure is named, with the CLI message kept", async () => {
+  const child = () => {
+    const failing = new EventEmitter();
+    failing.pid = process.pid;
+    failing.stdin = { end() {} };
+    failing.stdout = new EventEmitter();
+    failing.stderr = new EventEmitter();
+    setImmediate(() => { failing.stdout.emit("data", "Not logged in · Please run /login"); failing.emit("close", 1, null); });
+    return failing;
+  };
+  const answer = await new UninjectedModelCall({ model: "economy", cwd: tmpdir(), env: {}, spawnImpl: child }).observeCandidates("prompt", ["row"]);
+  assert.equal(answer.reasonCode, "UNINJECTED_MODEL_AUTH_UNAVAILABLE");
+  assert.match(answer.failureDetail ?? "", /Not logged in/u);
 });

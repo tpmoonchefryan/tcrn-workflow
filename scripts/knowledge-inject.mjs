@@ -1311,6 +1311,8 @@ export async function runSessionInjection({
               ...(judgement?.reasonCode ? { reasonCode: judgement.reasonCode } : {}),
               // TCRN-CROSS-STORY-459 R1: bounded and redacted at the source; re-bounded here.
               ...(typeof judgement?.failureDetail === "string" && judgement.failureDetail.length > 0 ? { failureDetail: redactFailureDetail(judgement.failureDetail, [prompt]) } : {}),
+              // STORY-459 R2: which CLI ran the judge (host = CLAUDE_CODE_EXECPATH), read from real sessions.
+              ...(judgement?.cliSource === "host" || judgement?.cliSource === "path" ? { cliSource: judgement.cliSource } : {}),
             },
           });
         }

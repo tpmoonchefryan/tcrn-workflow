@@ -3,7 +3,9 @@
 
 import { createHash } from "node:crypto";
 import {
+  accessSync,
   closeSync,
+  constants as fsConstants,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -1083,12 +1085,40 @@ export function redactFailureDetail(text, secrets = []) {
   return detail.length <= FAILURE_DETAIL_MAX ? detail : `…${detail.slice(-(FAILURE_DETAIL_MAX - 1))}`;
 }
 
-function modelCommand(host, model, cwd, systemPrompt) {
+/**
+ * TCRN-CROSS-STORY-459 R2: which CLI an uninjected model call runs. The host's own Claude CLI
+ * (CLAUDE_CODE_EXECPATH, when it names an executable file) is preferred over whatever `claude`
+ * is first on PATH, which can be an older standalone install that does not know the host's
+ * models (measured: PATH 2.1.266 reported claude-opus-5-5 as unrecognized, the host's 2.1.280
+ * did not). No variable names a Codex host's executable, so Codex runs `codex` from PATH.
+ * Shared with the release smoke instructions (TCRN-CROSS-SUB-241).
+ */
+export function resolveModelCli(kind, env = process.env) {
+  if (kind === "claude") {
+    const host = typeof env?.CLAUDE_CODE_EXECPATH === "string" ? env.CLAUDE_CODE_EXECPATH : "";
+    if (host.length > 0) {
+      try {
+        accessSync(host, fsConstants.X_OK);
+        if (statSync(host).isFile()) return { executable: host, source: "host" };
+      } catch { /* not executable here: fall back to PATH */ }
+    }
+    return { executable: "claude", source: "path" };
+  }
+  return { executable: "codex", source: "path" };
+}
+
+// `claude -p --bare` reads only ANTHROPIC_API_KEY or an apiKeyHelper, never OAuth, and
+// prints its refusal on stdout; measured on this platform as "Not logged in".
+const MODEL_AUTH_FAILURE = /not logged in|please run \/login|invalid api key|authentication_error/iu;
+
+function modelCommand(host, model, cwd, systemPrompt, env = process.env) {
   const codexCliModel = model.startsWith("codex-cli:") ? model.slice("codex-cli:".length) : null;
   if (host === "codex" || codexCliModel !== null) {
-    return { executable: "codex", arguments: ["exec", "-C", cwd, "-m", codexCliModel ?? model, "-s", "read-only", "--ephemeral", "--skip-git-repo-check"], cwd, systemPrompt };
+    const cli = resolveModelCli("codex", env);
+    return { kind: "codex", executable: cli.executable, cliSource: cli.source, arguments: ["exec", "-C", cwd, "-m", codexCliModel ?? model, "-s", "read-only", "--ephemeral", "--skip-git-repo-check"], cwd, systemPrompt };
   }
-  return { executable: "claude", arguments: ["-p", "--bare", "--model", model, "--system-prompt", systemPrompt], cwd, systemPrompt };
+  const cli = resolveModelCli("claude", env);
+  return { kind: "claude", executable: cli.executable, cliSource: cli.source, arguments: ["-p", "--bare", "--model", model, "--system-prompt", systemPrompt], cwd, systemPrompt };
 }
 
 /**
@@ -1096,8 +1126,9 @@ function modelCommand(host, model, cwd, systemPrompt) {
  * independent instances, so each has its own one-call allowance and timeout.
  */
 export class UninjectedModelCall {
-  constructor({ host = "claude", model, cwd, systemPrompt = "Return only the requested answer.", timeoutMs = 10_000, spawnImpl = spawn } = {}) {
+  constructor({ host = "claude", model, cwd, systemPrompt = "Return only the requested answer.", timeoutMs = 10_000, spawnImpl = spawn, env = process.env } = {}) {
     this.host = host === "codex" ? "codex" : "claude";
+    this.env = env;
     this.model = typeof model === "string" && model.length > 0 ? model : null;
     this.cwd = cwd ?? null;
     this.systemPrompt = systemPrompt;
@@ -1110,8 +1141,8 @@ export class UninjectedModelCall {
     if (this.used) return { ok: false, reasonCode: "UNINJECTED_MODEL_CALL_LIMIT", model: this.model };
     this.used = true;
     if (this.model === null || typeof this.cwd !== "string" || this.cwd.length === 0) return { ok: false, reasonCode: "UNINJECTED_MODEL_UNAVAILABLE", model: this.model };
-    const command = modelCommand(this.host, this.model, this.cwd, this.systemPrompt);
-    const cleanEnvironment = { ...process.env };
+    const command = modelCommand(this.host, this.model, this.cwd, this.systemPrompt, this.env);
+    const cleanEnvironment = { ...this.env };
     for (const key of ["CLAUDE_PROJECT_DIR", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "TCRN_INJECTION_STATE_DIR"]) delete cleanEnvironment[key];
     let child;
     try {
@@ -1134,7 +1165,7 @@ export class UninjectedModelCall {
     });
     // codex exec's argv has no system-prompt flag (unlike claude's --system-prompt above),
     // so its stdin body carries the instruction; claude's stdin stays the bare prompt.
-    const stdinBody = command.executable === "codex" ? `${command.systemPrompt}\n\n${String(prompt ?? "")}` : String(prompt ?? "");
+    const stdinBody = command.kind === "codex" ? `${command.systemPrompt}\n\n${String(prompt ?? "")}` : String(prompt ?? "");
     try { child.stdin?.end(stdinBody); } catch { /* a dead model is fail-open */ }
     let timer;
     const timeout = new Promise((resolveTimeout) => {
@@ -1155,8 +1186,13 @@ export class UninjectedModelCall {
       return { ok: false, reasonCode: "UNINJECTED_MODEL_TIMEOUT", model: this.model, timedOut: true };
     }
     await ensureProcessGroupEmpty(child.pid);
-    if (result?.code !== 0) return { ok: false, reasonCode: "UNINJECTED_MODEL_FAILED", model: this.model, error: stderr.slice(-200), failureDetail: redactFailureDetail(stderr, [prompt, command.systemPrompt]) };
-    return { ok: true, model: this.model, text: stdout.trim() };
+    if (result?.code !== 0) {
+      // A CLI in -p mode prints some refusals on stdout, so both streams feed the detail.
+      const failureDetail = redactFailureDetail(`${stderr}\n${stdout}`, [prompt, command.systemPrompt]);
+      const reasonCode = MODEL_AUTH_FAILURE.test(`${stderr}\n${stdout}`) ? "UNINJECTED_MODEL_AUTH_UNAVAILABLE" : "UNINJECTED_MODEL_FAILED";
+      return { ok: false, reasonCode, model: this.model, cliSource: command.cliSource, error: stderr.slice(-200), failureDetail };
+    }
+    return { ok: true, model: this.model, cliSource: command.cliSource, text: stdout.trim() };
   }
 
   async translatePrompt(prompt) {
@@ -1166,7 +1202,7 @@ export class UninjectedModelCall {
 
   async observeCandidates(prompt, candidates) {
     const answer = await this.call(`${prompt}\n\nCandidates:\n${(candidates ?? []).join("\n")}`);
-    return answer.ok ? { judgment: modelOutputJudgment(answer.text), model: answer.model } : { judgment: null, model: this.model, reasonCode: answer.reasonCode, ...(answer.failureDetail ? { failureDetail: answer.failureDetail } : {}) };
+    return answer.ok ? { judgment: modelOutputJudgment(answer.text), model: answer.model, ...(answer.cliSource ? { cliSource: answer.cliSource } : {}) } : { judgment: null, model: this.model, reasonCode: answer.reasonCode, ...(answer.failureDetail ? { failureDetail: answer.failureDetail } : {}), ...(answer.cliSource ? { cliSource: answer.cliSource } : {}) };
   }
 }
 
