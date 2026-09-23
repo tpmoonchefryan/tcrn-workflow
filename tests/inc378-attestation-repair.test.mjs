@@ -384,3 +384,33 @@ test("STORY-457 R3: attestation-verify reports the lock state, the holder and th
   const cleared = await verify(fx);
   assert.equal(cleared.value.lock, null);
 });
+
+// TCRN-CROSS-STORY-458 R3 (SUB-233): attestation-verify lists the single writes that have no
+// time receipt, counted from the first event the receipt store covers. A work-batch carries
+// one receipt, keyed to its last event (STORY-300), so a batch member is covered when a later
+// event of the same instant has the receipt. Red leg: drop that exclusion and the batch's
+// first members are reported as missing receipts.
+test("STORY-458 R3: attestation-verify lists single writes without a receipt and not the members of an attested batch", async (context) => {
+  const fx = await fixture(context);
+  await write(fx, "PROJECT-U0");
+  const projectId = (await cli(["project-list", "--workspace", fx.workspace])).value.records[0].id;
+  const batchFile = join(fx.base, "batch.json");
+  await writeFile(batchFile, JSON.stringify({ schemaVersion: "tcrn.work-batch.v1", members: [0, 1, 2].map((index) => ({ verb: "work-create", projectId, externalKey: `S458-${index}`, kind: "Incident", parentId: null, status: "active", title: `S458 ${index}` })) }));
+  const batched = await cli(["work-batch", "--workspace", fx.workspace, "--expected-version", String(fx.version), "--at", instant(fx.version + 1), "--from-file", batchFile, "--attest-dir", fx.attestDir]);
+  assert.equal(batched.ok, true, JSON.stringify(batched));
+  fx.version += 3;
+  const unattested = await write(fx, "PROJECT-U1", false);
+  await write(fx, "PROJECT-U2");
+  const before = await digests(fx.attestDir);
+  const result = await verify(fx);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.equal(result.value.consistent, true, "the new field never moves the consistent verdict");
+  assert.deepEqual(await digests(fx.attestDir), before);
+  const report = result.value.uncoveredWrites;
+  assert.equal(report?.fromSequence, 1, "counted from the first event the receipt store covers");
+  assert.equal(report.toSequence, fx.version);
+  assert.equal(report.count, 1);
+  assert.equal(report.truncated, false);
+  assert.deepEqual(report.writes, [{ sequence: 5, eventHash: unattested, occurredAt: instant(5), operation: "project.created" }],
+    "only the unattested single write; the batch's first two members ride its last event's receipt");
+});

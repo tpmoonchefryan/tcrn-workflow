@@ -277,7 +277,18 @@ writes no byte, and exits 0 whenever the directory can be read, printing
   lease), so a stale lock blocks nothing and a live holder's lock is never removed;
 - `chainHead`: the workspace `version`, `headEventHash`, and `receiptPresent`
   (a record for the head is in the segments the manifest names or, in a directory
-  with no manifest, a legacy file is named for it).
+  with no manifest, a legacy file is named for it);
+- `uncoveredWrites` (TCRN-CROSS-STORY-458): the single chain writes that have no
+  receipt, counted from `fromSequence`, the first event any receipt in the store
+  names (receipts began after actor attestation was enabled, so earlier events are
+  out of their reach), to `toSequence`, the chain head. A work-batch carries one
+  receipt, keyed to its last event, so an event is covered when it has a receipt
+  or a later event of the same `occurredAt` has one. The receipts counted are
+  those in the segments the manifest names, or the legacy files without a
+  manifest. `count` is the total; `writes` lists at most `limit` (1,000) of them,
+  oldest first, each with `sequence`, `eventHash`, `occurredAt` and the payload
+  `operation`, and `truncated` says whether more exist. It never moves
+  `consistent`, and `fromSequence` is null in a store with no receipt.
 
 When the segments the manifest names hold exactly one line more than it counts,
 each line as long as the excess bytes is taken out in turn; a line is a solution
@@ -294,7 +305,8 @@ cannot be read.
 
 Tests: `INC-378 verify reports a consistent store without taking the lock or
 writing a byte`; `STORY-457 R3: attestation-verify reports the lock state, the
-holder and the stale reason`; `INC-378 repair puts back the record a sorted write left outside
+holder and the stale reason`; `STORY-458 R3: attestation-verify lists single writes
+without a receipt and not the members of an attested batch`; `INC-378 repair puts back the record a sorted write left outside
 its manifest, and restore undoes it`; `INC-378 repair at the one-MiB edge splits
 the store in two, and restore removes the second segment again`; `INC-378 repair
 takes back a record appended after the last segment and keeps the store in

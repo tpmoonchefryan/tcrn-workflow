@@ -1016,6 +1016,33 @@ async function attestationLockReadout(directory: string): Promise<Readonly<Recor
   return lock === undefined ? null : { state: lock.state, holderPid: lock.holder?.pid ?? null, start: lock.holder?.start ?? null, createdAt: lock.holder?.createdAt ?? null, staleReason: lock.staleReason, ageMs: Math.floor(lock.ageMs) };
 }
 
+// TCRN-CROSS-STORY-458 R3: the single writes with no time receipt, counted from the first
+// event the receipt store covers (the time receipts began long after actor attestation was
+// enabled, so earlier events are out of their reach). A work-batch carries one receipt, keyed
+// to its last event (STORY-300), so an event is covered when it has a receipt or a later
+// event of the same instant does. At most UNCOVERED_WRITES_LIMIT are listed, oldest first,
+// with the full count. Read-only, and it never moves the consistent verdict.
+const UNCOVERED_WRITES_LIMIT = 1_000;
+
+function uncoveredWrites(events: AttestationChain["events"], receipts: ReadonlySet<string>): Readonly<Record<string, unknown>> {
+  const first = events.findIndex((event) => receipts.has(event.eventHash));
+  const uncovered: (typeof events)[number][] = [];
+  for (let index = Math.max(first, 0); first >= 0 && index < events.length; index += 1) {
+    const event = events[index]!;
+    let covered = receipts.has(event.eventHash);
+    for (let next = index + 1; !covered && next < events.length && events[next]!.occurredAt === event.occurredAt; next += 1) covered = receipts.has(events[next]!.eventHash);
+    if (!covered) uncovered.push(event);
+  }
+  return {
+    fromSequence: first >= 0 ? events[first]!.sequence : null,
+    toSequence: events.at(-1)?.sequence ?? 0,
+    count: uncovered.length,
+    limit: UNCOVERED_WRITES_LIMIT,
+    truncated: uncovered.length > UNCOVERED_WRITES_LIMIT,
+    writes: uncovered.slice(0, UNCOVERED_WRITES_LIMIT).map((event) => ({ sequence: event.sequence, eventHash: event.eventHash, occurredAt: event.occurredAt, operation: String((event.payload as { readonly operation?: unknown }).operation ?? "") })),
+  };
+}
+
 function assessAttestationStore(contents: AttestationContents, chain: AttestationChain, lock: Readonly<Record<string, unknown>> | null = null): { readonly consistent: boolean; readonly problems: readonly string[]; readonly report: Readonly<Record<string, unknown>> } {
   const problems: string[] = [];
   let manifest: AttestationManifestDocument | null = null;
@@ -1069,6 +1096,7 @@ function assessAttestationStore(contents: AttestationContents, chain: Attestatio
       lock,
       temporaryFiles: contents.temporary.map((file) => file.name),
       chainHead: { version: chain.version, headEventHash: head, receiptPresent },
+      uncoveredWrites: uncoveredWrites(chain.events, new Set(manifest === null ? contents.legacy.map((file) => file.name.replace(/\.json$/u, "")) : hashes)),
     },
   };
 }
