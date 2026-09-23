@@ -8,6 +8,7 @@
 // segment or its index could outgrow one canonical document, and every byte is computed
 // before the first write (R2); every read-modify-write holds the directory lock (R5).
 
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { link, mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -27,6 +28,11 @@ export const ATTESTATION_SEGMENT_RECORDS = 8_192;
 const ATTESTATION_LOCK_NAME = "attestation.lock";
 const ATTESTATION_LOCK_TIMEOUT_MS = 10_000;
 const ATTESTATION_LOCK_POLL_MS = 10;
+// TCRN-CROSS-STORY-457: a lock that cannot be read (empty, cut short, not a lock) and is
+// older than this is stale. A writer now places its lock whole, so only a pre-STORY-457
+// writer ever showed an empty lock, and only for the instant between creating and writing it.
+export const ATTESTATION_LOCK_UNREADABLE_STALE_MS = 5_000;
+export const ATTESTATION_LOCK_VERSION = "tcrn.attestation-lock.v1" as const;
 
 export interface AttestationFileRecord {
   readonly name: string;
@@ -117,17 +123,83 @@ async function atomicWrite(path: string, content: string | Buffer): Promise<void
   }
 }
 
-// The pid a lock file names: undefined when there is no lock file, null while its creator
-// has not yet written its pid.
-async function lockHolder(path: string): Promise<number | null | undefined> {
-  let text: string;
+export interface AttestationLockHolder {
+  readonly pid: number;
+  readonly start: string | null;
+  readonly createdAt: string | null;
+}
+
+export interface AttestationLockState {
+  readonly state: "live" | "stale" | "unreadable";
+  readonly holder: AttestationLockHolder | null;
+  readonly staleReason: "holder-not-running" | "holder-pid-reused" | "unparseable-expired" | null;
+  readonly ageMs: number;
+  readonly text: string;
+}
+
+// The start time `ps` reports for a pid, or null when it cannot say (no such process, no
+// `ps`). With null the pid-reuse check is skipped: the lock is then judged by the pid alone,
+// as before, so the fallback never clears a live holder (STORY-457 Assumptions).
+function processStart(pid: number): Promise<string | null> {
+  return new Promise((settle) => {
+    execFile("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 }, (error, stdout) => {
+      const text = typeof stdout === "string" ? stdout.trim() : "";
+      settle(error === null && text.length > 0 ? text : null);
+    });
+  });
+}
+
+let ownStart: Promise<string | null> | undefined;
+function ownProcessStart(): Promise<string | null> {
+  ownStart ??= processStart(process.pid);
+  return ownStart;
+}
+
+// Both lock formats: the canonical tcrn.attestation-lock.v1 line, and the pre-STORY-457
+// "<pid>\n", which names a pid and nothing to check it against.
+function parseAttestationLock(text: string): AttestationLockHolder | null {
+  if (/^[1-9]\d*\n$/u.test(text)) return { pid: Number(text), start: null, createdAt: null };
   try {
-    text = await readFile(path, "utf8");
+    const value = JSON.parse(text) as Record<string, unknown>;
+    if (text.endsWith("\n") && value.schemaVersion === ATTESTATION_LOCK_VERSION && Number.isSafeInteger(value.pid) && Number(value.pid) > 0 && (value.start === null || typeof value.start === "string") && typeof value.createdAt === "string") {
+      return { pid: Number(value.pid), start: value.start as string | null, createdAt: value.createdAt };
+    }
+  } catch {
+    // Not a lock this engine wrote: judged by its age below.
+  }
+  return null;
+}
+
+/**
+ * TCRN-CROSS-STORY-457 R2: the lock as it stands. Stale when its holder is not running, when
+ * the holder's pid now belongs to a process that started at another time, or when it cannot
+ * be read and is older than ATTESTATION_LOCK_UNREADABLE_STALE_MS; a fresh unreadable lock and
+ * a live holder are waited for. Read-only; undefined when there is no lock.
+ */
+export async function assessAttestationLock(path: string): Promise<AttestationLockState | undefined> {
+  let text: string;
+  let modified: number;
+  try {
+    const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    try {
+      modified = (await handle.stat()).mtimeMs;
+      text = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
   } catch (error) {
     if ((error as { code?: string }).code === "ENOENT") return undefined;
     throw error;
   }
-  return /^[1-9]\d*\n$/u.test(text) ? Number(text) : null;
+  const ageMs = Math.max(0, Date.now() - modified);
+  const holder = parseAttestationLock(text);
+  if (holder === null) return { state: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "stale" : "unreadable", holder, staleReason: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "unparseable-expired" : null, ageMs, text };
+  if (!processIsAlive(holder.pid)) return { state: "stale", holder, staleReason: "holder-not-running", ageMs, text };
+  if (holder.start !== null) {
+    const start = holder.pid === process.pid ? await ownProcessStart() : await processStart(holder.pid);
+    if (start !== null && start !== holder.start) return { state: "stale", holder, staleReason: "holder-pid-reused", ageMs, text };
+  }
+  return { state: "live", holder, staleReason: null, ageMs, text };
 }
 
 async function pause(): Promise<void> {
@@ -135,8 +207,8 @@ async function pause(): Promise<void> {
 }
 
 // Another waiter may have taken the same stale lock over and written its own between our
-// read and the rename; a moved lock that names anyone but the dead holder is put back.
-async function removeStaleLock(path: string, holder: number): Promise<void> {
+// read and the rename; a moved lock that is not the one judged stale is put back.
+async function removeStaleLock(path: string, stale: string): Promise<void> {
   const aside = `${path}.${process.pid}-${temporarySequence += 1}.stale`;
   try {
     await rename(path, aside);
@@ -144,7 +216,7 @@ async function removeStaleLock(path: string, holder: number): Promise<void> {
     if ((error as { code?: string }).code === "ENOENT") return;
     throw error;
   }
-  if (await lockHolder(aside) !== holder) {
+  if (await readFile(aside, "utf8").catch(() => null) !== stale) {
     await link(aside, path).catch((error: unknown) => {
       if ((error as { code?: string }).code !== "EEXIST") throw error;
     });
@@ -158,22 +230,41 @@ async function removeStaleLock(path: string, holder: number): Promise<void> {
 // exclusively and naming its holder's pid. A lock whose holder no longer exists is stale
 // and is taken over; a live holder is waited for until the timeout, which refuses with
 // ATTESTATION_LOCKED before the operation has written anything.
-export async function withAttestationLock<T>(directory: string, operation: () => Promise<T>, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS): Promise<T> {
+export interface AttestationStaleLockTakeover {
+  readonly reason: NonNullable<AttestationLockState["staleReason"]>;
+  readonly holderPid: number | null;
+}
+
+// STORY-457 R1: the lock is written whole into a private file and linked into place, so no
+// other process ever sees it half written; link refuses when a lock is already there.
+async function placeAttestationLock(path: string, text: string): Promise<boolean> {
+  const staged = `${path}.${process.pid}-${temporarySequence += 1}.new`;
+  await writeFile(staged, text, { flag: "wx", mode: 0o600 });
+  try {
+    await link(staged, path);
+    return true;
+  } catch (error) {
+    if ((error as { code?: string }).code !== "EEXIST") throw error;
+    return false;
+  } finally {
+    await rm(staged, { force: true });
+  }
+}
+
+export async function withAttestationLock<T>(directory: string, operation: () => Promise<T>, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS, onStaleLock?: (takeover: AttestationStaleLockTakeover) => void): Promise<T> {
   const path = resolve(directory, ATTESTATION_LOCK_NAME);
+  const own = `${canonicalJson({ createdAt: new Date().toISOString(), pid: process.pid, schemaVersion: ATTESTATION_LOCK_VERSION, start: await ownProcessStart() })}\n`;
   for (let waited = 0; ; waited += ATTESTATION_LOCK_POLL_MS) {
-    try {
-      await writeFile(path, `${process.pid}\n`, { flag: "wx", mode: 0o600 });
-      break;
-    } catch (error) {
-      if ((error as { code?: string }).code !== "EEXIST") throw error;
-    }
-    const holder = await lockHolder(path);
-    if (typeof holder === "number" && !processIsAlive(holder)) {
-      await removeStaleLock(path, holder);
+    if (await placeAttestationLock(path, own)) break;
+    const lock = await assessAttestationLock(path);
+    if (lock === undefined) continue;
+    if (lock.state === "stale") {
+      await removeStaleLock(path, lock.text);
+      onStaleLock?.({ reason: lock.staleReason!, holderPid: lock.holder?.pid ?? null });
       continue;
     }
     if (waited >= timeoutMs) {
-      const by = typeof holder === "number" ? ` by process ${holder}` : "";
+      const by = lock.holder !== null ? ` by process ${lock.holder.pid}` : "";
       throw attestationError("ATTESTATION_LOCKED", `${ATTESTATION_LOCK_NAME} is still held${by} after ${timeoutMs} ms`);
     }
     await pause();
@@ -181,7 +272,8 @@ export async function withAttestationLock<T>(directory: string, operation: () =>
   try {
     return await operation();
   } finally {
-    await rm(path, { force: true });
+    // Release only the lock this writer placed; one that is not ours is left for its owner.
+    if (await readFile(path, "utf8").catch(() => null) === own) await rm(path, { force: true });
   }
 }
 
@@ -193,7 +285,8 @@ function storeFileName(name: string): boolean {
 // Rewrite, backup and restore run inside a lock the caller already holds (repair runs all
 // three inside one), so they check it is this process's rather than take it again.
 async function assertLockHeld(directory: string): Promise<void> {
-  if (await lockHolder(resolve(directory, ATTESTATION_LOCK_NAME)) !== process.pid) throw attestationError("ATTESTATION_LOCK_NOT_HELD", "call inside withAttestationLock");
+  const lock = await assessAttestationLock(resolve(directory, ATTESTATION_LOCK_NAME));
+  if (lock?.state !== "live" || lock.holder?.pid !== process.pid) throw attestationError("ATTESTATION_LOCK_NOT_HELD", "call inside withAttestationLock");
 }
 
 export interface AttestationStoreFile {
@@ -473,9 +566,10 @@ async function writeSegments(directory: string, records: readonly AttestationFil
 // when consistent, else what is wrong.
 export async function checkAttestationStore(directory: string, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS): Promise<string | null> {
   const lock = resolve(directory, ATTESTATION_LOCK_NAME);
+  // STORY-457: the same judgement the writers use; a stale lock is not someone mid-rewrite.
   const held = async (): Promise<boolean> => {
-    const holder = await lockHolder(lock);
-    return holder === null || (holder !== undefined && processIsAlive(holder));
+    const state = (await assessAttestationLock(lock))?.state;
+    return state === "live" || state === "unreadable";
   };
   for (let waited = 0; ; waited += ATTESTATION_LOCK_POLL_MS) {
     if (!(await held())) {
@@ -559,11 +653,12 @@ export async function deleteLegacyAttestations(directory: string, baseline: Atte
   });
 }
 
-export async function writeAttestationReceipt(directory: string, receipt: string, options: { readonly lockTimeoutMs?: number } = {}): Promise<void> {
+export async function writeAttestationReceipt(directory: string, receipt: string, options: { readonly lockTimeoutMs?: number } = {}): Promise<{ readonly staleLock: AttestationStaleLockTakeover | null }> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const value = assertCanonicalJson(receipt);
   if (!isObject(value) || typeof value.eventHash !== "string" || !/^[a-f0-9]{64}$/u.test(value.eventHash)) throw new Error("ATTESTATION_RECORD_INVALID");
   const eventHash = value.eventHash;
+  let staleLock: AttestationStaleLockTakeover | null = null;
   await withAttestationLock(directory, async () => {
     const manifest = await readManifest(directory);
     if (manifest === null) {
@@ -573,5 +668,6 @@ export async function writeAttestationReceipt(directory: string, receipt: string
     const records = [...await readSegmentRecords(directory, manifest), { name: `${eventHash}.json`, bytes: Buffer.from(receipt, "utf8"), value }]
       .sort((left, right) => compareCanonicalText(left.name, right.name));
     await writeSegments(directory, records, ATTESTATION_SEGMENT_BYTES);
-  }, options.lockTimeoutMs);
+  }, options.lockTimeoutMs, (takeover) => { staleLock = takeover; });
+  return { staleLock };
 }

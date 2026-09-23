@@ -3,10 +3,10 @@
 // segmented receipt backend, with a full-value readback before deletion.
 
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -297,4 +297,84 @@ test("INC-378 a lock held by a live process is refused without a byte changed, a
   await writeAttestationReceipt(directory, next, { lockTimeoutMs: 1_000 });
   assert.equal((await readStore(directory)).text, sorted([...stored, next]).join(""));
   assert.deepEqual((await readdir(directory)).sort(), ["000001.idx", "000001.ndjson", "manifest.json"], "the stale lock was taken over and released");
+});
+
+// TCRN-CROSS-STORY-457 (SUB-231): the lock names its holder by pid and by the start time the
+// system reports for that pid, and it is written whole before it appears. Stale -- and taken
+// over, with the reason reported -- when the holder is not running, when its pid now belongs
+// to a process that started at another time, or when the lock cannot be read and is older
+// than the limit. A live holder is still waited for and refused at the timeout.
+function processStart(pid) {
+  return execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" }).trim();
+}
+
+function lockText(pid, start) {
+  return `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid, schemaVersion: "tcrn.attestation-lock.v1", start })}\n`;
+}
+
+async function longLived(context) {
+  const child = spawn(process.execPath, ["--eval", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
+  context.after(() => child.kill("SIGKILL"));
+  await new Promise((settle) => setTimeout(settle, 100));
+  return child;
+}
+
+test("STORY-457 AC1: a lock whose holder is not running is taken over and the reason is reported", async (context) => {
+  const directory = await inc378Directory(context, "s457-dead");
+  const stored = await migratedStore(directory, [0, 1].map((index) => syntheticReceipt(syntheticHash("s457-dead", index))));
+  const holder = spawn(process.execPath, ["--eval", ""], { stdio: "ignore" });
+  const [pid] = [holder.pid];
+  await once(holder, "exit");
+  await writeFile(join(directory, "attestation.lock"), lockText(pid, "Thu Jan  1 00:00:00 1970"), "utf8");
+  const next = syntheticReceipt(syntheticHash("s457-dead", 2));
+  const written = await writeAttestationReceipt(directory, next, { lockTimeoutMs: 1_000 });
+  assert.deepEqual(written?.staleLock, { reason: "holder-not-running", holderPid: pid });
+  assert.equal((await readStore(directory)).text, sorted([...stored, next]).join(""));
+  assert.deepEqual((await readdir(directory)).sort(), ["000001.idx", "000001.ndjson", "manifest.json"]);
+});
+
+test("STORY-457 AC2 and AC5: a pid reused by an unrelated live process is stale at once, not after the timeout", async (context) => {
+  const directory = await inc378Directory(context, "s457-reused");
+  const stored = await migratedStore(directory, [syntheticReceipt(syntheticHash("s457-reused", 0))]);
+  const unrelated = await longLived(context);
+  assert.notEqual(processStart(unrelated.pid), "Thu Jan  1 00:00:00 1970");
+  await writeFile(join(directory, "attestation.lock"), lockText(unrelated.pid, "Thu Jan  1 00:00:00 1970"), "utf8");
+  const next = syntheticReceipt(syntheticHash("s457-reused", 1));
+  const started = Date.now();
+  const written = await writeAttestationReceipt(directory, next, { lockTimeoutMs: 5_000 });
+  assert.ok(Date.now() - started < 2_500, "taken over without waiting for the timeout");
+  assert.deepEqual(written?.staleLock, { reason: "holder-pid-reused", holderPid: unrelated.pid });
+  assert.equal((await readStore(directory)).text, sorted([...stored, next]).join(""));
+});
+
+test("STORY-457 AC3: an unreadable lock older than the limit is taken over, a fresh one is waited for", async (context) => {
+  const directory = await inc378Directory(context, "s457-empty");
+  const stored = await migratedStore(directory, [syntheticReceipt(syntheticHash("s457-empty", 0))]);
+  const lock = join(directory, "attestation.lock");
+  await writeFile(lock, "", "utf8");
+  const before = await fileDigests(directory);
+  await assert.rejects(
+    writeAttestationReceipt(directory, syntheticReceipt(syntheticHash("s457-empty", 1)), { lockTimeoutMs: 200 }),
+    (error) => error?.reasonCode === "ATTESTATION_LOCKED",
+  );
+  assert.deepEqual(await fileDigests(directory), before, "a fresh unreadable lock is not cleared");
+  const old = new Date(Date.now() - 10 * 60_000);
+  await utimes(lock, old, old);
+  const next = syntheticReceipt(syntheticHash("s457-empty", 2));
+  const written = await writeAttestationReceipt(directory, next, { lockTimeoutMs: 1_000 });
+  assert.deepEqual(written?.staleLock, { reason: "unparseable-expired", holderPid: null });
+  assert.equal((await readStore(directory)).text, sorted([...stored, next]).join(""));
+});
+
+test("STORY-457 AC4: a live holder whose start time matches is waited for and never cleared", async (context) => {
+  const directory = await inc378Directory(context, "s457-live");
+  await migratedStore(directory, [syntheticReceipt(syntheticHash("s457-live", 0))]);
+  const holder = await longLived(context);
+  await writeFile(join(directory, "attestation.lock"), lockText(holder.pid, processStart(holder.pid)), "utf8");
+  const before = await fileDigests(directory);
+  await assert.rejects(
+    writeAttestationReceipt(directory, syntheticReceipt(syntheticHash("s457-live", 1)), { lockTimeoutMs: 300 }),
+    (error) => error?.reasonCode === "ATTESTATION_LOCKED" && error.message.includes(String(holder.pid)),
+  );
+  assert.deepEqual(await fileDigests(directory), before, "the live holder's lock is untouched");
 });

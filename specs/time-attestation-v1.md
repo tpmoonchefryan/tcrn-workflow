@@ -175,22 +175,43 @@ Receipts are written after the workspace lease is released, so two writers could
 each read the same store and the second rename silently drop the first receipt.
 Every read-modify-write of a store — writing a receipt, the migration's `prepare`
 and `delete` steps, repair and restore — therefore holds `attestation.lock` in the
-directory. The lock is created exclusively (`O_CREAT | O_EXCL`) and holds its
-holder's process id.
+directory.
 
-- A lock naming a process that no longer exists is stale and is taken over: it is
-  moved aside, checked to still be that same lock, and removed; a lock another
-  waiter took over in the meantime is put back.
-- A live holder, or a lock whose creator has not yet written its process id, is
-  waited for, polling every 10 ms, for up to 10,000 ms; then the write refuses
-  with `ATTESTATION_LOCKED` before it has changed anything.
-- A process id reused by an unrelated live process keeps a stale lock looking held
-  until that process ends; the refusal names the process id.
+The lock (TCRN-CROSS-STORY-457) is one canonical JSON line,
+`{"createdAt","pid","schemaVersion":"tcrn.attestation-lock.v1","start"}` followed
+by LF: the holder's process id, the start time `ps -o lstart= -p <pid>` reports for
+it (`null` when `ps` cannot say) and the moment it was placed. The writer writes it
+whole into a private file and links it into place, so the lock never exists half
+written; the link refuses when a lock is already there. The pre-STORY-457 form,
+the process id followed by LF, is still read: it names a pid and no start time.
+
+- A lock is **stale**, and is taken over, when its holder is not running
+  (`holder-not-running`); when the holder's pid is running but `ps` reports a
+  different start time for it, that is, the pid now belongs to an unrelated
+  process (`holder-pid-reused`); or when the lock cannot be read as either form and
+  is older than 5,000 ms (`unparseable-expired`). A stale lock is moved aside,
+  checked to still be the same lock, and removed; a lock another waiter took over
+  in the meantime is put back. `writeAttestationReceipt` returns the reason and the
+  holder's pid as `staleLock`.
+- A live holder, and an unreadable lock younger than 5,000 ms, are waited for,
+  polling every 10 ms, for up to 10,000 ms; then the write refuses with
+  `ATTESTATION_LOCKED` before it has changed anything, naming the holder's pid
+  when the lock names one.
+- When `ps` cannot report a start time (no such tool, or no answer within
+  2,000 ms), the reuse check is skipped and the lock is judged by its pid alone, as
+  before; the fallback never clears a live holder. A pre-STORY-457 lock is judged
+  the same way.
+- A writer releases only the lock it placed.
 
 Tests: `INC-378 twelve writes started together in one process lose no receipt`;
 `INC-378 two processes released together lose no receipt`; `INC-378 a lock held by
 a live process is refused without a byte changed, and a lock left by a dead
-process is taken over`.
+process is taken over`; `STORY-457 AC1: a lock whose holder is not running is taken
+over and the reason is reported`; `STORY-457 AC2 and AC5: a pid reused by an
+unrelated live process is stale at once, not after the timeout`; `STORY-457 AC3: an
+unreadable lock older than the limit is taken over, a fresh one is waited for`;
+`STORY-457 AC4: a live holder whose start time matches is waited for and never
+cleared`.
 
 ## Excluded from export and archive
 
