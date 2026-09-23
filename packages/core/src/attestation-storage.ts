@@ -67,6 +67,11 @@ function sha256(bytes: Buffer | string): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
+// The refusals added by TCRN-CROSS-INC-378 carry a stable reasonCode for the CLI to report.
+function attestationError(reasonCode: string, detail: string): Error {
+  return Object.assign(new Error(`${reasonCode}: ${detail}`), { reasonCode });
+}
+
 function isObject(value: JsonValue | undefined): value is Readonly<Record<string, JsonValue>> {
   return value !== undefined && value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -153,7 +158,7 @@ async function removeStaleLock(path: string, holder: number): Promise<void> {
 // exclusively and naming its holder's pid. A lock whose holder no longer exists is stale
 // and is taken over; a live holder is waited for until the timeout, which refuses with
 // ATTESTATION_LOCKED before the operation has written anything.
-async function withAttestationLock<T>(directory: string, operation: () => Promise<T>, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS): Promise<T> {
+export async function withAttestationLock<T>(directory: string, operation: () => Promise<T>, timeoutMs = ATTESTATION_LOCK_TIMEOUT_MS): Promise<T> {
   const path = resolve(directory, ATTESTATION_LOCK_NAME);
   for (let waited = 0; ; waited += ATTESTATION_LOCK_POLL_MS) {
     try {
@@ -169,7 +174,7 @@ async function withAttestationLock<T>(directory: string, operation: () => Promis
     }
     if (waited >= timeoutMs) {
       const by = typeof holder === "number" ? ` by process ${holder}` : "";
-      throw Object.assign(new Error(`ATTESTATION_LOCKED: ${ATTESTATION_LOCK_NAME} is still held${by} after ${timeoutMs} ms`), { reasonCode: "ATTESTATION_LOCKED" });
+      throw attestationError("ATTESTATION_LOCKED", `${ATTESTATION_LOCK_NAME} is still held${by} after ${timeoutMs} ms`);
     }
     await pause();
   }
@@ -178,6 +183,160 @@ async function withAttestationLock<T>(directory: string, operation: () => Promis
   } finally {
     await rm(path, { force: true });
   }
+}
+
+// Store files are the only names backup copies and restore writes back or removes.
+function storeFileName(name: string): boolean {
+  return name === "manifest.json" || segmentFileName(name) || legacyName(name);
+}
+
+// Rewrite, backup and restore run inside a lock the caller already holds (repair runs all
+// three inside one), so they check it is this process's rather than take it again.
+async function assertLockHeld(directory: string): Promise<void> {
+  if (await lockHolder(resolve(directory, ATTESTATION_LOCK_NAME)) !== process.pid) throw attestationError("ATTESTATION_LOCK_NOT_HELD", "call inside withAttestationLock");
+}
+
+export interface AttestationStoreFile {
+  readonly name: string;
+  readonly bytes: Buffer;
+}
+
+export interface AttestationDirectoryContents {
+  readonly manifest: Buffer | null;
+  readonly segments: readonly AttestationStoreFile[];
+  readonly indexes: readonly AttestationStoreFile[];
+  readonly legacy: readonly AttestationStoreFile[];
+  readonly lock: Buffer | null;
+  readonly temporary: readonly AttestationStoreFile[];
+  readonly other: readonly { readonly name: string; readonly bytes: Buffer | null }[];
+}
+
+// R4: the lenient read verify, repair and restore start from. It judges nothing: every
+// entry is sorted into what the store owns (manifest, segments, indexes, legacy receipts),
+// the lock, write residue (.tmp- files and stale-lock leftovers) and everything else, and
+// read as it is. An entry that is not a regular file is listed with the others, unread.
+export async function readAttestationDirectory(directory: string): Promise<AttestationDirectoryContents> {
+  let manifest: Buffer | null = null;
+  let lock: Buffer | null = null;
+  const segments: AttestationStoreFile[] = [];
+  const indexes: AttestationStoreFile[] = [];
+  const legacy: AttestationStoreFile[] = [];
+  const temporary: AttestationStoreFile[] = [];
+  const other: { readonly name: string; readonly bytes: Buffer | null }[] = [];
+  const entries = (await readdir(directory, { withFileTypes: true })).sort((left, right) => compareCanonicalText(left.name, right.name));
+  for (const entry of entries) {
+    const bytes = entry.isFile() ? await readFile(resolve(directory, entry.name)) : null;
+    if (bytes === null) other.push({ name: entry.name, bytes });
+    else if (entry.name === "manifest.json") manifest = bytes;
+    else if (/^\d{6}\.ndjson$/u.test(entry.name)) segments.push({ name: entry.name, bytes });
+    else if (/^\d{6}\.idx$/u.test(entry.name)) indexes.push({ name: entry.name, bytes });
+    else if (legacyName(entry.name)) legacy.push({ name: entry.name, bytes });
+    else if (entry.name === ATTESTATION_LOCK_NAME) lock = bytes;
+    else if (entry.name.startsWith(".tmp-") || entry.name.startsWith(`${ATTESTATION_LOCK_NAME}.`)) temporary.push({ name: entry.name, bytes });
+    else other.push({ name: entry.name, bytes });
+  }
+  return { manifest, segments, indexes, legacy, lock, temporary, other };
+}
+
+function storeFiles(contents: AttestationDirectoryContents): readonly AttestationStoreFile[] {
+  const manifest = contents.manifest === null ? [] : [{ name: "manifest.json", bytes: contents.manifest }];
+  return [...manifest, ...contents.segments, ...contents.indexes, ...contents.legacy];
+}
+
+// R4 repair: before a store is rewritten, every file it owns is copied byte for byte into
+// backupDirectory, which must not exist or be empty, beside backup-manifest.json
+// (tcrn.attestation-backup.v1) naming every file in the directory with its size, sha-256
+// and whether it was copied. Files the store does not own are named, not copied; the lock
+// and entries that are not regular files are left out; no path is recorded. Each copy is
+// synced by atomicWrite and read back against its digest before this returns, so a backup
+// that did not land refuses the repair before the store is touched.
+export async function backupAttestationStore(directory: string, backupDirectory: string): Promise<string> {
+  await assertLockHeld(directory);
+  const contents = await readAttestationDirectory(directory);
+  await mkdir(backupDirectory, { recursive: true, mode: 0o700 });
+  if ((await readdir(backupDirectory)).length > 0) throw attestationError("ATTESTATION_BACKUP_INVALID", "the backup directory is not empty");
+  const owned = storeFiles(contents);
+  for (const file of owned) await atomicWrite(resolve(backupDirectory, file.name), file.bytes);
+  const foreign = [...contents.temporary, ...contents.other.flatMap((file) => file.bytes === null ? [] : [{ name: file.name, bytes: file.bytes }])];
+  const describe = (file: AttestationStoreFile, copied: boolean): Readonly<Record<string, JsonValue>> =>
+    ({ name: file.name, bytes: file.bytes.length, sha256: sha256(file.bytes), copied });
+  const files = [...owned.map((file) => describe(file, true)), ...foreign.map((file) => describe(file, false))]
+    .sort((left, right) => compareCanonicalText(String(left.name), String(right.name)));
+  const manifest = canonicalJson({ schemaVersion: "tcrn.attestation-backup.v1", files });
+  await atomicWrite(resolve(backupDirectory, "backup-manifest.json"), manifest);
+  for (const file of owned) {
+    if (sha256(await readFile(resolve(backupDirectory, file.name))) !== sha256(file.bytes)) throw attestationError("ATTESTATION_BACKUP_INVALID", `${file.name} did not read back`);
+  }
+  return manifest;
+}
+
+// R4 repair: the store rewritten by the one segment writer (R2) from these canonical
+// record lines, each without its LF, in any order.
+export async function rewriteAttestationStore(directory: string, lines: readonly string[]): Promise<void> {
+  await assertLockHeld(directory);
+  const records = lines.map((line) => {
+    const value = assertCanonicalJson(`${line}\n`);
+    if (!isObject(value) || typeof value.eventHash !== "string") throw new Error("ATTESTATION_RECORD_INVALID");
+    return { name: `${value.eventHash}.json`, bytes: Buffer.from(line, "utf8"), value };
+  });
+  await writeSegments(directory, records.sort((left, right) => compareCanonicalText(left.name, right.name)), ATTESTATION_SEGMENT_BYTES);
+}
+
+// The eventHash of every receipt in these store files: each segment line and each legacy
+// receipt. A line that is not a record refuses, because it could be any receipt.
+function receiptHashes(files: readonly AttestationStoreFile[]): Set<string> {
+  const hashes = new Set<string>();
+  for (const file of files) {
+    if (legacyName(file.name)) hashes.add(file.name.slice(0, 64));
+    if (!file.name.endsWith(".ndjson")) continue;
+    for (const line of file.bytes.toString("utf8").split("\n").filter((text) => text.length > 0)) {
+      let value: JsonValue = null;
+      try {
+        value = JSON.parse(line) as JsonValue;
+      } catch {
+        // judged below with every other line that is not a record
+      }
+      if (!isObject(value) || typeof value.eventHash !== "string") throw attestationError("ATTESTATION_RESTORE_REFUSED", `${file.name} holds a line that is not a receipt`);
+      hashes.add(value.eventHash);
+    }
+  }
+  return hashes;
+}
+
+// R4 restore, the rollback of a repair. backup-manifest.json and every copied file are
+// checked against their recorded size and sha-256 first, and a store holding a receipt the
+// backup lacks is refused, so a restore never drops a receipt written after the repair.
+// Then each copied file is written back (the manifest last), store files the backup does
+// not have are removed, files the store does not own are left alone, and every restored
+// file is read back against its digest.
+export async function restoreAttestationStore(directory: string, backupDirectory: string): Promise<{ readonly backupManifest: string; readonly restored: readonly string[]; readonly removed: readonly string[] }> {
+  await assertLockHeld(directory);
+  const backupManifest = (await readFile(resolve(backupDirectory, "backup-manifest.json"))).toString("utf8");
+  const document = assertCanonicalJson(backupManifest);
+  const entries = isObject(document) && document.schemaVersion === "tcrn.attestation-backup.v1" && Array.isArray(document.files) ? document.files : null;
+  if (entries === null) throw attestationError("ATTESTATION_RESTORE_REFUSED", "backup-manifest.json is not a tcrn.attestation-backup.v1 document");
+  const files: AttestationStoreFile[] = [];
+  for (const entry of entries) {
+    if (!isObject(entry) || typeof entry.name !== "string" || typeof entry.copied !== "boolean") throw attestationError("ATTESTATION_RESTORE_REFUSED", "backup-manifest.json has a malformed entry");
+    if (!entry.copied) continue;
+    const bytes = storeFileName(entry.name) ? await readFile(resolve(backupDirectory, entry.name)) : null;
+    if (bytes === null || bytes.length !== entry.bytes || sha256(bytes) !== entry.sha256) throw attestationError("ATTESTATION_RESTORE_REFUSED", `${entry.name} in the backup does not match backup-manifest.json`);
+    files.push({ name: entry.name, bytes });
+  }
+  const current = storeFiles(await readAttestationDirectory(directory));
+  const kept = receiptHashes(files);
+  const lost = [...receiptHashes(current)].filter((hash) => !kept.has(hash));
+  if (lost.length > 0) throw attestationError("ATTESTATION_RESTORE_REFUSED", `the store holds ${lost.length} receipt(s) the backup does not, first ${lost[0]}`);
+  const names = new Set(files.map((file) => file.name));
+  for (const file of [...files.filter((entry) => entry.name !== "manifest.json"), ...files.filter((entry) => entry.name === "manifest.json")]) {
+    await atomicWrite(resolve(directory, file.name), file.bytes);
+  }
+  const removed = current.filter((file) => !names.has(file.name)).map((file) => file.name);
+  for (const name of removed) await rm(resolve(directory, name), { force: true });
+  for (const file of files) {
+    if (sha256(await readFile(resolve(directory, file.name))) !== sha256(file.bytes)) throw attestationError("ATTESTATION_RESTORE_UNVERIFIED", `${file.name} did not read back`);
+  }
+  return { backupManifest, restored: files.map((file) => file.name), removed };
 }
 
 async function readLegacy(directory: string): Promise<readonly AttestationFileRecord[]> {
@@ -201,6 +360,10 @@ async function readManifest(directory: string): Promise<AttestationManifest | nu
     if ((error as { code?: string }).code === "ENOENT") return null;
     throw error;
   }
+  return parseAttestationManifest(bytes);
+}
+
+export function parseAttestationManifest(bytes: Buffer): AttestationManifest {
   const value = assertCanonicalJson(bytes.toString("utf8"));
   const manifest = isObject(value) ? value as Readonly<Record<string, unknown>> : null;
   if (manifest === null || manifest.schemaVersion !== ATTESTATION_MANIFEST_VERSION || !Array.isArray(manifest.segments) ||
@@ -242,16 +405,17 @@ async function readSegmentRecords(directory: string, manifest: AttestationManife
 
 // R1: the digest of a record list is the sha-256 of exactly the bytes canonicalSha256
 // would hash for the array -- "[", each record's canonical line without its LF, joined by
-// ",", then "]\n" -- fed to the hash one record at a time. It has no count or byte
+// ",", then "]\n" -- fed to the hash one line at a time. It has no count or byte
 // ceiling, and below one MiB it equals canonicalSha256 of the array, which is what every
 // existing manifest recorded, so none of them has to be migrated.
-function recordsDigest(records: readonly AttestationFileRecord[]): string {
+export function attestationRecordsDigest(lines: readonly string[]): string {
   const hash = createHash("sha256").update("[");
-  for (const [index, record] of records.entries()) {
-    const line = canonicalJson(record.value);
-    hash.update(`${index === 0 ? "" : ","}${line.slice(0, -1)}`);
-  }
+  for (const [index, line] of lines.entries()) hash.update(`${index === 0 ? "" : ","}${line}`);
   return hash.update("]\n").digest("hex");
+}
+
+function recordsDigest(records: readonly AttestationFileRecord[]): string {
+  return attestationRecordsDigest(records.map((record) => canonicalJson(record.value).slice(0, -1)));
 }
 
 // R2: every byte of the new store -- segments, their indexes and the manifest -- is

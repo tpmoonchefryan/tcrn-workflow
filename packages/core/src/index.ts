@@ -56,11 +56,18 @@ export { SegmentedBackend, SEGMENTED_BACKEND_PROFILE } from "./segmented-backend
 export type { SegmentIndexDocument, SegmentIndexEntry, SegmentManifest, SegmentManifestEntry, SegmentedBackendProfile } from "./segmented-backend.js";
 export {
   ATTESTATION_MANIFEST_VERSION,
+  attestationRecordsDigest,
+  backupAttestationStore,
   checkAttestationStore,
   deleteLegacyAttestations,
   migrateAttestationDirectory,
+  parseAttestationManifest,
+  readAttestationDirectory,
   readAttestationReceipt,
   reportAttestationDirectory,
+  restoreAttestationStore,
+  rewriteAttestationStore,
+  withAttestationLock,
   writeAttestationReceipt,
 } from "./attestation-storage.js";
 // INC-074: the storage-home sentinel declares where a workspace's chain lives

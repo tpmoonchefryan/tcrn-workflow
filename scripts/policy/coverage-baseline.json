@@ -2090,6 +2090,24 @@
         "433 replays retained production terminal output and rejects an inner failure behind exit 0",
         "433 does not blindly rerun the same failed batch, but an explicit rerun marker does"
       ]
+    },
+    "tests/inc378-attestation-repair.test.mjs": {
+      "testCount": 12,
+      "assertionCount": 76,
+      "testNames": [
+        "INC-378 verify reports a consistent store without taking the lock or writing a byte",
+        "INC-378 repair puts back the record a sorted write left outside its manifest, and restore undoes it",
+        "INC-378 repair at the one-MiB edge splits the store in two, and restore removes the second segment again",
+        "INC-378 repair takes back a record appended after the last segment and keeps the store in eventHash order",
+        "INC-378 repair refuses an expected record that is not in the store",
+        "INC-378 repair refuses a named record whose removal does not leave the manifest store",
+        "INC-378 repair refuses a record for an event the chain does not have",
+        "INC-378 repair refuses a record whose occurredAt is not its event time",
+        "INC-378 repair refuses a backup directory inside the store or the workspace, or one that is not empty",
+        "INC-378 restore refuses a backup that changed by one byte",
+        "INC-378 restore refuses when the store holds a receipt the backup does not",
+        "INC-378 a relocation receipt in the directory is listed by verify and left alone by repair and restore"
+      ]
     }
   }
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 
 import {
@@ -7,6 +8,8 @@ import {
   activeBinding,
   applyMachineSettingRemove,
   applyMachineSettingSet,
+  attestationRecordsDigest,
+  backupAttestationStore,
   checkAttestationStore,
   deleteLegacyAttestations,
   breakWorkspaceLease,
@@ -48,6 +51,11 @@ import {
   materializeWorkspace,
   migrateAttestationDirectory,
   migrateKnowledgeBodies,
+  parseAttestationManifest,
+  readAttestationDirectory,
+  restoreAttestationStore,
+  rewriteAttestationStore,
+  withAttestationLock,
   workBatchReceipt,
   workspaceBudgets,
   planWorkspaceMigration,
@@ -142,10 +150,10 @@ import type {
   RecallWorkInput,
 } from "../../core/src/index.js";
 import { existsSync, readFileSync } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 
-import { assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
+import { assertCanonicalJson, assertStrictInstant, canonicalExternalKey, canonicalJson, canonicalSha256, deriveStableId } from "../../protocol/src/index.js";
 import { isWorkStatus } from "../../protocol/src/index.js";
 import type { JsonValue, PlannedDeliveryKind, WorkRecord, WorkStatus } from "../../protocol/src/index.js";
 // ProjectRecord is a core type, not a protocol one. The protocol package never exported
@@ -789,7 +797,7 @@ async function attestationMigrationTargets(root: string): Promise<readonly Attes
 
 async function runAttestationMigration(io: CliIo, values: Readonly<Record<string, string>>): Promise<void> {
   const mode = values.mode;
-  if (mode !== "report" && mode !== "prepare" && mode !== "delete") fail("CLI_ARGUMENT_MALFORMED", "mode must be report, prepare, or delete");
+  if (mode !== "report" && mode !== "prepare" && mode !== "delete") fail("CLI_ARGUMENT_MALFORMED", "mode must be report, prepare, delete, repair, or restore");
   if (mode === "delete" && values.baseline === undefined) fail("CLI_ARGUMENT_MISSING", "--baseline");
   const root = values.root ?? "";
   const targets = await attestationMigrationTargets(root);
@@ -830,6 +838,328 @@ async function runAttestationMigration(io: CliIo, values: Readonly<Record<string
   }
   output.targets = rows;
   io.write(canonicalJson(output));
+}
+
+// TCRN-CROSS-INC-378 R4: attestation-verify, and attestation-migrate --mode repair and
+// --mode restore. core reads, backs up, rewrites and restores the store files and holds
+// the lock; what is judged about the files, the chain lookups and the reports are here.
+const sha256Hex = (bytes: Buffer | string): string => createHash("sha256").update(bytes).digest("hex");
+
+type AttestationContents = Awaited<ReturnType<typeof readAttestationDirectory>>;
+type AttestationManifestDocument = ReturnType<typeof parseAttestationManifest>;
+type AttestationChain = Awaited<ReturnType<typeof materializeWorkspace>>;
+
+// Segments as one buffer and the offset of every line in it: line i is
+// all[starts[i], starts[i + 1]) and ends in its LF.
+interface AttestationLines {
+  readonly all: Buffer;
+  readonly starts: readonly number[];
+}
+
+function attestationLines(segments: readonly { readonly bytes: Buffer }[]): AttestationLines {
+  const all = Buffer.concat(segments.map((segment) => segment.bytes));
+  const starts = [0];
+  for (let end = all.indexOf(0x0a); end !== -1; end = all.indexOf(0x0a, end + 1)) starts.push(end + 1);
+  if (starts.at(-1) !== all.length) starts.push(all.length);
+  return { all, starts };
+}
+
+function lineText(lines: AttestationLines, index: number): string {
+  return lines.all.toString("utf8", lines.starts[index], lines.starts[index + 1]).replace(/\n$/u, "");
+}
+
+function lineEventHash(text: string): string | null {
+  try {
+    const value = JSON.parse(text) as { readonly eventHash?: unknown };
+    return typeof value.eventHash === "string" ? value.eventHash : null;
+  } catch {
+    return null;
+  }
+}
+
+// Whether the lines left once `removed` are taken out are exactly the store the manifest
+// describes: cut into its segments by record count, every segment equal in records, bytes
+// and sha-256, then the streamed digest. Sizes are compared before anything is hashed,
+// which is what keeps trying every line affordable. Returns what differs, or null.
+function manifestMismatch(lines: AttestationLines, removed: ReadonlySet<number>, manifest: AttestationManifestDocument): string | null {
+  const starts = lines.starts;
+  const kept: number[] = [];
+  for (let index = 0; index + 1 < starts.length; index += 1) if (!removed.has(index)) kept.push(index);
+  if (kept.length !== manifest.count) return `${kept.length} records where the manifest counts ${manifest.count}`;
+  let next = 0;
+  const parts = manifest.segments.map((segment) => kept.slice(next, next += segment.records));
+  if (next !== kept.length) return "the manifest segments do not account for every record";
+  for (const [position, segment] of manifest.segments.entries()) {
+    const part = parts[position] ?? [];
+    const bytes = part.reduce((total, index) => total + starts[index + 1]! - starts[index]!, 0);
+    if (part.length !== segment.records || bytes !== segment.bytes) return `${segment.name} differs from the manifest in records or bytes`;
+  }
+  for (const [position, segment] of manifest.segments.entries()) {
+    const part = parts[position] ?? [];
+    const hash = createHash("sha256");
+    let run = part[0] ?? 0;
+    for (const [offset, index] of part.entries()) {
+      if (part[offset + 1] === index + 1) continue;
+      hash.update(lines.all.subarray(starts[run]!, starts[index + 1]!));
+      run = part[offset + 1] ?? 0;
+    }
+    if (hash.digest("hex") !== segment.sha256) return `${segment.name} differs from the manifest in sha-256`;
+  }
+  if (attestationRecordsDigest(kept.map((index) => lineText(lines, index))) !== manifest.recordsDigest) return "the streamed records digest differs from the manifest";
+  return null;
+}
+
+// One segment file as verify reports it: size, lines and sha-256; whether every line is a
+// canonical record and the lines rise strictly by eventHash; whether the manifest names
+// it; and whether its index holds exactly one entry per line, pointing at that line.
+function describeAttestationSegment(file: { readonly name: string; readonly bytes: Buffer }, index: { readonly name: string; readonly bytes: Buffer } | undefined, referenced: boolean): { readonly report: Readonly<Record<string, unknown>>; readonly hashes: readonly string[]; readonly whole: boolean } {
+  const lines = attestationLines([file]);
+  const hashes: string[] = [];
+  let canonical = file.bytes.length === 0 || file.bytes.at(-1) === 0x0a;
+  for (let position = 0; position + 1 < lines.starts.length; position += 1) {
+    const text = lineText(lines, position);
+    const hash = lineEventHash(text);
+    try {
+      assertCanonicalJson(`${text}\n`);
+    } catch {
+      canonical = false;
+    }
+    if (hash === null) canonical = false;
+    hashes.push(hash ?? "");
+  }
+  const sorted = hashes.every((hash, position) => position === 0 || hashes[position - 1]! < hash);
+  let indexReport: Readonly<Record<string, unknown>> | null = null;
+  if (index !== undefined) {
+    let entries: Readonly<Record<string, { readonly segment?: unknown; readonly offset?: unknown; readonly length?: unknown }>> = {};
+    try {
+      const value = assertCanonicalJson(index.bytes.toString("utf8")) as { readonly entries?: typeof entries };
+      entries = value.entries ?? {};
+    } catch {
+      entries = {};
+    }
+    const matches = Object.keys(entries).length === hashes.length && hashes.every((hash, position) => {
+      const entry = entries[hash];
+      return entry?.segment === file.name && entry.offset === lines.starts[position] && entry.length === lines.starts[position + 1]! - lines.starts[position]!;
+    });
+    indexReport = { name: index.name, bytes: index.bytes.length, sha256: sha256Hex(index.bytes), entries: Object.keys(entries).length, matchesSegment: matches };
+  }
+  return {
+    report: { name: file.name, bytes: file.bytes.length, lines: hashes.length, sha256: sha256Hex(file.bytes), canonical, sorted, referenced, index: indexReport },
+    hashes,
+    whole: canonical && sorted && indexReport !== null && indexReport.matchesSegment === true,
+  };
+}
+
+// The one line whose removal leaves exactly the store the manifest describes. Tried only
+// when the manifest's segments hold one line more than it counts, and only for lines as
+// long as the excess bytes; reported only when exactly one line fits, with where it sits
+// and the chain event it names. Anything else is unresolved: position and time are never
+// used to guess.
+function identifyExtraRecords(lines: AttestationLines, files: readonly { readonly name: string; readonly bytes: Buffer }[], manifest: AttestationManifestDocument, chain: AttestationChain): Readonly<Record<string, unknown>> {
+  const total = lines.starts.length - 1;
+  const excess = lines.all.length - manifest.segments.reduce((sum, segment) => sum + segment.bytes, 0);
+  const fits: number[] = [];
+  for (let index = 0; total === manifest.count + 1 && index < total; index += 1) {
+    if (lines.starts[index + 1]! - lines.starts[index]! === excess && manifestMismatch(lines, new Set([index]), manifest) === null) fits.push(index);
+  }
+  if (fits.length !== 1) return { status: "unresolved", records: [] };
+  const index = fits[0]!;
+  let firstLine = 0;
+  let firstByte = 0;
+  let segment = files[0]?.name ?? "";
+  for (const file of files) {
+    const count = attestationLines([file]).starts.length - 1;
+    if (index < firstLine + count) {
+      segment = file.name;
+      break;
+    }
+    firstLine += count;
+    firstByte += file.bytes.length;
+  }
+  const text = lineText(lines, index);
+  let record: { readonly eventHash?: unknown; readonly occurredAt?: unknown; readonly observedAt?: unknown } = {};
+  try {
+    record = JSON.parse(text) as typeof record;
+  } catch {
+    record = {};
+  }
+  const field = (value: unknown): string | null => typeof value === "string" ? value : null;
+  const event = chain.events.find((candidate) => candidate.eventHash === record.eventHash);
+  return {
+    status: "resolved",
+    records: [{
+      segment,
+      line: index - firstLine + 1,
+      offset: lines.starts[index]! - firstByte,
+      length: lines.starts[index + 1]! - lines.starts[index]!,
+      eventHash: field(record.eventHash),
+      occurredAt: field(record.occurredAt),
+      observedAt: field(record.observedAt),
+      chainEvent: event === undefined ? null : { sequence: event.sequence, occurredAt: event.occurredAt, occurredAtMatches: event.occurredAt === record.occurredAt },
+    }],
+  };
+}
+
+// attestation-verify: the whole store judged from one lenient read, without the lock and
+// without writing a byte. It names the manifest and every file, never the records. A
+// directory with no manifest is the legacy layout and is consistent when it holds no
+// segment; otherwise every segment the manifest names must match it (records, bytes,
+// sha-256, count, streamed digest), hold canonical lines in rising eventHash order, and
+// have an index that points at exactly its lines.
+function assessAttestationStore(contents: AttestationContents, chain: AttestationChain): { readonly consistent: boolean; readonly problems: readonly string[]; readonly report: Readonly<Record<string, unknown>> } {
+  const problems: string[] = [];
+  let manifest: AttestationManifestDocument | null = null;
+  if (contents.manifest !== null) {
+    try {
+      manifest = parseAttestationManifest(contents.manifest);
+    } catch (error) {
+      problems.push(`manifest.json is not a valid manifest: ${String((error as { message?: unknown }).message ?? error)}`);
+    }
+  } else if (contents.segments.length > 0) {
+    problems.push("segment files are present but no manifest.json names them");
+  }
+  const named = new Set((manifest?.segments ?? []).map((segment) => segment.name));
+  const segments = contents.segments.map((file) => describeAttestationSegment(file, contents.indexes.find((entry) => entry.name === file.name.replace(/\.ndjson$/u, ".idx")), named.has(file.name)));
+  const referenced = (manifest?.segments ?? []).flatMap((segment) => {
+    const file = contents.segments.find((entry) => entry.name === segment.name);
+    if (file === undefined) problems.push(`${segment.name} is named by the manifest but is not in the directory`);
+    return file === undefined ? [] : [file];
+  });
+  const lines = attestationLines(referenced);
+  const hashes = (manifest?.segments ?? []).flatMap((segment) => segments.find((entry) => entry.report.name === segment.name)?.hashes ?? []);
+  let computed: Readonly<Record<string, unknown>> | null = null;
+  let extraRecords: Readonly<Record<string, unknown>> = { status: "none", records: [] };
+  if (manifest !== null) {
+    const count = lines.starts.length - 1;
+    computed = { count, recordsDigest: attestationRecordsDigest(lines.starts.slice(1).map((_, index) => lineText(lines, index))), concatenatedSha256: sha256Hex(lines.all) };
+    const mismatch = manifestMismatch(lines, new Set(), manifest);
+    if (mismatch !== null) problems.push(mismatch);
+    for (const segment of segments) {
+      if (named.has(String(segment.report.name)) && !segment.whole) problems.push(`${String(segment.report.name)} is not canonical records in eventHash order with an index that matches`);
+    }
+    if (!hashes.every((hash, position) => position === 0 || hashes[position - 1]! < hash)) problems.push("the records are not in rising eventHash order across segments");
+    if (count !== manifest.count) extraRecords = identifyExtraRecords(lines, referenced, manifest, chain);
+  }
+  const head = chain.headEventHash;
+  const receiptPresent = head !== null && (manifest === null ? contents.legacy.some((file) => file.name === `${head}.json`) : hashes.includes(head));
+  return {
+    consistent: problems.length === 0,
+    problems,
+    report: {
+      schemaVersion: "tcrn.attestation-verify.v1",
+      reasonCode: "ATTESTATION_VERIFY_READY",
+      consistent: problems.length === 0,
+      problems,
+      manifest: contents.manifest === null ? null : { bytes: contents.manifest.length, sha256: sha256Hex(contents.manifest), document: manifest },
+      computed,
+      segments: segments.map((segment) => segment.report),
+      extraRecords,
+      legacyFiles: contents.legacy.length,
+      otherFiles: contents.other.map((file) => ({ name: file.name, bytes: file.bytes?.length ?? null, sha256: file.bytes === null ? null : sha256Hex(file.bytes) })),
+      lock: contents.lock === null ? null : contents.lock.toString("utf8").trim(),
+      temporaryFiles: contents.temporary.map((file) => file.name),
+      chainHead: { version: chain.version, headEventHash: head, receiptPresent },
+    },
+  };
+}
+
+// verify, repair and restore take a directory that exists; repair and restore take it
+// only by the name attestations, the one directory they may rewrite.
+async function existingAttestationDirectory(path: string, named: boolean): Promise<string> {
+  const directory = resolve(path);
+  if (named && basename(directory) !== "attestations") fail("CLI_ARGUMENT_MALFORMED", "--root must name an attestations directory for --mode repair and --mode restore");
+  const stats = await stat(directory).catch(() => null);
+  if (stats === null || !stats.isDirectory()) fail("ATTESTATION_DIRECTORY_MISSING", `${directory} is not a directory`);
+  return directory;
+}
+
+// A line that rebuilds byte for byte from its own eventHash, occurredAt and observedAt is a
+// canonical tcrn.time-attestation.v1 receipt with exactly those four fields, all well formed.
+function receiptFields(text: string): { readonly eventHash: string; readonly occurredAt: string; readonly observedAt: string } | null {
+  try {
+    const value = JSON.parse(text) as { readonly eventHash?: unknown; readonly occurredAt?: unknown; readonly observedAt?: unknown };
+    const fields = { eventHash: String(value.eventHash), occurredAt: String(value.occurredAt), observedAt: String(value.observedAt) };
+    return buildTimeAttestationReceipt(fields.eventHash, fields.occurredAt, fields.observedAt) === `${text}\n` ? fields : null;
+  } catch {
+    return null;
+  }
+}
+
+// attestation-migrate --mode repair: puts back into its manifest a store whose segments
+// hold records the manifest never counted, each named up front with --expect-extra. Under
+// the lock, and before anything is written, the segments without exactly those records
+// must be the store the manifest describes, and each record must be a canonical receipt
+// for an event on the chain with that event's occurredAt; any miss refuses with
+// ATTESTATION_REPAIR_REFUSED. Then the store is backed up, rewritten by the segment writer
+// and judged again as verify judges it.
+async function runAttestationRepair(io: CliIo, values: Readonly<Record<string, string>>): Promise<void> {
+  required(values, ["workspace", "expect-extra", "backup-dir"]);
+  const refuse = (reason: string): never => fail("ATTESTATION_REPAIR_REFUSED", reason);
+  const expected = listValue(values["expect-extra"]);
+  if (expected.some((hash) => !SHA256_PATTERN.test(hash)) || new Set(expected).size !== expected.length) fail("CLI_ARGUMENT_MALFORMED", "--expect-extra must list distinct sha-256 event hashes");
+  const directory = await existingAttestationDirectory(values.root ?? "", true);
+  const workspace = resolve(values.workspace ?? "");
+  const backupDirectory = resolve(values["backup-dir"] ?? "");
+  if (insideWorkspace(directory, backupDirectory) || insideWorkspace(workspace, backupDirectory)) refuse("--backup-dir must resolve outside the attestation directory and the workspace root");
+  if ((await readdir(backupDirectory).catch(() => [])).length > 0) refuse("--backup-dir must not exist or must be empty");
+  const chain = await materializeWorkspace(workspace);
+  const report = await withAttestationLock(directory, async () => {
+    const before = await readAttestationDirectory(directory);
+    if (before.manifest === null) return refuse("the directory has no manifest.json to repair against");
+    let manifest: AttestationManifestDocument;
+    try {
+      manifest = parseAttestationManifest(before.manifest);
+    } catch (error) {
+      return refuse(`manifest.json is not a valid manifest: ${String((error as { message?: unknown }).message ?? error)}`);
+    }
+    const lines = attestationLines(before.segments);
+    const texts = lines.starts.slice(1).map((_, index) => lineText(lines, index));
+    const hashes = texts.map(lineEventHash);
+    const removed = new Set<number>();
+    for (const hash of expected) {
+      const at = hashes.flatMap((candidate, index) => candidate === hash ? [index] : []);
+      if (at.length !== 1) refuse(`${hash} is in the segments ${at.length} times, not once`);
+      removed.add(at[0]!);
+    }
+    const mismatch = manifestMismatch(lines, removed, manifest);
+    if (mismatch !== null) refuse(`without the named records the segments are not the store the manifest describes: ${mismatch}`);
+    const extraRecords = [...removed].sort((left, right) => left - right).map((index) => {
+      const fields = receiptFields(texts[index]!) ?? refuse(`${hashes[index] ?? ""} is not a canonical tcrn.time-attestation.v1 receipt`);
+      const event = chain.events.find((candidate) => candidate.eventHash === fields.eventHash) ?? refuse(`${fields.eventHash} is not an event on the chain`);
+      if (event.occurredAt !== fields.occurredAt) refuse(`${fields.eventHash} has occurredAt ${fields.occurredAt}, but the event has ${event.occurredAt}`);
+      return { record: texts[index]!, chainEvent: { sequence: event.sequence, occurredAt: event.occurredAt } };
+    });
+    const backupManifest = await backupAttestationStore(directory, backupDirectory);
+    await rewriteAttestationStore(directory, texts);
+    const after = await readAttestationDirectory(directory);
+    const verdict = assessAttestationStore(after, chain);
+    if (!verdict.consistent || after.manifest === null) fail("ATTESTATION_REPAIR_UNVERIFIED", `the rewritten store is not consistent (${verdict.problems.join("; ")}); restore it from ${backupDirectory}`);
+    const afterLines = attestationLines(parseAttestationManifest(after.manifest).segments.flatMap((segment) => after.segments.filter((file) => file.name === segment.name)));
+    return {
+      schemaVersion: "tcrn.attestation-repair.v1",
+      reasonCode: "ATTESTATION_REPAIRED",
+      before: { manifest, manifestSha256: sha256Hex(before.manifest), concatenatedSha256: sha256Hex(lines.all) },
+      extraRecords,
+      backup: { directory: backupDirectory, manifestSha256: sha256Hex(backupManifest) },
+      after: { manifest: parseAttestationManifest(after.manifest), manifestSha256: sha256Hex(after.manifest), concatenatedSha256: sha256Hex(afterLines.all) },
+    };
+  });
+  io.write(canonicalJson(report));
+}
+
+// attestation-migrate --mode restore: the rollback of a repair, from the backup it made.
+async function runAttestationRestore(io: CliIo, values: Readonly<Record<string, string>>): Promise<void> {
+  required(values, ["backup-dir"]);
+  const directory = await existingAttestationDirectory(values.root ?? "", true);
+  const backupDirectory = resolve(values["backup-dir"] ?? "");
+  const result = await withAttestationLock(directory, () => restoreAttestationStore(directory, backupDirectory));
+  io.write(canonicalJson({
+    schemaVersion: "tcrn.attestation-restore.v1",
+    reasonCode: "ATTESTATION_RESTORED",
+    backup: { directory: backupDirectory, manifestSha256: sha256Hex(result.backupManifest) },
+    restored: result.restored,
+    removed: result.removed,
+  }));
 }
 
 // STORY-299. A committed fact whose derived view could not be written is still a
@@ -949,7 +1279,8 @@ export const COMMAND_CATALOG = Object.freeze([
   { name: "artifact-put", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "file", required: true, valueKind: "string" }, { name: "at", required: true, valueKind: "instant" }] },
   { name: "artifact-verify", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "attestation-enable", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "actor", required: true, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
-  { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }] },
+  { name: "attestation-migrate", availability: "cli", mutates: true, flags: [{ name: "root", required: true, valueKind: "string" }, { name: "mode", required: true, valueKind: "string" }, { name: "baseline", required: false, valueKind: "string" }, { name: "baseline-out", required: false, valueKind: "string" }, { name: "workspace", required: false, valueKind: "string" }, { name: "expect-extra", required: false, valueKind: "list" }, { name: "backup-dir", required: false, valueKind: "string" }] },
+  { name: "attestation-verify", availability: "cli", mutates: false, flags: [{ name: "attest-dir", required: true, valueKind: "string" }, { name: "workspace", required: true, valueKind: "string" }] },
   { name: "commands", availability: "cli", mutates: false, flags: [] },
   { name: "conference-append-position", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "external-key", required: true, valueKind: "string" }, { name: "actor-id", required: true, valueKind: "string" }, { name: "position", required: true, valueKind: "string" }, { name: "stance", required: false, valueKind: "string" }, { name: "risks", required: true, valueKind: "list" }, { name: "recommendations", required: true, valueKind: "list" }, { name: "evidence-ids", required: true, valueKind: "list" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "conference-cancel", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "conference-id", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
@@ -1249,9 +1580,21 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     return;
   }
   if (command === "attestation-migrate") {
-    const values = parseArguments(rest, ["root", "mode", "baseline", "baseline-out"]);
+    const values = parseArguments(rest, ["root", "mode", "baseline", "baseline-out", "workspace", "expect-extra", "backup-dir"]);
     required(values, ["root", "mode"]);
-    await runAttestationMigration(io, values);
+    if (values.mode === "repair") await runAttestationRepair(io, values);
+    else if (values.mode === "restore") await runAttestationRestore(io, values);
+    else await runAttestationMigration(io, values);
+    return;
+  }
+  if (command === "attestation-verify") {
+    const values = parseArguments(rest, ["attest-dir", "workspace"]);
+    required(values, ["attest-dir", "workspace"]);
+    const workspace = resolve(values.workspace ?? "");
+    if (insideWorkspace(workspace, resolve(values["attest-dir"] ?? ""))) fail("CLI_ARGUMENT_MALFORMED", "--attest-dir must resolve outside the workspace root");
+    const directory = await existingAttestationDirectory(values["attest-dir"] ?? "", false);
+    const chain = await materializeWorkspace(workspace);
+    io.write(canonicalJson(assessAttestationStore(await readAttestationDirectory(directory), chain).report));
     return;
   }
   if (command === "profile-generate") {

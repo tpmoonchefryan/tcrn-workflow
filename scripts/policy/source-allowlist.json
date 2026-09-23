@@ -504,6 +504,7 @@
     "tests/inc270-engine-capability-surface.test.mjs",
     "tests/inc274-platform-storage-shape.test.mjs",
     "tests/inc275-mcp-absent.test.mjs",
+    "tests/inc378-attestation-repair.test.mjs",
     "tests/init033-install-surface.test.mjs",
     "tests/injection-session.test.mjs",
     "tests/io-boundaries.test.mjs",
