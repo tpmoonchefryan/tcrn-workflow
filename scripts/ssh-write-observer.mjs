@@ -208,9 +208,9 @@ export function runtimeConfigStatus(env = process.env, { rosterPath } = {}) {
 
 // Anchored to a whole host name: `${PRIVATE_VM_HOST}-staging` is a different machine
 // and a local directory whose name merely contains the host is not a transport.
-const HOST_NAME = new RegExp(`^${escapeRegExp(PRIVATE_VM_HOST)}(?:\\.[A-Za-z0-9.-]+)?$`, "u");
+let HOST_NAME = new RegExp(`^${escapeRegExp(PRIVATE_VM_HOST)}(?:\\.[A-Za-z0-9.-]+)?$`, "u");
 // Anchored to a path boundary: `${PRIVATE_RUNTIME_ROOT}/governance-mirror` is not the governed tree.
-const GOVERNANCE = new RegExp(`${escapeRegExp(PRIVATE_GOVERNANCE_ROOT)}(?![A-Za-z0-9_-])`, "u");
+let GOVERNANCE = new RegExp(`${escapeRegExp(PRIVATE_GOVERNANCE_ROOT)}(?![A-Za-z0-9_-])`, "u");
 
 // Redirection operators that create/extend a file. `2>&1` and friends duplicate a
 // descriptor and open nothing, so they are excluded at the parse site (`dup`).
@@ -250,7 +250,18 @@ const RUNNERS = new Set(["node", "nodejs", "node24"]);
 // The one program on that host allowed to write inside the governed tree is the
 // engine installed there; anchored on both ends (prefix AND basename) so a file
 // merely *named* tcrn-workflow.mjs somewhere else is not it.
-const HOST_ENGINE = new RegExp(`^${escapeRegExp(PRIVATE_RUNTIME_ROOT)}/engine/(?:[^\\s]+/)?tcrn-workflow\\.mjs$`, "u");
+let HOST_ENGINE = new RegExp(`^${escapeRegExp(PRIVATE_RUNTIME_ROOT)}/engine/(?:[^\\s]+/)?tcrn-workflow\\.mjs$`, "u");
+
+// TCRN-CROSS-STORY-456 (#258): the three matchers classification reads were fixed when the
+// module loaded, from whatever process.env held then. Hook mode rebuilds them from the
+// configuration it resolved, so a value read from the container settings is the value a
+// command is classified against, not the load-time placeholder.
+function configureClassification(config) {
+  if (config.host === PRIVATE_VM_HOST && config.runtimeRoot === PRIVATE_RUNTIME_ROOT) return;
+  HOST_NAME = new RegExp(`^${escapeRegExp(config.host)}(?:\\.[A-Za-z0-9.-]+)?$`, "u");
+  GOVERNANCE = new RegExp(`${escapeRegExp(`${config.runtimeRoot}/governance`)}(?![A-Za-z0-9_-])`, "u");
+  HOST_ENGINE = new RegExp(`^${escapeRegExp(config.runtimeRoot)}/engine/(?:[^\\s]+/)?tcrn-workflow\\.mjs$`, "u");
+}
 
 // Targets that are not persistent state on the host.
 const SCRATCH_ROOTS = ["/tmp/", "/var/tmp/", "/run/", "/dev/null"];
@@ -1086,7 +1097,8 @@ function probeTagFor(command) {
 // apart from "nothing arrived on stdin": both used to end in exit 0 with empty output, and
 // that byte-identity is how a CI step whose flag was dropped would keep reporting success.
 function hookMode(stdin) {
-  const config = runtimeConfigStatus();
+  const env = hookRuntimeEnv();
+  const config = runtimeConfigStatus(env, { rosterPath: env.TCRN_SSH_TARGET_ROSTER });
   if (!config.ok) {
     try {
       writeSync(2, `${JSON.stringify({ status: config.reason, reason: "RUNTIME_CONFIGURATION_INVALID", detail: config.detail })}\n`);
@@ -1095,6 +1107,7 @@ function hookMode(stdin) {
     }
     return "runtime-config-unavailable";
   }
+  configureClassification(config.config);
   let input;
   try {
     input = JSON.parse(stdin);
@@ -1233,14 +1246,7 @@ export function readRegistration(projectDir) {
       detail: `no ${PROJECT_SETTINGS_FILES.join(" or ")} under ${root}`,
     };
   }
-  const settingEnv = {};
-  for (const { settings } of present) {
-    for (const name of [...REQUIRED_RUNTIME_NAMES, "TCRN_SSH_TARGET_ROSTER"]) {
-      if (typeof settings?.env?.[name] === "string" && settings.env[name].length > 0) {
-        settingEnv[name] = settings.env[name];
-      }
-    }
-  }
+  const settingEnv = runtimeEnvFromSettings(present.map((item) => item.settings));
   for (const { path, settings } of present) {
     const groups = Array.isArray(settings?.hooks?.PreToolUse) ? settings.hooks.PreToolUse : [];
     for (const group of groups) {
@@ -1280,6 +1286,49 @@ export function readRegistration(projectDir) {
     reason: "hook-not-registered",
     detail: `no PreToolUse hook covering Bash names ${REGISTRATION_MARKER} in ${present.map((item) => item.path).join(", ")}`,
   };
+}
+
+// The runtime names a root's settings env blocks carry, later file winning. The channel gate
+// and hook mode read them through this one function (TCRN-CROSS-STORY-456 R1).
+function runtimeEnvFromSettings(settingsList) {
+  const env = {};
+  for (const settings of settingsList) {
+    for (const name of [...REQUIRED_RUNTIME_NAMES, "TCRN_SSH_TARGET_ROSTER"]) {
+      if (typeof settings?.env?.[name] === "string" && settings.env[name].length > 0) env[name] = settings.env[name];
+    }
+  }
+  return env;
+}
+
+/**
+ * TCRN-CROSS-STORY-456 R1: neither host hands a hook process the TCRN_SSH_* env block, so
+ * hook mode falls back to the env block registered in the container's own settings, found
+ * through --container-root first and then the hook environment's CLAUDE_PROJECT_DIR. A
+ * usable value already in the environment wins. Nothing here writes, and no value is ever
+ * printed: a refusal names only what is still missing.
+ */
+export function hookRuntimeEnv(env = process.env, containerRoot = containerRootOverride) {
+  const anchor = typeof env?.[PROJECT_DIR_ENV] === "string" && env[PROJECT_DIR_ENV].length > 0 ? resolve(env[PROJECT_DIR_ENV]) : null;
+  const root = containerRoot ?? anchor;
+  if (root === null || REQUIRED_RUNTIME_NAMES.every((name) => safeRuntimeValue(env?.[name]))) return env;
+  const present = [];
+  for (const relative of PROJECT_SETTINGS_FILES) {
+    try {
+      present.push(JSON.parse(readFileSync(join(root, relative), "utf8")));
+    } catch {
+      // An absent or unreadable settings file contributes nothing; the refusal still names what is missing.
+    }
+  }
+  const fromSettings = runtimeEnvFromSettings(present);
+  const merged = { ...env };
+  for (const name of REQUIRED_RUNTIME_NAMES) {
+    if (!safeRuntimeValue(env?.[name]) && fromSettings[name] !== undefined) merged[name] = fromSettings[name];
+  }
+  const roster = fromSettings.TCRN_SSH_TARGET_ROSTER;
+  if (!(typeof env?.TCRN_SSH_TARGET_ROSTER === "string" && env.TCRN_SSH_TARGET_ROSTER.length > 0) && roster !== undefined) {
+    merged.TCRN_SSH_TARGET_ROSTER = isAbsolute(roster) ? roster : resolve(root, roster);
+  }
+  return merged;
 }
 
 // A PreToolUse payload with the field set the host sends (docs.claude.com hooks

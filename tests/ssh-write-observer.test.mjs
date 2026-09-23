@@ -243,8 +243,8 @@ const MUTATIONS = [
   { id: "exemption-entry-scratch", find: `    matches: (unit) => unit.targets.every(isScratchTarget),`, replace: `    matches: () => false,`, witness: "H05" },
   {
     id: "host-engine-anchor",
-    find: 'const HOST_ENGINE = new RegExp(`^${escapeRegExp(PRIVATE_RUNTIME_ROOT)}/engine/(?:[^\\\\s]+/)?tcrn-workflow\\\\.mjs$`, "u");',
-    replace: `const HOST_ENGINE = /tcrn-workflow\\.mjs/u;`,
+    find: 'let HOST_ENGINE = new RegExp(`^${escapeRegExp(PRIVATE_RUNTIME_ROOT)}/engine/(?:[^\\\\s]+/)?tcrn-workflow\\\\.mjs$`, "u");',
+    replace: `let HOST_ENGINE = /tcrn-workflow\\.mjs/u;`,
     witness: "H17",
   },
   { id: "scratch-root-tmp", find: `["/tmp/", "/var/tmp/", "/run/", "/dev/null"]`, replace: `["/var/tmp/", "/run/", "/dev/null"]`, witness: "H05" },
@@ -262,15 +262,15 @@ const MUTATIONS = [
   { id: "host-check", find: `      if (!transport.host || !HOST_NAME.test(transport.host)) continue;`, replace: `      if (false) continue;`, witness: "E01" },
   {
     id: "host-anchor",
-    find: 'const HOST_NAME = new RegExp(`^${escapeRegExp(PRIVATE_VM_HOST)}(?:\\\\.[A-Za-z0-9.-]+)?$`, "u");',
-    replace: `const HOST_NAME = /./u;`,
+    find: 'let HOST_NAME = new RegExp(`^${escapeRegExp(PRIVATE_VM_HOST)}(?:\\\\.[A-Za-z0-9.-]+)?$`, "u");',
+    replace: `let HOST_NAME = /./u;`,
     witness: "E02",
   },
   { id: "governance-check", find: `      if (!GOVERNANCE.test(transport.remote)) continue;`, replace: `      if (false) continue;`, witness: "E03" },
   {
     id: "governance-anchor",
-    find: 'const GOVERNANCE = new RegExp(`${escapeRegExp(PRIVATE_GOVERNANCE_ROOT)}(?![A-Za-z0-9_-])`, "u");',
-    replace: `const GOVERNANCE = /governance/u;`,
+    find: 'let GOVERNANCE = new RegExp(`${escapeRegExp(PRIVATE_GOVERNANCE_ROOT)}(?![A-Za-z0-9_-])`, "u");',
+    replace: `let GOVERNANCE = /governance/u;`,
     witness: "E04",
   },
   // The heart of defect 3: scope the write-primitive scan to the remote command.
@@ -916,4 +916,74 @@ test("observe semantics: classify never emits a blocking decision", async () => 
     assert.equal(Object.hasOwn(got, "permissionDecision"), false, "observe mode must not emit a permission decision");
   }
   assert.equal(source.includes("permissionDecision"), false, "switching to enforce is the review layer's call (MIN-058)");
+});
+
+// ---------------------------------------------------------------------------
+// TCRN-CROSS-STORY-456 (SUB-230): neither host hands the hook process the TCRN_SSH_* env
+// block, so in a real session the observer reported SSH_OBSERVER_RUNTIME_CONFIG_REQUIRED
+// and let everything through unexamined. Hook mode now reads the same env block the
+// channel gate reads, from the container root named by --container-root or by the hook
+// environment's CLAUDE_PROJECT_DIR. Every value here is synthetic. Red leg: take the
+// fallback out and the first test reports the runtime configuration missing.
+// ---------------------------------------------------------------------------
+
+function strippedEnv(extra = {}) {
+  const env = { ...process.env };
+  for (const name of ["TCRN_SSH_GOVERNED_HOST", "TCRN_SSH_RUNTIME_ROOT", "TCRN_SSH_LOOPBACK", "TCRN_SSH_FACADE_ENDPOINT", "TCRN_SSH_TARGET_ROSTER", "CLAUDE_PROJECT_DIR"]) delete env[name];
+  return { ...env, ...extra };
+}
+
+test("STORY-456 AC1: with no TCRN_SSH_* in the hook environment, the container settings env configures and classifies", async () => {
+  const root = await makeProjectRoot({ hooks: null });
+  const logDir = await mkdtemp(join(tmpdir(), "s456-hook-"));
+  try {
+    for (const [label, args, extra] of [
+      ["CLAUDE_PROJECT_DIR", [], { CLAUDE_PROJECT_DIR: root }],
+      ["--container-root", ["--container-root", root], {}],
+    ]) {
+      const sink = join(logDir, `${label.replace(/[^a-z]/giu, "")}.log`);
+      const env = strippedEnv({ ...extra, S2_OBSERVE_LOG: sink });
+      const hit = spawnSync(process.execPath, [SOURCE_PATH, ...args], { encoding: "utf8", env, input: hookPayload });
+      assert.equal(hit.status, 0, `${label}: ${hit.stderr}`);
+      assert.equal(hit.stderr, "", `${label}: no runtime configuration refusal`);
+      const logged = (await readFile(sink, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+      assert.deepEqual(logged.map((entry) => entry.reason), ["ssh-write"], `${label}: the settings values are the values classified against`);
+      const pass = spawnSync(process.execPath, [SOURCE_PATH, ...args], { encoding: "utf8", env, input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "git status" } }) });
+      assert.equal(pass.status, 0, label);
+      assert.equal(pass.stderr, "", label);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(logDir, { recursive: true, force: true });
+  }
+});
+
+test("STORY-456 AC2: settings without the values still fail open with exit 1 and name only what is missing", async () => {
+  const root = await makeProjectRoot({ hooks: null, env: { TCRN_SSH_GOVERNED_HOST: FIXTURE_HOST, TCRN_SSH_TARGET_ROSTER: TARGET_ROSTER } });
+  try {
+    const run = spawnSync(process.execPath, [SOURCE_PATH, "--container-root", root], { encoding: "utf8", env: strippedEnv(), input: hookPayload });
+    assert.equal(run.status, 1);
+    const report = JSON.parse(run.stderr.trim());
+    assert.equal(report.reason, "RUNTIME_CONFIGURATION_INVALID");
+    assert.equal(report.status, "SSH_OBSERVER_RUNTIME_CONFIG_REQUIRED");
+    assert.match(report.detail, /TCRN_SSH_RUNTIME_ROOT, TCRN_SSH_LOOPBACK, TCRN_SSH_FACADE_ENDPOINT/u);
+    assert.equal(run.stderr.includes(FIXTURE_HOST), false, "a value never reaches the error output");
+    assert.equal(run.stderr.includes("TCRN_SSH_GOVERNED_HOST"), false, "a supplied name is not reported as missing");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("STORY-456 R1: a value in the hook environment outranks the container settings", async () => {
+  const root = await makeProjectRoot({ hooks: null, env: { TCRN_SSH_GOVERNED_HOST: "other-host.invalid", TCRN_SSH_RUNTIME_ROOT: FIXTURE_RUNTIME_ROOT, TCRN_SSH_LOOPBACK: FIXTURE_LOOPBACK, TCRN_SSH_FACADE_ENDPOINT: FIXTURE_FACADE_ENDPOINT, TCRN_SSH_TARGET_ROSTER: TARGET_ROSTER } });
+  const logDir = await mkdtemp(join(tmpdir(), "s456-precedence-"));
+  try {
+    const sink = join(logDir, "hits.log");
+    const run = spawnSync(process.execPath, [SOURCE_PATH, "--container-root", root], { encoding: "utf8", env: strippedEnv({ TCRN_SSH_GOVERNED_HOST: FIXTURE_HOST, S2_OBSERVE_LOG: sink }), input: hookPayload });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal((await readFile(sink, "utf8")).trim().split("\n").length, 1, "the environment's host, not the settings host, is the one that registers and classifies");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(logDir, { recursive: true, force: true });
+  }
 });
