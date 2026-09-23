@@ -9,6 +9,7 @@ export const TELEMETRY_AVAILABILITY = Object.freeze(["available", "unavailable",
 const OBSERVATION_CHANNELS = Object.freeze(["retrieval", "reference", "trigger", "verify"]);
 const OBSERVATION_CHANNEL_BY_KIND: Record<string, string> = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify", "gate-result": "verify" });
 const OBSERVATION_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v1";
+const OBSERVATION_CHANNEL_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v2";
 const OBSERVATION_BOUNDARY_PREFIX = "telemetry:observation-collector:";
 export const TELEMETRY_LINE_BYTES = 16 * 1024;
 export const TELEMETRY_RETENTION_DAYS = 90;
@@ -421,14 +422,15 @@ function observationIntervals(rows: readonly TelemetryRecord[]): readonly { read
   return intervals;
 }
 
-function observationCoverageChannelValid(value: TelemetryPayload, entries: readonly TelemetryRecord[], channel: string, from: string, until: string): boolean {
-  const proof = (value.channelCheckpoints as Record<string, unknown>)[channel];
+// One channel's checkpoint against the records it claims. `zero` is only for the per-channel
+// v2 receipt's observed zero (STORY-453 R2): no real record, and a high-water count of 0.
+function observationCoverageChannelValid(proof: unknown, entries: readonly TelemetryRecord[], channel: string, from: string, until: string, zero = false): boolean {
   if (proof === null || typeof proof !== "object" || Array.isArray(proof)) return false;
   const fields = proof as Record<string, unknown>;
   if (canonicalJson(Object.keys(fields).sort()) !== canonicalJson(["availability", "highWaterCount", "highWaterDay", "highWaterDigest", "recordCount", "source", "sourceDigest", "startSequence", "stopSequence"])) return false;
   const boundary = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)), exact = boundary.filter((record) => record.payload.source === fields.source), identityPrefix = typeof fields.source === "string" ? fields.source.slice(0, -channel.length) : "", rows = exact.length > 0 ? exact : boundary.filter((record) => String(record.payload.source).startsWith(identityPrefix) && String(record.payload.source).endsWith(`:${channel}`));
   const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort(observationChronologicalCompare);
-  if (rows.length === 0 || actual.length === 0) return false;
+  if (rows.length === 0 || (actual.length === 0) !== zero) return false;
   const groups = new Map<string, TelemetryRecord[]>(); for (const row of rows) { const source = row.payload.source as string; groups.set(source, [...(groups.get(source) ?? []), row]); }
   const intervals = [...groups.values()].flatMap((group) => observationIntervals(group) ?? []);
   const fromValue = parseStrictInstant(from), untilValue = parseStrictInstant(until);
@@ -437,14 +439,38 @@ function observationCoverageChannelValid(value: TelemetryPayload, entries: reado
   for (const interval of intervals) { if (interval.start > cursor) return false; if (interval.end > cursor) cursor = interval.end; }
   const terminal = intervals.reduce((best, interval) => best === null || interval.end > best.end ? interval : best, null as typeof intervals[number] | null);
   const selected = intervals.flatMap((interval) => interval.ordered).sort(observationChronologicalCompare);
-  return fields.availability === "available" && typeof fields.source === "string" && fields.source.startsWith(OBSERVATION_BOUNDARY_PREFIX) && typeof fields.sourceDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.sourceDigest) && Number.isSafeInteger(fields.recordCount) && Number(fields.recordCount) >= 2 && selected.length === fields.recordCount && Number.isSafeInteger(fields.highWaterCount) && Number(fields.highWaterCount) >= 1 && Number(fields.highWaterCount) === actual.length && fields.highWaterDay === from.slice(0, 10) && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(actual as unknown as import("../../protocol/src/index.js").JsonValue) && cursor >= untilValue - 1_000_000n && terminal !== null && Number.isSafeInteger(fields.startSequence) && Number.isSafeInteger(fields.stopSequence) && Number(fields.startSequence) === Number(intervals[0]?.ordered[0]?.payload.sequence) && Number(fields.stopSequence) === Number(terminal.last.payload.sequence) && canonicalSha256(selected as unknown as import("../../protocol/src/index.js").JsonValue) === fields.sourceDigest;
+  return fields.availability === "available" && typeof fields.source === "string" && fields.source.startsWith(OBSERVATION_BOUNDARY_PREFIX) && typeof fields.sourceDigest === "string" && /^[a-f0-9]{64}$/u.test(fields.sourceDigest) && Number.isSafeInteger(fields.recordCount) && Number(fields.recordCount) >= 2 && selected.length === fields.recordCount && Number.isSafeInteger(fields.highWaterCount) && Number(fields.highWaterCount) >= (zero ? 0 : 1) && Number(fields.highWaterCount) === actual.length && fields.highWaterDay === from.slice(0, 10) && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(actual as unknown as import("../../protocol/src/index.js").JsonValue) && cursor >= untilValue - 1_000_000n && terminal !== null && Number.isSafeInteger(fields.startSequence) && Number.isSafeInteger(fields.stopSequence) && Number(fields.startSequence) === Number(intervals[0]?.ordered[0]?.payload.sequence) && Number(fields.stopSequence) === Number(terminal.last.payload.sequence) && canonicalSha256(selected as unknown as import("../../protocol/src/index.js").JsonValue) === fields.sourceDigest;
 }
 
 function observationCoverageValid(value: TelemetryPayload, entries: readonly TelemetryRecord[], from: string, until: string): boolean {
   const channels = value.channels;
   if (value.source !== "telemetry:observation-collector" || value.coverageVersion !== OBSERVATION_COVERAGE_VERSION || !Array.isArray(channels) || channels.length !== OBSERVATION_CHANNELS.length || new Set(channels).size !== channels.length || !OBSERVATION_CHANNELS.every((channel) => channels.includes(channel)) || value.channelCheckpoints === null || typeof value.channelCheckpoints !== "object" || Array.isArray(value.channelCheckpoints)) return false;
   const proofs = value.channelCheckpoints as Record<string, unknown>;
-  return canonicalJson(Object.keys(proofs).sort()) === canonicalJson([...OBSERVATION_CHANNELS].sort()) && OBSERVATION_CHANNELS.every((channel) => observationCoverageChannelValid(value, entries, channel, from, until));
+  return canonicalJson(Object.keys(proofs).sort()) === canonicalJson([...OBSERVATION_CHANNELS].sort()) && OBSERVATION_CHANNELS.every((channel) => observationCoverageChannelValid(proofs[channel], entries, channel, from, until));
+}
+
+/**
+ * TCRN-CROSS-STORY-453: a per-channel (v2) seal receipt against the records it claims. The
+ * single-channel rules are the v1 rules (interval union over the whole UTC day, boundary
+ * phase and sequence, high water, source identity); an observed zero additionally needs no
+ * real record and the channel's valid ok self-checks, named by id. `entries` holds the day's
+ * records and the boundary rows around it; receipts themselves are not entries.
+ */
+export function observationChannelReceiptValid(receipt: TelemetryRecord, entries: readonly TelemetryRecord[]): boolean {
+  const value = receipt.payload;
+  const channel = value.channel as string;
+  const from = String(value.coveredFrom);
+  const until = String(value.coveredUntil);
+  const day = from.slice(0, 10);
+  if (receipt.kind !== "observation-coverage" || value.source !== "telemetry:observation-collector" || value.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION || value.availability !== "available" || value.collectionErrors !== 0 || !OBSERVATION_CHANNELS.includes(channel) || !/^\d{4}-\d{2}-\d{2}T00:00:00\.000Z$/u.test(from) || until !== new Date(Date.parse(from) + 86_400_000).toISOString() || Date.parse(receipt.at) < Date.parse(until)) return false;
+  const inDay = entries.filter((record) => new Date(record.at).toISOString().slice(0, 10) === day);
+  const actual = inDay.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort(observationChronologicalCompare);
+  const selfChecks = inDay.filter((record) => record.kind === COLLECTOR_SELF_CHECK_KIND && record.payload.channel === channel && record.payload.verdict === "ok" && collectorSelfCheckProblem(record) === null).map((record) => record.id).sort().slice(0, 64);
+  const zero = value.outcome === "observed-zero";
+  if (!zero && value.outcome !== "records") return false;
+  const proofEntries = entries.filter((record) => (record.at >= from && record.at < until) || String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  return observationCoverageChannelValid(value.checkpoint, proofEntries, channel, from, until, zero) && value.recordCount === actual.length && value.sourceDigest === canonicalSha256(actual as unknown as import("../../protocol/src/index.js").JsonValue)
+    && canonicalJson(value.selfCheckIds as import("../../protocol/src/index.js").JsonValue) === canonicalJson(zero ? selfChecks : []) && (!zero || selfChecks.length > 0);
 }
 
 // TCRN-CROSS-STORY-452: a collector self-check records that a channel's own write path ran
@@ -608,7 +634,8 @@ export async function readTelemetryObservationWindow(root: string, at: string, w
     const until = new Date(new Date(from).getTime() + 86_400_000).toISOString();
     const entries = [...(dayRecords.get(name) ?? [])].sort((left, right) => left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id));
     const sourceDigest = canonicalSha256(entries as unknown as import("../../protocol/src/index.js").JsonValue);
-    const receipts = coverage.filter((record) => record.payload.coveredFrom === from && record.payload.coveredUntil === until);
+    // A per-channel (v2) receipt is judged by its own reader; the four-channel rules here are unchanged.
+    const receipts = coverage.filter((record) => record.payload.coveredFrom === from && record.payload.coveredUntil === until && record.payload.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION);
     const proven = receipts.length > 0 && receipts.every((record) => {
       const value = record.payload;
       return value.availability === "available" && value.collectionErrors === 0 &&

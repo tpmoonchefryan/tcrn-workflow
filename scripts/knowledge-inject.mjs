@@ -730,18 +730,66 @@ export async function sealObservationDay(root, { at = new Date().toISOString(), 
   }
   const problems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
   const sourceDigest = canonicalSha256(entries);
-  if (problems.length > 0 || entries.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until, missingChannels, invalidChannels, recordCount: entries.length, sourceDigest };
-  const existing = read.records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until);
+  const channels = await sealObservationChannels(core, root, read.records, { at, from, until, entries, proofEntries, unreadable: problems.length > 0 });
+  if (problems.length > 0 || entries.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until, missingChannels, invalidChannels, recordCount: entries.length, sourceDigest, channels };
+  const existing = read.records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until && record.payload.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION);
   const matching = existing.find((record) => record.payload.sourceDigest === sourceDigest && record.payload.recordCount === entries.length);
-  if (matching !== undefined) return { ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: true, record: matching };
-  if (existing.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest };
+  if (matching !== undefined) return { ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: true, record: matching, channels };
+  if (existing.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, channels };
   const receipt = await core.appendTelemetryRecord(root, core.createTelemetryRecord({
     at,
     kind: "observation-coverage",
     session: `observation-seal-${from.slice(0, 10)}`,
     payload: { source: "telemetry:observation-collector", availability: "available", coverageVersion: "tcrn.telemetry-observation-coverage.v1", coveredFrom: from, coveredUntil: until, channels: ["retrieval", "reference", "trigger", "verify"], channelCheckpoints, recordCount: entries.length, sourceDigest, collectionErrors: 0 },
   }));
-  return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record };
+  return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record, channels };
+}
+
+const OBSERVATION_CHANNEL_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v2";
+
+// TCRN-CROSS-STORY-453 R1/R2/R4: every channel is judged alone and sealed on its own v2
+// receipt, so one missing channel blocks no other. Inside a channel the v1 rules stand
+// unchanged (interval union over the whole UTC day from one trusted host source, boundary
+// phase and sequence, high water, no fragments); a channel with no real record seals only as
+// an observed zero, which needs a valid ok self-check from its own write path. The receipt
+// keeps the channel's count and digest for the day. One receipt per channel and day: a
+// repeat is a duplicate, a different one a conflict. Nothing is backfilled.
+async function sealObservationChannels(core, root, records, { at, from, until, entries, proofEntries, unreadable }) {
+  const telemetry = await telemetryModule();
+  const results = [];
+  for (const channel of OBSERVATION_CHANNELS) {
+    const refuse = (reasonCode = "TELEMETRY_COVERAGE_UNPROVEN") => results.push({ channel, ok: false, reasonCode });
+    const rows = proofEntries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
+    const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
+    const selfCheckIds = actual.length > 0 ? [] : entries.filter((record) => record.kind === telemetry?.COLLECTOR_SELF_CHECK_KIND && record.payload.channel === channel && record.payload.verdict === "ok" && telemetry.collectorSelfCheckProblem(record) === null).map((record) => record.id).sort().slice(0, 64);
+    if (unreadable || rows.length === 0 || (actual.length === 0 && selfCheckIds.length === 0)) { refuse(); continue; }
+    const identities = [...new Set(rows.map((record) => observationSourceIdentity(record, channel)).filter(Boolean))].sort();
+    const candidate = identities.map((identity) => ({ identity, proof: observationCoverageCandidate(rows.filter((record) => observationSourceIdentity(record, channel) === identity), actual, from, until) }))
+      .find((entry) => entry.proof !== null);
+    if (candidate === undefined) { refuse(); continue; }
+    const outcome = actual.length > 0 ? "records" : "observed-zero";
+    const payload = {
+      source: "telemetry:observation-collector",
+      availability: "available",
+      coverageVersion: OBSERVATION_CHANNEL_COVERAGE_VERSION,
+      coveredFrom: from,
+      coveredUntil: until,
+      channel,
+      outcome,
+      checkpoint: { availability: "available", source: candidate.identity, startSequence: candidate.proof.startSequence, stopSequence: candidate.proof.stopSequence, recordCount: candidate.proof.rows.length, sourceDigest: canonicalSha256(candidate.proof.rows), highWaterDay: from.slice(0, 10), highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual) },
+      selfCheckIds,
+      recordCount: actual.length,
+      sourceDigest: canonicalSha256(actual),
+      collectionErrors: 0,
+    };
+    const existing = records.filter((record) => record.kind === "observation-coverage" && record.payload.coverageVersion === OBSERVATION_CHANNEL_COVERAGE_VERSION && record.payload.channel === channel && record.payload.coveredFrom === from && record.payload.coveredUntil === until);
+    const matching = existing.find((record) => record.payload.outcome === outcome && record.payload.recordCount === actual.length && record.payload.sourceDigest === payload.sourceDigest);
+    if (matching !== undefined) { results.push({ channel, ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", outcome, duplicate: true, id: matching.id }); continue; }
+    if (existing.length > 0) { refuse("TELEMETRY_COVERAGE_CONFLICT"); continue; }
+    const receipt = await core.appendTelemetryRecord(root, core.createTelemetryRecord({ at, kind: "observation-coverage", session: `observation-seal-${from.slice(0, 10)}-${channel}`, payload }));
+    results.push({ channel, ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", outcome, duplicate: receipt.duplicate, id: receipt.record.id });
+  }
+  return results;
 }
 
 async function queryLanguageAnswer(prompt, settings, host) {

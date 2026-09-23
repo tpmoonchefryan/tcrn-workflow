@@ -571,7 +571,7 @@ test("STORY-393: continuous and overlapping trusted sessions form one coverage i
   ]);
   const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
   assert.equal(sealed.ok, true, JSON.stringify(sealed));
-  const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage");
+  const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage" && record.payload.coverageVersion === "tcrn.telemetry-observation-coverage.v1");
   assert.equal(receipt.payload.channelCheckpoints.retrieval.recordCount, 4);
   assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true);
 });
@@ -585,7 +585,7 @@ test("STORY-393 U5: repeated start-stop pairs in one trusted session form one co
   ]);
   const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
   assert.equal(sealed.ok, true, JSON.stringify(sealed));
-  const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage");
+  const receipt = (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.find((record) => record.kind === "observation-coverage" && record.payload.coverageVersion === "tcrn.telemetry-observation-coverage.v1");
   assert.equal(receipt.payload.channelCheckpoints.retrieval.recordCount, 4);
   assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true);
 });
@@ -703,6 +703,9 @@ test("STORY-393: partial, gapped, and reverse-phase upstream coverage never seal
     assert.equal(sealed.ok, false, name);
     assert.deepEqual(sealed.invalidChannels, ["retrieval", "reference", "trigger", "verify"], name);
     assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, false, name);
+    // TCRN-CROSS-STORY-453 AC2: sealing by channel does not loosen any single channel.
+    assert.deepEqual(sealed.channels?.map((entry) => entry.reasonCode), Array(4).fill("TELEMETRY_COVERAGE_UNPROVEN"), name);
+    assert.deepEqual((await readTelemetryRecords(root, { kind: "observation-coverage", limit: 10 })).records, [], name);
   }
 });
 
@@ -791,4 +794,114 @@ test("STORY-452 AC6 and R3: a day from before self-checks existed reads unknown,
   const sealed = await sealObservationDay(withoutVerify, { at: "2026-09-11T00:00:01.000Z" });
   assert.equal(sealed.ok, false);
   assert.ok(sealed.invalidChannels.includes("verify"), JSON.stringify(sealed));
+});
+
+// TCRN-CROSS-STORY-453 (SUB-226): each channel is sealed on its own receipt. One trusted
+// session covers 2026-09-10 on every channel; `actual` names the channels with a real
+// record that day and `selfChecked` the channels with an ok self-check from their own
+// write path. The four-channel v1 receipt is still written when all four prove.
+const SEAL_DAY = "2026-09-10";
+
+async function channelDay(root, { actual = [], selfChecked = [] } = {}) {
+  const records = {};
+  for (const channel of OBSERVATION_CHANNELS) {
+    const kind = { retrieval: "retrieval", reference: "reference", trigger: "trigger", verify: "verify" }[channel];
+    const observed = [];
+    if (actual.includes(channel)) {
+      const real = createTelemetryRecord({ at: `${SEAL_DAY}T10:00:00.000Z`, kind, session: `seal-actual-${channel}`, payload: { source: `seal-actual:${channel}`, availability: "available" } });
+      await appendTelemetryRecord(root, real);
+      observed.push(real);
+    }
+    if (selfChecked.includes(channel)) await appendTelemetryRecord(root, selfCheck({ channel, at: `${SEAL_DAY}T11:00:00.000Z`, session: `seal-session-${channel}` }));
+    const source = `${OBSERVATION_BOUNDARY_PREFIX}test-host:seal-session:${channel}`;
+    for (const [phase, at, sequence] of [["start", "2026-09-09T23:59:59.000Z", 1], ["stop", "2026-09-11T00:00:00.000Z", 2]]) {
+      const day = phase === "start" ? "2026-09-09" : SEAL_DAY;
+      const seen = day === SEAL_DAY ? observed : [];
+      await appendTelemetryRecord(root, createTelemetryRecord({
+        at, kind, session: "seal-session",
+        payload: { source, availability: "available", phase, sequence, highWaterDay: day, highWaterCount: seen.length, highWaterDigest: canonicalSha256(seen), highWaterAt: seen.at(-1)?.at ?? null },
+      }));
+    }
+    records[channel] = observed;
+  }
+  return records;
+}
+
+async function channelReceipts(root) {
+  return (await readTelemetryRecords(root, { kind: "observation-coverage", limit: 100 })).records
+    .filter((record) => record.payload.coverageVersion === "tcrn.telemetry-observation-coverage.v2");
+}
+
+async function receiptEntries(root) {
+  return (await readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER })).records.filter((record) => record.kind !== "observation-coverage");
+}
+
+test("STORY-453 AC1: three complete channels are sealed on their own receipts while verify stays unproven", async (t) => {
+  const root = await scratch("tcrn-telemetry-seal-by-channel-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await channelDay(root, { actual: ["retrieval", "reference", "trigger"] });
+  const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.deepEqual(sealed.channels?.map((entry) => [entry.channel, entry.reasonCode, entry.outcome ?? null]), [
+    ["retrieval", "TELEMETRY_COVERAGE_RECORDED", "records"],
+    ["reference", "TELEMETRY_COVERAGE_RECORDED", "records"],
+    ["trigger", "TELEMETRY_COVERAGE_RECORDED", "records"],
+    ["verify", "TELEMETRY_COVERAGE_UNPROVEN", null],
+  ], "a missing verify no longer fails the other three");
+  const receipts = await channelReceipts(root);
+  assert.deepEqual(receipts.map((record) => record.payload.channel).sort(), ["reference", "retrieval", "trigger"]);
+  const entries = await receiptEntries(root);
+  for (const receipt of receipts) {
+    assert.equal(receipt.payload.coveredFrom, `${SEAL_DAY}T00:00:00.000Z`);
+    assert.equal(receipt.payload.recordCount, 1, "the receipt keeps the channel's own count and digest for the day");
+    assert.equal(telemetryCore.observationChannelReceiptValid(receipt, entries), true, receipt.payload.channel);
+  }
+  assert.equal(sealed.ok, false, "the four-channel bundle is still unproven: no v1 receipt without verify");
+  assert.deepEqual(sealed.invalidChannels, ["verify"]);
+  assert.equal((await readTelemetryRecords(root, { kind: "observation-coverage", limit: 100 })).records.length, 3);
+});
+
+test("STORY-453 R2: an ok self-check with no real record and a proven interval seals an observed zero", async (t) => {
+  const root = await scratch("tcrn-telemetry-seal-observed-zero-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await channelDay(root, { actual: ["retrieval", "reference", "trigger"], selfChecked: ["verify"] });
+  const sealed = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  const verifyResult = sealed.channels?.find((entry) => entry.channel === "verify");
+  assert.equal(verifyResult?.reasonCode, "TELEMETRY_COVERAGE_RECORDED");
+  assert.equal(verifyResult.outcome, "observed-zero");
+  const verify = (await channelReceipts(root)).find((record) => record.payload.channel === "verify");
+  assert.equal(verify?.payload.outcome, "observed-zero");
+  assert.equal(verify.payload.recordCount, 0);
+  assert.equal(verify.payload.selfCheckIds.length, 1);
+  const entries = await receiptEntries(root);
+  assert.equal(telemetryCore.observationChannelReceiptValid(verify, entries), true);
+  assert.equal(telemetryCore.observationChannelReceiptValid(verify, entries.filter((record) => record.kind !== "collector-self-check")), false,
+    "without the self-check the same interval is not an observed zero");
+});
+
+test("STORY-453 AC3 and R4: a second seal is a duplicate per channel, and a conflicting receipt is reported", async (t) => {
+  const root = await scratch("tcrn-telemetry-seal-duplicate-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await channelDay(root, { actual: [...OBSERVATION_CHANNELS] });
+  const first = await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(first.ok, true, "all four prove: the v1 receipt is written as before");
+  const second = await sealObservationDay(root, { at: "2026-09-11T00:00:02.000Z" });
+  assert.deepEqual(second.channels?.map((entry) => [entry.reasonCode, entry.duplicate]), Array(4).fill(["TELEMETRY_COVERAGE_ALREADY_RECORDED", true]));
+  assert.equal((await channelReceipts(root)).length, 4, "no new receipt");
+  assert.equal((await readTelemetryObservationWindow(root, "2026-09-11T12:00:00.000Z", 1)).complete, true,
+    "AC4: the v1 receipt is read by its own rules beside the per-channel receipts");
+
+  const conflicted = await scratch("tcrn-telemetry-seal-conflict-");
+  t.after(() => rm(conflicted, { recursive: true, force: true }));
+  await channelDay(conflicted, { actual: [...OBSERVATION_CHANNELS] });
+  const genuine = await sealObservationDay(conflicted, { at: "2026-09-11T00:00:01.000Z" });
+  const retrieval = (await channelReceipts(conflicted)).find((record) => record.payload.channel === "retrieval");
+  const other = await scratch("tcrn-telemetry-seal-conflict-copy-");
+  t.after(() => rm(other, { recursive: true, force: true }));
+  await channelDay(other, { actual: [...OBSERVATION_CHANNELS] });
+  await appendTelemetryRecord(other, createTelemetryRecord({ at: retrieval.at, kind: "observation-coverage", session: retrieval.session, payload: { ...retrieval.payload, sourceDigest: "0".repeat(64) } }));
+  const conflict = await sealObservationDay(other, { at: "2026-09-11T00:00:01.000Z" });
+  assert.equal(genuine.ok, true);
+  assert.equal(conflict.channels?.find((entry) => entry.channel === "retrieval")?.reasonCode, "TELEMETRY_COVERAGE_CONFLICT");
+  assert.deepEqual(conflict.channels?.filter((entry) => entry.channel !== "retrieval").map((entry) => entry.reasonCode), Array(3).fill("TELEMETRY_COVERAGE_RECORDED"),
+    "a conflict on one channel blocks no other");
 });
