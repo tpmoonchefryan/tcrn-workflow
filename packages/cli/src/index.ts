@@ -122,6 +122,7 @@ import {
   resolveQueryLanguage,
   templateBindingFromWorkRecord,
   readTelemetryRecordById,
+  readObservationDayVerdicts,
   readTelemetryRecords,
   appendTelemetryRecord,
   createTelemetryRecord,
@@ -1366,6 +1367,7 @@ export const COMMAND_CATALOG = Object.freeze([
   // PG-specific; it is removed.
   { name: "storage-home-status", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }] },
   { name: "telemetry-list", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "class", required: false, valueKind: "string" }, { name: "since", required: false, valueKind: "instant" }, { name: "limit", required: false, valueKind: "integer" }, { name: "offset", required: false, valueKind: "integer" }] },
+  { name: "telemetry-observation", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "day", required: true, valueKind: "string" }] },
   { name: "telemetry-stats", availability: "cli", mutates: false, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "kind", required: false, valueKind: "string" }, { name: "class", required: false, valueKind: "string" }, { name: "since", required: false, valueKind: "instant" }] },
   { name: "template-admit", availability: "cli", mutates: true, flags: [{ name: "workspace", required: true, valueKind: "string" }, { name: "expected-version", required: true, valueKind: "integer", headSentinel: true }, { name: "at", required: true, valueKind: "instant" }, { name: "template", required: true, valueKind: "string" }, { name: "owner", required: true, valueKind: "string" }, { name: "actor", required: false, valueKind: "string" }, { name: "attest-dir", required: false, valueKind: "string" }] },
   { name: "template-validate", availability: "cli", mutates: false, flags: [{ name: "template", required: true, valueKind: "string" }] },
@@ -2870,6 +2872,28 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
       headEventHash: state.headEventHash,
       ...result,
     }));
+    return;
+  }
+  // TCRN-CROSS-STORY-453 R3: one UTC day's per-channel observation verdicts (sealed,
+  // observed-zero, idle, unproven) with each receipt id and its validity. Read-only.
+  if (command === "telemetry-observation") {
+    const values = parseArguments(rest, ["workspace", "day"]);
+    required(values, ["workspace", "day"]);
+    const day = values.day ?? "";
+    if (!/^\d{4}-\d{2}-\d{2}$/u.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00.000Z`)) || new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) !== day) {
+      fail("CLI_ARGUMENT_MALFORMED", "day");
+    }
+    const state = await validateWorkspace(values.workspace ?? "");
+    const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
+    if (transient === undefined) fail("CLI_COMMAND_FAILED", "workspace has no transient root for telemetry");
+    const result = await readObservationDayVerdicts(transient.path, day);
+    io.write(canonicalJson({
+      reasonCode: "TELEMETRY_OBSERVATION_READY",
+      workspaceId: state.metadata.workspaceId,
+      version: state.version,
+      headEventHash: state.headEventHash,
+      ...result,
+    } as unknown as JsonValue));
     return;
   }
   if (command === "telemetry-stats") {

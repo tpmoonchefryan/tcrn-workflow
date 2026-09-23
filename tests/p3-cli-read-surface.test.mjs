@@ -11,14 +11,17 @@ import { COMMAND_CATALOG, runCli } from "../dist/build/packages/cli/src/index.js
 import {
   acquireWorkspaceLease,
   annotateWork,
+  appendTelemetryRecord,
   createProject,
+  createTelemetryRecord,
   createWork,
   deleteWork,
   initializeWorkspace,
   STORY_SCOPE_HEADINGS,
   validateWorkspace,
 } from "../dist/build/packages/core/src/index.js";
-import { PROTOCOL_LIMITS, validateEventChain } from "../dist/build/packages/protocol/src/index.js";
+import { OBSERVATION_BOUNDARY_PREFIX, sealObservationDay } from "../scripts/knowledge-inject.mjs";
+import { PROTOCOL_LIMITS, canonicalSha256, validateEventChain } from "../dist/build/packages/protocol/src/index.js";
 
 const instant = (second) => `2026-07-11T00:00:${String(second).padStart(2, "0")}Z`;
 const STORY_SCOPE = [
@@ -632,4 +635,29 @@ test("INC-027: the default window never stands in for a supplied one, and event-
   // WSA-3: a read verb answers from view-verified state, so a stale view refuses.
   await writeFile(join(fx.workspace, ".tcrn-workflow", "views", "index.json"), "{}\n");
   assert.equal(await reasonOf(["event-list", ...ws]), "WORKSPACE_VIEW_STALE");
+});
+
+// TCRN-CROSS-STORY-453 R3 (SUB-227): the per-channel daily verdicts are readable through
+// the engine CLI, so an observer reads them with the engine, not with a script of its own.
+test("STORY-453 R3: telemetry-observation reads a day's per-channel verdicts and receipt ids, read-only", async (context) => {
+  const fx = await fixture(context);
+  const transient = join(fx.base, "transient");
+  const real = createTelemetryRecord({ at: "2026-09-10T10:00:00.000Z", kind: "retrieval", session: "cli-real", payload: { source: "cli-test:retrieval", availability: "available" } });
+  await appendTelemetryRecord(transient, real);
+  for (const [phase, at, day, seen] of [["start", "2026-09-09T23:59:59.000Z", "2026-09-09", []], ["stop", "2026-09-11T00:00:00.000Z", "2026-09-10", [real]]]) {
+    await appendTelemetryRecord(transient, createTelemetryRecord({ at, kind: "retrieval", session: "cli-session", payload: { source: `${OBSERVATION_BOUNDARY_PREFIX}cli-host:cli-session:retrieval`, availability: "available", phase, sequence: phase === "start" ? 1 : 2, highWaterDay: day, highWaterCount: seen.length, highWaterDigest: canonicalSha256(seen), highWaterAt: seen.at(-1)?.at ?? null } }));
+  }
+  const sealed = await sealObservationDay(transient, { at: "2026-09-11T00:00:01.000Z" });
+  const retrievalSeal = sealed.channels.find((entry) => entry.channel === "retrieval");
+  assert.equal(retrievalSeal.reasonCode, "TELEMETRY_COVERAGE_RECORDED");
+  const before = await validateWorkspace(fx.workspace);
+  const read = await run(["telemetry-observation", "--workspace", fx.workspace, "--day", "2026-09-10"]);
+  assert.equal(read.reasonCode, "TELEMETRY_OBSERVATION_READY");
+  assert.equal(read.day, "2026-09-10");
+  assert.deepEqual(read.channels.map((entry) => [entry.channel, entry.verdict]), [["retrieval", "sealed"], ["reference", "unproven"], ["trigger", "unproven"], ["verify", "unproven"]],
+    "one host session was active that day, so the unsealed channels are unproven, not idle");
+  assert.deepEqual(read.channels[0].receipts, [{ id: retrievalSeal.id, coverageVersion: "tcrn.telemetry-observation-coverage.v2", valid: true }]);
+  assert.equal((await validateWorkspace(fx.workspace)).version, before.version, "reading appends nothing");
+  assert.equal(await reasonOf(["telemetry-observation", "--workspace", fx.workspace, "--day", "2026-02-30"]), "CLI_ARGUMENT_MALFORMED");
+  assert.equal(COMMAND_CATALOG.find((entry) => entry.name === "telemetry-observation")?.mutates, false);
 });

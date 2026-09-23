@@ -905,3 +905,50 @@ test("STORY-453 AC3 and R4: a second seal is a duplicate per channel, and a conf
   assert.deepEqual(conflict.channels?.filter((entry) => entry.channel !== "retrieval").map((entry) => entry.reasonCode), Array(3).fill("TELEMETRY_COVERAGE_RECORDED"),
     "a conflict on one channel blocks no other");
 });
+
+// TCRN-CROSS-STORY-453 R3 (SUB-227): the read side of per-channel sealing. Each channel of
+// a UTC day is sealed (a real-record receipt), an observed zero, idle (no boundary and no
+// self-check from any host that day) or unproven (activity that was not sealed); a v1
+// four-channel receipt still reads by its own rules and expands to all four channels.
+function verdicts(read) {
+  return Object.fromEntries(read.channels.map((entry) => [entry.channel, entry.verdict]));
+}
+
+test("STORY-453 R3: a channel day reads as sealed, observed zero, idle or unproven, with its receipts", async (t) => {
+  const root = await scratch("tcrn-telemetry-verdicts-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await channelDay(root, { actual: ["retrieval", "reference"], selfChecked: ["verify"] });
+  await sealObservationDay(root, { at: "2026-09-11T00:00:01.000Z" });
+  const read = await telemetryCore.readObservationDayVerdicts?.(root, SEAL_DAY);
+  assert.deepEqual(verdicts(read), { retrieval: "sealed", reference: "sealed", trigger: "unproven", verify: "observed-zero" },
+    "trigger had boundaries and neither a record nor a self-check: activity that was not sealed");
+  assert.equal(read.idle, false);
+  const retrieval = read.channels.find((entry) => entry.channel === "retrieval");
+  const receipt = (await channelReceipts(root)).find((record) => record.payload.channel === "retrieval");
+  assert.deepEqual(retrieval.receipts, [{ id: receipt.id, coverageVersion: "tcrn.telemetry-observation-coverage.v2", valid: true }]);
+  assert.deepEqual(read.channels.find((entry) => entry.channel === "trigger").receipts, []);
+
+  const idle = await telemetryCore.readObservationDayVerdicts(root, "2026-09-12");
+  assert.equal(idle.idle, true);
+  assert.deepEqual(verdicts(idle), { retrieval: "idle", reference: "idle", trigger: "idle", verify: "idle" }, "no boundary and no self-check: idle, listed apart from unproven");
+});
+
+test("STORY-453 R3: a v1 four-channel receipt still reads by its own rules and seals all four channels", async (t) => {
+  const sealedRoot = await scratch("tcrn-telemetry-verdicts-v1-source-");
+  t.after(() => rm(sealedRoot, { recursive: true, force: true }));
+  await channelDay(sealedRoot, { actual: [...OBSERVATION_CHANNELS] });
+  await sealObservationDay(sealedRoot, { at: "2026-09-11T00:00:01.000Z" });
+  const root = await scratch("tcrn-telemetry-verdicts-v1-");
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const record of (await readTelemetryRecords(sealedRoot, { limit: Number.MAX_SAFE_INTEGER })).records) {
+    if (record.payload.coverageVersion !== "tcrn.telemetry-observation-coverage.v2") await appendTelemetryRecord(root, record);
+  }
+  const read = await telemetryCore.readObservationDayVerdicts?.(root, SEAL_DAY);
+  assert.deepEqual(verdicts(read), { retrieval: "sealed", reference: "sealed", trigger: "sealed", verify: "sealed" });
+  assert.deepEqual(read.channels[0].receipts.map((entry) => [entry.coverageVersion, entry.valid]), [["tcrn.telemetry-observation-coverage.v1", true]]);
+  // The v1 rule is unchanged: one extra record in the day invalidates the four-channel receipt.
+  await appendTelemetryRecord(root, createTelemetryRecord({ at: `${SEAL_DAY}T12:00:00.000Z`, kind: "judge", session: "late", payload: { source: "late:judge", availability: "available" } }));
+  const late = await telemetryCore.readObservationDayVerdicts(root, SEAL_DAY);
+  assert.deepEqual(verdicts(late), { retrieval: "unproven", reference: "unproven", trigger: "unproven", verify: "unproven" });
+  assert.equal(late.channels[0].receipts[0].valid, false);
+});

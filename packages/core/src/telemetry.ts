@@ -562,6 +562,67 @@ export async function readObservationChannelDays(root: string, day: string): Pro
   return { ...classifyObservationChannelDays(records, day), problems };
 }
 
+export interface ObservationDayVerdict {
+  readonly channel: string;
+  readonly verdict: "sealed" | "observed-zero" | "idle" | "unproven";
+  readonly receipts: readonly { readonly id: string; readonly coverageVersion: string; readonly valid: boolean }[];
+}
+
+export interface ObservationDayVerdicts {
+  readonly day: string;
+  readonly idle: boolean;
+  readonly channels: readonly ObservationDayVerdict[];
+}
+
+function byInstant(left: TelemetryRecord, right: TelemetryRecord): number {
+  return left.at < right.at ? -1 : left.at > right.at ? 1 : left.id.localeCompare(right.id);
+}
+
+/**
+ * TCRN-CROSS-STORY-453 R3: each channel's verdict for one UTC day. `records` holds the day's
+ * records, the boundary rows around it and its seal receipts (the day file, the one before and
+ * the three after). A valid v2 receipt gives sealed or observed-zero; a v1 receipt, judged by
+ * the v1 rules, seals all four channels; otherwise the day is idle (no boundary row and no
+ * self-check from any host, STORY-454 R2) or the channel is unproven. Receipts are listed with
+ * their validity. Read-only.
+ */
+export function observationDayVerdicts(records: readonly TelemetryRecord[], day: string, { unreadable = false }: { readonly unreadable?: boolean } = {}): ObservationDayVerdicts {
+  const from = `${day}T00:00:00.000Z`;
+  const until = new Date(Date.parse(from) + 86_400_000).toISOString();
+  const entries = records.filter((record) => record.kind !== "observation-coverage");
+  const inDay = entries.filter((record) => new Date(record.at).toISOString().slice(0, 10) === day).sort(byInstant);
+  const boundary = entries.filter((record) => String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  const idle = !boundary.some((record) => record.payload.highWaterDay === day || new Date(record.at).toISOString().slice(0, 10) === day) && !inDay.some((record) => record.kind === COLLECTOR_SELF_CHECK_KIND);
+  const receipts = records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until).sort(byInstant);
+  const proofRecords = entries.filter((record) => (record.at >= from && record.at < until) || String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
+  const v1 = receipts.filter((record) => record.payload.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION).map((record) => {
+    const value = record.payload;
+    const valid = !unreadable && inDay.every((entry) => entry.payload.availability === "available") && value.availability === "available" && value.collectionErrors === 0 && Date.parse(record.at) >= Date.parse(until)
+      && observationCoverageValid(value, proofRecords, from, until) && value.recordCount === inDay.length && value.sourceDigest === canonicalSha256(inDay as unknown as import("../../protocol/src/index.js").JsonValue);
+    return { id: record.id, coverageVersion: String(value.coverageVersion), valid };
+  });
+  const v1Sealed = v1.length > 0 && v1.every((entry) => entry.valid);
+  const channels = OBSERVATION_CHANNELS.map((channel): ObservationDayVerdict => {
+    const ownRecords = inDay.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel);
+    const v2 = receipts.filter((record) => record.payload.coverageVersion === OBSERVATION_CHANNEL_COVERAGE_VERSION && record.payload.channel === channel)
+      .map((record) => ({ record, valid: !unreadable && ownRecords.every((entry) => entry.payload.availability === "available") && observationChannelReceiptValid(record, entries) }));
+    const sealed = v2.find((entry) => entry.valid);
+    const verdict = sealed !== undefined ? (sealed.record.payload.outcome === "observed-zero" ? "observed-zero" : "sealed") : v1Sealed ? "sealed" : idle ? "idle" : "unproven";
+    return { channel, verdict, receipts: [...v1, ...v2.map(({ record, valid }) => ({ id: record.id, coverageVersion: OBSERVATION_CHANNEL_COVERAGE_VERSION, valid }))] };
+  });
+  return { day, idle, channels };
+}
+
+/** Read-only: reads the day file, the one before and the three after, then observationDayVerdicts. */
+export async function readObservationDayVerdicts(root: string, day: string): Promise<ObservationDayVerdicts & { readonly problems: TelemetryReadResult["problems"] }> {
+  const target = await readTelemetryDay(root, day);
+  const records = [...target.records];
+  for (const offset of [-1, 1, 2, 3]) {
+    records.push(...(await readTelemetryDay(root, new Date(Date.parse(`${day}T00:00:00.000Z`) + offset * 86_400_000).toISOString().slice(0, 10))).records);
+  }
+  return { ...observationDayVerdicts(records, day, { unreadable: target.problems.length > 0 }), problems: target.problems };
+}
+
 export async function readTelemetryObservationWindow(root: string, at: string, windowDays = TELEMETRY_RETENTION_DAYS): Promise<TelemetryObservationWindow> {
   if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650) fail("TELEMETRY_FILTER_INVALID", "windowDays must be a positive bounded integer");
   try { parseStrictInstant(at); } catch { fail("TELEMETRY_FILTER_INVALID", "at is not a strict instant"); }
