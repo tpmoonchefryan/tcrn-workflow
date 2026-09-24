@@ -3,7 +3,42 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
-## Unreleased
+## 1.2.0 — minor candidate
+
+This release seals and reads the observation evidence behind automatic
+knowledge retirement one channel at a time (TCRN-CROSS-EPIC-138): a
+`collector-self-check` record class written by each channel's own write path,
+one v2 receipt per channel beside the unchanged four-channel v1 receipt, the
+read-only `telemetry-observation` verb, fitness windows counted in
+relevant-channel observation days with `windows`, `refusals`, `idleDays` and
+`unprovenDays` and `KNOWLEDGE_RETIRE_SWEEP_REFUSED` on a short window, per-day
+fitness summaries under `telemetry/summaries/<day>.json`, and one open
+observation interval per session (`TELEMETRY_BOUNDARY_ALREADY_OPEN`,
+TCRN-CROSS-STORY-464). It also bounds snapshot-less chain replay by the
+20,000-event `maxChainEvents` and writes the replay snapshot when an append
+crosses an interval multiple (TCRN-CROSS-STORY-451); writes the attestation
+lock as a `tcrn.attestation-lock.v2` line whose start time `ps` reads under
+`LC_ALL=C` and `TZ=UTC`, takes stale locks over safely, and reports lock
+state and uncovered single writes in `attestation-verify`
+(TCRN-CROSS-STORY-457, TCRN-CROSS-STORY-458, TCRN-CROSS-INC-382); lets the
+SSH write observer read its runtime configuration from the container
+settings env (TCRN-CROSS-STORY-456); gives judge telemetry `cliSource` and a
+bounded, redacted `failureDetail` and runs the host's own Claude CLI
+(TCRN-CROSS-STORY-459, TCRN-CROSS-INC-387); repairs the `batch:formal` entry
+(TCRN-CROSS-STORY-460, TCRN-CROSS-INC-383, TCRN-CROSS-INC-384); moves
+stale-version source archives aside in `verify:p8`, keeps portal tests off
+the real machine settings and documents the checks a release run makes
+(TCRN-CROSS-STORY-461, TCRN-CROSS-INC-386); adds a responsibility-classified
+proof count beside the raw ratio (TCRN-CROSS-STORY-462); and pins the INC-155
+coverage evidence to integrity relations (TCRN-CROSS-STORY-463). The 1.1.3
+known limitations on stale and empty attestation locks and on the
+10,000-event replay bound are resolved. `hardRatio` rises from 2.5324 to the
+measured 2.5354 with three recorded exceptions and `coreSourceLineCap` from
+24126 to the measured 24683 under Owner ruling OQ-EV1-1. The upgrade note
+(upgrade both hosts together) and the known limitations are in
+`docs/releases/1.2.0.md`. The immutable 1.1.3 Engine and 1.0.5 Helper
+publications remain unchanged; the paired 1.2.0/1.0.6 release is published
+only after exact-commit CI and independent asset verification.
 
 The offline vulnerability policy snapshot was refreshed on 2026-09-23 after a
 real advisory check of the complete frozen dependency graph (25 packages, 4
@@ -15,9 +50,7 @@ unchanged and `fast-uri` stays at the patched 3.1.6 (TCRN-CROSS-STORY-450).
 once the age exceeds `maxAgeDays` (30): the governance check shows the
 seven-day `VULNERABILITY_POLICY_EXPIRING` notice from 2026-10-16T00:00:00Z and
 reports `VULNERABILITY_POLICY_STALE` from 2026-10-24T00:00:00Z, the 31st UTC
-day after the check, unless the snapshot is refreshed again before then. The
-next version is Engine 1.2.0; its release commit folds this section into the
-1.2.0 section and into `docs/releases/1.2.0.md`.
+day after the check, unless the snapshot is refreshed again before then.
 
 `retire-proposals` keeps `missingDays` and `invalidDays` only as compatibility
 names: since TCRN-CROSS-STORY-454 they list the card window's idle days (no

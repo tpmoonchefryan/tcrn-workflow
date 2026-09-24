@@ -45,7 +45,7 @@ function runStripWarningFixture(emissions) {
 
 test("development mode is explicitly offline and telemetry-free", () => {
   assert.equal(DEFAULT_MODE, "development");
-  assert.equal(FRAMEWORK_VERSION, "1.1.3");
+  assert.equal(FRAMEWORK_VERSION, "1.2.0");
   assert.deepEqual(admitDevelopment(), {
     admitted: true,
     mode: "development",
