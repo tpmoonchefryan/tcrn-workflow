@@ -26,8 +26,17 @@ async function cli(args) {
   return JSON.parse(stdout);
 }
 
+// TCRN-CROSS-INC-386: the portal and every CLI it starts read and write machine settings
+// under HOME, so every portal child gets a scratch HOME inside its fixture, removed with it.
+async function scratchHome(base) {
+  const home = join(base, "home");
+  await mkdir(home, { recursive: true });
+  return home;
+}
+
 async function scratch(prefix, externalKey) {
   const base = await realpath(await mkdtemp(join(tmpdir(), prefix)));
+  const home = await scratchHome(base);
   const roots = {};
   for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
     const path = join(base, kind);
@@ -39,17 +48,18 @@ async function scratch(prefix, externalKey) {
     "--external-key", externalKey, "--at", "2026-08-11T15:00:00Z"]);
   const proseRoot = join(base, "prose");
   await mkdir(proseRoot);
-  return { base, workspace: roots.workspace, proseRoot };
+  return { base, workspace: roots.workspace, proseRoot, home };
 }
 
-async function startPortal({ workspace, container, proseRoot, env = {} }) {
+async function startPortal({ workspace, container, proseRoot, home, env = {} }) {
+  assert.ok(home, "every portal child needs a scratch HOME inside its fixture (TCRN-CROSS-INC-386)");
   const args = [join(portalRoot, "portal.mjs")];
   if (container) args.push("--container", container);
   else args.push("--workspace", workspace);
   if (proseRoot) args.push("--prose-root", proseRoot);
   args.push("--port", "0");
   const child = spawn(process.execPath, args, {
-    env: { ...process.env, TCRN_WORKFLOW_CLI: CLI, ...env },
+    env: { ...process.env, TCRN_WORKFLOW_CLI: CLI, ...env, HOME: home },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const url = await new Promise((resolve, reject) => {
@@ -293,7 +303,7 @@ test("container mode lists partitions and changes the selected live target", asy
     await cli(["init", "--workspace", roots.workspace, "--framework", roots.framework, "--transient", roots.transient, "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"], "--external-key", `TCRN-PORTAL-${id}`, "--at", "2026-08-11T15:00:00Z"]);
     partitions.push({ id, workspace: roots.workspace });
   }
-  const { child, url } = await startPortal({ container });
+  const { child, url } = await startPortal({ container, home: await scratchHome(base) });
   t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
   const { boot } = await readBoot(url);
   const partitionRead = await request(url, "/api/partitions", readOptions(boot.token));
@@ -407,7 +417,7 @@ test("container mode lists every partition and switches the live target", async 
     await cli(["init", "--workspace", roots.workspace, "--framework", roots.framework, "--transient", roots.transient, "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"], "--external-key", `TCRN-PORTAL-CONSERVATION-${id}`, "--at", "2026-08-11T15:00:00Z"]);
     partitions.push({ id, workspace: roots.workspace });
   }
-  const { child, url } = await startPortal({ container });
+  const { child, url } = await startPortal({ container, home: await scratchHome(base) });
   t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
   const { boot } = await readBoot(url);
   assert.equal(boot.partitionMode, true);
@@ -450,7 +460,8 @@ test("launcher generation emits regular files, starts macOS launcher, and names 
   for (const file of report.files) { assert.equal((await lstat(file)).isFile(), true); assert.equal((await lstat(file)).isSymbolicLink(), false); assert.match(await readFile(file, "utf8"), /--container/u); }
   const command = report.files.find((file) => file.endsWith(".command"));
   assert.match(await readFile(command, "utf8"), /^#!\/bin\/sh/u);
-  const launcher = spawn(command, [], { env: { ...process.env, TCRN_WORKFLOW_CLI: CLI }, stdio: ["ignore", "pipe", "pipe"] });
+  const home = await scratchHome(base);
+  const launcher = spawn(command, [], { env: { ...process.env, TCRN_WORKFLOW_CLI: CLI, HOME: home }, stdio: ["ignore", "pipe", "pipe"] });
   t.after(() => launcher.kill());
   const url = await new Promise((resolve, reject) => { let buffer = ""; const timer = setTimeout(() => reject(new Error(`launcher timeout: ${buffer}`)), 15000); launcher.stdout.on("data", (chunk) => { buffer += chunk; const line = buffer.split("\n").find((entry) => entry.includes("PORTAL_LISTENING")); if (line) { clearTimeout(timer); resolve(JSON.parse(line).url); } }); launcher.on("exit", (code) => { clearTimeout(timer); reject(new Error(`launcher exited ${code}: ${buffer}`)); }); });
   const { boot: launcherBoot } = await readBoot(url);
@@ -460,7 +471,7 @@ test("launcher generation emits regular files, starts macOS launcher, and names 
   await mkdir(badOutput);
   await execFileAsync(process.execPath, [generator, "--container", vanished, "--output-dir", badOutput, "--prose-root", proseRoot, "--port", "0"], { encoding: "utf8" });
   let failure;
-  try { await execFileAsync(join(badOutput, "tcrn-workflow-portal.sh"), [], { encoding: "utf8" }); } catch (error) { failure = error; }
+  try { await execFileAsync(join(badOutput, "tcrn-workflow-portal.sh"), [], { encoding: "utf8", env: { ...process.env, HOME: home } }); } catch (error) { failure = error; }
   assert.ok(failure);
   assert.match(String(failure.stderr), /PORTAL_CONTAINER_UNAVAILABLE/u);
 });
@@ -579,7 +590,7 @@ test("STORY-355 GWT4: container mode's default prose root sits above the chain c
   const roots = {};
   for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) { const path = join(root, kind); await mkdir(path); roots[kind] = path; }
   await cli(["init", "--workspace", roots.workspace, "--framework", roots.framework, "--transient", roots.transient, "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"], "--external-key", "TCRN-PORTAL-PROSE-DEFAULT", "--at", "2026-08-11T15:00:00Z"]);
-  const { child, url } = await startPortal({ container });
+  const { child, url } = await startPortal({ container, home: await scratchHome(base) });
   t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
   const { boot } = await readBoot(url);
   assert.equal(boot.proseRoot, dirname(container));
@@ -591,7 +602,7 @@ test("STORY-355: an explicit --prose-root resolving inside a chain container fai
   const unsafeProseRoot = join(fixture.base, ".tcrn-workspace", "nested");
   const args = [join(portalRoot, "portal.mjs"), "--workspace", fixture.workspace, "--prose-root", unsafeProseRoot, "--port", "0"];
   const { status, stderr } = await new Promise((resolveSpawn) => {
-    const child = spawn(process.execPath, args, { env: { ...process.env, TCRN_WORKFLOW_CLI: CLI }, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(process.execPath, args, { env: { ...process.env, TCRN_WORKFLOW_CLI: CLI, HOME: fixture.home }, stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "";
     child.stderr.on("data", (chunk) => { stderr += chunk; });
     child.on("exit", (code) => resolveSpawn({ status: code, stderr }));
@@ -616,7 +627,7 @@ test("STORY-355: --workspace mode's default prose root also lands above the chai
   const roots = {};
   for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) { const path = join(partitionRoot, kind); await mkdir(path); roots[kind] = path; }
   await cli(["init", "--workspace", roots.workspace, "--framework", roots.framework, "--transient", roots.transient, "--evidence-locator", roots["evidence-locator"], "--release-trust", roots["release-trust"], "--external-key", "TCRN-PORTAL-WORKSPACE-DEFAULT", "--at", "2026-08-11T15:00:00Z"]);
-  const { child, url } = await startPortal({ workspace: roots.workspace });
+  const { child, url } = await startPortal({ workspace: roots.workspace, home: await scratchHome(base) });
   t.after(async () => { child.kill(); await rm(base, { recursive: true, force: true }); });
   const { boot } = await readBoot(url);
   assert.equal(boot.proseRoot, base);

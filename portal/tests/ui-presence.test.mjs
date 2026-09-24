@@ -56,6 +56,10 @@ async function cli(args) {
 
 async function scratch(prefix) {
   const base = await realpath(await mkdtemp(join(tmpdir(), prefix)));
+  // TCRN-CROSS-INC-386: the portal and every CLI it starts read and write machine settings
+  // under HOME, so each fixture carries its own scratch HOME, removed with the fixture.
+  const home = join(base, "home");
+  await mkdir(home);
   const roots = {};
   for (const kind of ["framework", "workspace", "transient", "evidence-locator", "release-trust"]) {
     const path = join(base, kind);
@@ -68,7 +72,7 @@ async function scratch(prefix) {
   const proseRoot = join(base, "prose");
   await mkdir(proseRoot);
   await writeFile(join(proseRoot, "AGENTS.md"), "# Workspace rules\n\nbackup.cadence\nbackup.unknown\n", "utf8");
-  return { base, workspace: roots.workspace, proseRoot };
+  return { base, workspace: roots.workspace, proseRoot, home };
 }
 
 async function writeScratch(fixture, command, args) {
@@ -138,9 +142,10 @@ function installDomShims(window) {
 }
 
 async function startPortal(fixture, env = {}) {
+  assert.ok(fixture.home, "every portal child needs the fixture scratch HOME (TCRN-CROSS-INC-386)");
   const child = spawn(process.execPath, [join(portalRoot, "portal.mjs"), "--workspace", fixture.workspace,
     "--prose-root", fixture.proseRoot, "--port", "0"], {
-    env: { ...process.env, TCRN_WORKFLOW_CLI: CLI, ...env },
+    env: { ...process.env, TCRN_WORKFLOW_CLI: CLI, ...env, HOME: fixture.home },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const url = await new Promise((resolve, reject) => {
