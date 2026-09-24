@@ -564,16 +564,44 @@ export async function recordObservationBoundary({
     const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
     const records = [...read.records];
     const created = [];
+    const alreadyOpen = [];
     if (phase === "start") {
+      // TCRN-CROSS-STORY-464 (MIN-223 D3): a SessionStart is judged per channel with the
+      // Stop branch's own open-interval and latest-stop selection and its three-day bound.
+      // R1: an open interval inside the bound stays open and no second start is written.
+      // R2: otherwise a latest stop inside the bound is resumed from, at that stop's instant
+      // and in the source of that instant's UTC day, as a Stop resumes; the interval a Stop
+      // later closes then holds exactly the rows the Stop alone would write. Outside the
+      // bound, or with no earlier boundary, the start is written at the current instant.
+      const insideBound = (day) => {
+        const days = observationDaysBetween(day, atDay);
+        return days.length > 0 && days.length <= MAX_BOUNDARY_DAYS_PER_STOP;
+      };
       for (const channel of OBSERVATION_CHANNELS) {
-        const target = observationSourceForDay(host, sessionId, atDay, channel);
+        const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
+        const open = sessionRows
+          .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
+          .filter(({ record, day }) => day !== null && record.payload.phase === "start")
+          .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
+          .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
+          .at(-1) ?? null;
+        if (open !== null && insideBound(open.day)) {
+          alreadyOpen.push(channel);
+          continue;
+        }
+        const previousStop = observationLatestStop(sessionRows);
+        const stopDay = previousStop === null ? null : observationDay(previousStop.at);
+        const resumed = stopDay !== null && insideBound(stopDay);
+        const startAt = resumed ? previousStop.at : at;
+        const startDay = resumed ? stopDay : atDay;
+        const target = observationSourceForDay(host, sessionId, startDay, channel);
         const rows = records.filter((record) => record.payload?.source === target.source);
         const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
         created.push(core.createTelemetryRecord({
-          at,
+          at: startAt,
           kind: channel,
           session: target.sessionKey,
-          payload: observationHighWaterPayload(records, channel, atDay, at, target.source, "start", sequence, at),
+          payload: observationHighWaterPayload(records, channel, startDay, startAt, target.source, "start", sequence, startAt),
         }));
       }
     } else {
@@ -684,7 +712,10 @@ export async function recordObservationBoundary({
       await emitBatchVerifyTelemetry({ root, sessionId: String(sessionId), at, selfCheck: { host: dispatchHostName(host) } });
     } catch { /* an unavailable emitter leaves the verify channel unknown, never zero */ }
     const coverage = phase === "stop" ? await sealObservationDay(root, { at }) : null;
-    return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.some((receipt) => receipt.duplicate), ...(coverage === null ? {} : { coverage }) };
+    // TCRN-CROSS-STORY-464: a SessionStart that writes nothing says why, and one that leaves
+    // some channel open names it; the caller's handling is unchanged.
+    if (phase === "start" && receipts.length === 0) return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_ALREADY_OPEN", phase, sessionId: String(sessionId), count: 0, duplicate: false, alreadyOpen };
+    return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.some((receipt) => receipt.duplicate), ...(alreadyOpen.length === 0 ? {} : { alreadyOpen }), ...(coverage === null ? {} : { coverage }) };
   } catch (error) {
     return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", error: String(error?.reasonCode ?? error?.message ?? error) };
   }

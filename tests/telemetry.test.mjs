@@ -472,6 +472,130 @@ test("TCRN-CROSS-SUB-153 D4: exactly three days remains bounded and invalid time
   assert.deepEqual(invalid, { ok: false, reasonCode: "TELEMETRY_BOUNDARY_INVALID" });
 });
 
+// TCRN-CROSS-STORY-464 (MIN-223 D3): a SessionStart is judged per channel with the Stop
+// branch's own open-interval and latest-stop rules and its three-day bound. The sequences
+// below are the real 2026-09-22 ones (sessions ef407051 and e73074d1), in isolated fixtures.
+const ACTUAL_KIND = Object.freeze({ retrieval: "retrieval-hit", reference: "reference", trigger: "trigger", verify: "verify" });
+
+function boundaryAt(fixture, sessionId, phase, at) {
+  return recordObservationBoundary({ partition: "cross-project", containerRoot: fixture.base, sessionId, host: "claude", phase, at, workspaceState: fixture.state });
+}
+
+async function boundaryRows(fixture) {
+  return (await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER })).records
+    .filter((record) => record.payload.source.startsWith(OBSERVATION_BOUNDARY_PREFIX))
+    .sort((left, right) => left.payload.source.localeCompare(right.payload.source) || left.payload.sequence - right.payload.sequence);
+}
+
+function boundarySources(rows) {
+  const sources = new Map();
+  for (const row of rows) sources.set(row.payload.source, [...(sources.get(row.payload.source) ?? []), row]);
+  return sources;
+}
+
+function assertPhasesAlternate(rows, label) {
+  const alternate = (list) => list.every((row, index) => row.payload.phase === (index % 2 === 0 ? "start" : "stop"));
+  for (const [source, list] of boundarySources(rows)) {
+    const bySequence = [...list].sort((left, right) => left.payload.sequence - right.payload.sequence);
+    assert.deepEqual(bySequence.map((row) => row.payload.sequence), bySequence.map((_, index) => index + 1), `${label}: ${source} is numbered without gaps`);
+    assert.ok(alternate(bySequence), `${label}: ${source} alternates by sequence`);
+    const byTime = [...list].sort((left, right) => left.at.localeCompare(right.at) || left.payload.sequence - right.payload.sequence || left.id.localeCompare(right.id));
+    assert.ok(alternate(byTime), `${label}: ${source} alternates by time`);
+  }
+}
+
+test("STORY-464 R1: a repeated SessionStart inside an open interval writes no second start", async (t) => {
+  const fixture = await workspaceFixture(t);
+  await boundaryAt(fixture, "ef407051", "start", "2026-09-22T12:01:40.782Z");
+  await boundaryAt(fixture, "ef407051", "stop", "2026-09-22T17:02:40.604Z");
+  const first = await boundaryAt(fixture, "ef407051", "start", "2026-09-22T17:17:43.006Z");
+  assert.equal(first.count, 4, JSON.stringify(first));
+  const before = await boundaryRows(fixture);
+  const second = await boundaryAt(fixture, "ef407051", "start", "2026-09-22T17:17:57.992Z");
+  assert.deepEqual(await boundaryRows(fixture), before, "the second SessionStart adds no boundary row");
+  const stop = await boundaryAt(fixture, "ef407051", "stop", "2026-09-22T17:23:10.059Z");
+  assert.equal(stop.ok, true, JSON.stringify(stop));
+  assertPhasesAlternate(await boundaryRows(fixture), "repeated SessionStart");
+  assert.deepEqual({ ...second, alreadyOpen: [...(second.alreadyOpen ?? [])].sort() }, {
+    ok: true,
+    reasonCode: "TELEMETRY_BOUNDARY_ALREADY_OPEN",
+    phase: "start",
+    sessionId: "ef407051",
+    count: 0,
+    duplicate: false,
+    alreadyOpen: [...OBSERVATION_CHANNELS].sort(),
+  }, "a SessionStart that writes nothing says so");
+});
+
+test("STORY-464 R2: a SessionStart after idle resumes from the last stop and writes what a lone Stop writes", async (t) => {
+  for (const [label, session, history, sessionStartAt, stopAt, resumedSession, resumedAt] of [
+    ["same day", "idle-same-day", [["start", "2026-09-22T12:01:40.782Z"], ["stop", "2026-09-22T17:02:40.604Z"]], "2026-09-22T17:17:43.006Z", "2026-09-22T17:23:10.059Z", "20260922.idle-same-day", "2026-09-22T17:02:40.604Z"],
+    ["next day", "idle-next-day", [["start", "2026-09-22T20:00:00.000Z"], ["stop", "2026-09-22T22:00:00.000Z"]], "2026-09-23T01:00:00.000Z", "2026-09-23T02:00:00.000Z", "20260922.idle-next-day", "2026-09-22T22:00:00.000Z"],
+  ]) {
+    const resumed = await workspaceFixture(t);
+    const stopOnly = await workspaceFixture(t);
+    for (const fixture of [resumed, stopOnly]) {
+      for (const [phase, at] of history) await boundaryAt(fixture, session, phase, at);
+    }
+    const start = await boundaryAt(resumed, session, "start", sessionStartAt);
+    assert.equal(start.count, 4, `${label}: ${JSON.stringify(start)}`);
+    const opened = (await boundaryRows(resumed)).filter((row) => row.payload.sequence === 3);
+    assert.deepEqual(opened.map((row) => [row.session, row.payload.phase, row.at]), Array(4).fill([resumedSession, "start", resumedAt]), `${label}: the new start is the last stop, in the source of that stop's day`);
+    for (const fixture of [resumed, stopOnly]) {
+      const stop = await boundaryAt(fixture, session, "stop", stopAt);
+      assert.equal(stop.ok, true, `${label}: ${JSON.stringify(stop)}`);
+    }
+    assert.deepEqual(await boundaryRows(resumed), await boundaryRows(stopOnly), `${label}: every day source holds exactly the rows of the Stop alone`);
+    assertPhasesAlternate(await boundaryRows(resumed), label);
+  }
+});
+
+test("STORY-464 R3: a backfilled start never lands before the current day rows and the day still seals", async (t) => {
+  const fixture = await workspaceFixture(t);
+  await boundaryAt(fixture, "e73074d1", "start", "2026-09-21T02:54:45.937Z");
+  const sessionStart = await boundaryAt(fixture, "e73074d1", "start", "2026-09-22T04:36:10.878Z");
+  for (const at of ["2026-09-22T04:57:54.997Z", "2026-09-22T05:02:12.183Z"]) {
+    const stop = await boundaryAt(fixture, "e73074d1", "stop", at);
+    assert.equal(stop.ok, true, JSON.stringify(stop));
+  }
+  const rows = await boundaryRows(fixture);
+  for (const [source, list] of boundarySources(rows)) {
+    assert.ok(list.every((row, index) => index === 0 || row.at >= list[index - 1].at), `${source} never gains a row earlier than one it already holds`);
+  }
+  assertPhasesAlternate(rows, "cross-day backfill");
+  assert.equal(sessionStart.reasonCode, "TELEMETRY_BOUNDARY_ALREADY_OPEN", JSON.stringify(sessionStart));
+
+  for (const channel of OBSERVATION_CHANNELS) {
+    await appendTelemetryRecord(fixture.transient, createTelemetryRecord({ at: "2026-09-22T12:00:00.000Z", kind: ACTUAL_KIND[channel], session: `e73074d1-actual-${channel}`, payload: { source: `story-464-actual:${channel}`, availability: "available" } }));
+  }
+  const pastDayEnd = await boundaryAt(fixture, "e73074d1", "stop", "2026-09-23T00:30:00.000Z");
+  assert.equal(pastDayEnd.ok, true, JSON.stringify(pastDayEnd));
+  assert.deepEqual(pastDayEnd.coverage.channels.map((entry) => [entry.channel, entry.reasonCode]), OBSERVATION_CHANNELS.map((channel) => [channel, "TELEMETRY_COVERAGE_RECORDED"]), JSON.stringify(pastDayEnd.coverage));
+  const receipts = (await readTelemetryRecords(fixture.transient, { kind: "observation-coverage", limit: 100 })).records
+    .filter((record) => record.payload.channel === "retrieval" && record.payload.coveredFrom === "2026-09-22T00:00:00.000Z");
+  assert.equal(receipts.length, 1, "the unchanged seal writes the channel receipt for 2026-09-22");
+  assertPhasesAlternate(await boundaryRows(fixture), "after the day end");
+});
+
+test("STORY-464 R1 and R2: outside the three-day bound a SessionStart starts at its own instant", async (t) => {
+  const fixture = await workspaceFixture(t);
+  const at = "2026-09-15T01:00:00.000Z";
+  await boundaryAt(fixture, "stale-open", "start", "2026-09-12T10:00:00.000Z");
+  for (const [phase, when] of [["start", "2026-09-12T10:00:00.000Z"], ["stop", "2026-09-12T23:00:00.000Z"]]) await boundaryAt(fixture, "stale-stop", phase, when);
+  for (const [phase, when] of [["start", "2026-09-13T10:00:00.000Z"], ["stop", "2026-09-13T23:00:00.000Z"]]) await boundaryAt(fixture, "edge-stop", phase, when);
+  for (const session of ["stale-open", "stale-stop"]) {
+    const result = await boundaryAt(fixture, session, "start", at);
+    assert.equal(result.count, 4, `${session}: ${JSON.stringify(result)}`);
+    const written = (await boundaryRows(fixture)).filter((row) => row.session === `20260915.${session}`);
+    assert.deepEqual(written.map((row) => [row.payload.phase, row.at, row.payload.sequence]), Array(4).fill(["start", at, 1]), `${session}: four UTC days back is outside the bound`);
+  }
+  const edge = await boundaryAt(fixture, "edge-stop", "start", at);
+  assert.equal(edge.count, 4, JSON.stringify(edge));
+  const rows = await boundaryRows(fixture);
+  assert.deepEqual(rows.filter((row) => row.session === "20260913.edge-stop" && row.payload.sequence === 3).map((row) => [row.payload.phase, row.at]), Array(4).fill(["start", "2026-09-13T23:00:00.000Z"]), "three UTC days back is inside the same bound a Stop uses");
+  assert.equal(rows.filter((row) => row.session === "20260915.edge-stop").length, 0);
+});
+
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
   const fixture = await workspaceFixture(t);
   const telemetry = createTelemetryRecord({ at: INSTANT(4), kind: "subagent-stop", session: "session-evidence", payload: payload() });
