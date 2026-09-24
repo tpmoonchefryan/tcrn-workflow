@@ -1594,6 +1594,45 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
+  // TCRN-CROSS-INC-381 (SUB-252): since SUB-228 retire-proposals keeps missingDays as the
+  // compatibility name for idle days, and the evolution panel still counted it as missing. An
+  // idle day neither counts toward the window nor breaks it (STORY-454 R2); what the card
+  // window lacks is windows.card.missingObservationDays, and the idle and unproven days are
+  // listed beside it. Red leg: count missingDays again.
+  test("INC-381 the evolution panel shows missing observation days, not idle days", async () => {
+    const fixture = await scratch("tcrn-inc381-evolution-dom-");
+    const idleDays = Array.from({ length: 11 }, (_, index) => `2026-09-${String(index + 1).padStart(2, "0")}`);
+    const unprovenDays = ["2026-09-12", "2026-09-13"];
+    const payload = {
+      reasonCode: "KNOWLEDGE_RETIRE_PROPOSALS_READY",
+      windowComplete: false,
+      missingDays: idleDays.map((day) => `${day}.ndjson`),
+      invalidDays: unprovenDays.map((day) => `${day}.ndjson`),
+      idleDays,
+      unprovenDays,
+      windows: { card: { complete: false, observationDays: 89, missingObservationDays: 1 } },
+      proposals: [],
+      retiredRecords: [],
+      lastSweepAt: null,
+    };
+    const wrapper = join(fixture.base, "retire-proposals-wrapper.mjs");
+    await writeFile(wrapper, `import { spawnSync } from "node:child_process";
+if (process.argv[2] === "retire-proposals") {
+  process.stdout.write(${JSON.stringify(JSON.stringify(payload))});
+} else {
+  const actual = spawnSync(process.execPath, [${JSON.stringify(CLI)}, ...process.argv.slice(2)], { encoding: "utf8" });
+  process.stdout.write(actual.stdout || "");
+  process.stderr.write(actual.stderr || "");
+  process.exitCode = actual.status ?? 1;
+}
+`, "utf8");
+    const page = await loadExecutedDom(fixture, { TCRN_WORKFLOW_CLI: wrapper });
+    try {
+      const label = page.document.querySelector("#evolution-retirement strong")?.textContent ?? "";
+      assert.equal(label, "incomplete observation window · 1 missing days · 11 idle days · 2 unproven days");
+    } finally { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); }
+  });
+
   test("STORY-389: narrow execution cards, status receipts, and French tab labels keep their boundaries", async () => {
     const page = await preparePage();
     try {

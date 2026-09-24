@@ -19,6 +19,15 @@ day after the check, unless the snapshot is refreshed again before then. The
 next version is Engine 1.2.0; its release commit folds this section into the
 1.2.0 section and into `docs/releases/1.2.0.md`.
 
+`retire-proposals` keeps `missingDays` and `invalidDays` only as compatibility
+names: since TCRN-CROSS-STORY-454 they list the card window's idle days (no
+channel activity, which neither count toward the observation window nor break
+it) and its unproven days, as `<day>.ndjson` names, not the days the window is
+missing. How many observation days a window lacks is
+`windows.<class>.missingObservationDays`; the portal's evolution panel now shows
+that number for the card window and lists the idle and unproven days beside it
+(TCRN-CROSS-INC-381).
+
 ## 1.1.3 — patch candidate
 
 This append-only patch repairs the time-attestation store after the
