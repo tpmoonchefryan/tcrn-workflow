@@ -57,7 +57,6 @@ import {
   recordIdentity,
   redactFailureDetail,
 } from "./injection-session.mjs";
-import { canonicalSha256 } from "../dist/build/packages/protocol/src/index.js";
 
 const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const PLATFORM_ROOT = resolve(SCRIPT_DIRECTORY, "../../..");
@@ -301,28 +300,10 @@ async function languageModule() {
   return coreLanguageModule;
 }
 
-let coreTelemetryModule;
-async function telemetryModule() {
-  if (coreTelemetryModule !== undefined) return coreTelemetryModule;
-  try {
-    coreTelemetryModule = await import(resolve(SCRIPT_DIRECTORY, "../dist/build/packages/core/src/telemetry.js"));
-  } catch {
-    coreTelemetryModule = null;
-  }
-  return coreTelemetryModule;
-}
-
-// TCRN-CROSS-STORY-452 R1: a channel's self-check is written where that channel's real
-// records are written, by the same writer, under the source the core table names for the
-// channel. A writer without the method (a test double, an unavailable root) writes none.
-async function emitSelfCheck(writer, channel, { host, verdict = "ok", reasonCode = null } = {}) {
-  if (typeof writer?.selfCheck !== "function") return null;
-  const code = verdict === "failed" && !/^[A-Z][A-Z0-9_]{0,127}$/u.test(String(reasonCode)) ? `${channel.toUpperCase()}_FAILED` : reasonCode;
-  return writer.selfCheck(channel, { host: dispatchHostName(host), verdict, reasonCode: code });
-}
-
-export const OBSERVATION_CHANNELS = Object.freeze(["retrieval", "reference", "trigger", "verify"]);
-export const OBSERVATION_BOUNDARY_PREFIX = "telemetry:observation-collector:";
+// TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-257): the four channel events below keep their phase and
+// sequence, so their payloads are unchanged. The collector self-checks, observation boundary rows,
+// per-day seal receipts and fitness summaries once written beside them are retired; the records
+// already written stay readable through the ordinary telemetry reads.
 const OBSERVATION_CHANNEL_BY_KIND = Object.freeze({ retrieval: "retrieval", "retrieval-hit": "retrieval", reference: "reference", pull: "reference", trigger: "trigger", "rule-trigger": "trigger", verify: "verify", "gate-result": "verify" });
 
 async function nextObservationSequence(core, root, kind, source) {
@@ -367,492 +348,12 @@ async function telemetryWriter(partition, containerRoot, sessionId, suppliedStat
       return { availability: "unavailable", id: null };
     }
   };
-  write.selfCheck = async (channel, { host, verdict, reasonCode }) => {
-    try {
-      const telemetry = await telemetryModule();
-      const source = telemetry?.COLLECTOR_SELF_CHECK_SOURCES?.[channel]?.[0];
-      if (typeof telemetry?.appendCollectorSelfCheck !== "function" || source === undefined) return null;
-      return await telemetry.appendCollectorSelfCheck(root, { at: new Date().toISOString(), session: sessionId, channel, host: String(host ?? "unknown-host"), source, verdict, reasonCode });
-    } catch {
-      return null;
-    }
-  };
   return write;
-}
-
-function safeObservationPart(value, fallback) {
-  const text = String(value ?? fallback).replace(/[^A-Za-z0-9._:-]/gu, "_").slice(0, 32);
-  return text.length > 0 ? text : fallback;
-}
-
-function observationSourceIdentity(record, channel) {
-  const source = typeof record?.payload?.source === "string" ? record.payload.source : "";
-  if (!source.startsWith(OBSERVATION_BOUNDARY_PREFIX)) return null;
-  const session = safeObservationPart(record.session, "unknown-session");
-  const suffix = `:${session}:${channel}`;
-  if (source.endsWith(suffix) && source.length > OBSERVATION_BOUNDARY_PREFIX.length + suffix.length) {
-    const day = /^(\d{8})\./u.exec(session)?.[1];
-    return day === undefined ? `${source.slice(0, -suffix.length)}:${channel}` : `${source.slice(0, -suffix.length)}:${day}.${channel}`;
-  }
-  return source.endsWith(`:${channel}`) ? source : null;
-}
-
-function observationChronologicalCompare(left, right) {
-  return left.at.localeCompare(right.at) || Number(left.payload.sequence) - Number(right.payload.sequence) || left.id.localeCompare(right.id);
-}
-
-function observationPhaseSequenceValid(rows) {
-  const phases = rows.map((record) => record.payload.phase);
-  const sequences = rows.map((record) => record.payload.sequence);
-  return rows.length >= 2 && rows.length % 2 === 0 && rows.every((record) => record.payload.availability === "available") && phases.every((phase, index) => phase === (index % 2 === 0 ? "start" : "stop")) && sequences.every((sequence, index) => Number.isSafeInteger(sequence) && sequence >= 1 && (index === 0 || sequence === sequences[index - 1] + 1));
-}
-
-function observationIntervals(rows) {
-  const ordered = [...rows].sort(observationChronologicalCompare);
-  if (!observationPhaseSequenceValid(rows) || !observationPhaseSequenceValid(ordered)) return null;
-  const intervals = [];
-  for (let index = 0; index < ordered.length; index += 2) {
-    const start = ordered[index];
-    const last = ordered[index + 1];
-    intervals.push({ ordered: [start, last], start: Date.parse(start.at), end: Date.parse(last.at), last });
-  }
-  return intervals;
-}
-
-function observationHighWaterValid(record, actual, day, requireFull = false) {
-  const fields = record.payload;
-  const observed = typeof fields.highWaterAt === "string" ? actual.filter((entry) => entry.at <= fields.highWaterAt) : [];
-  return fields.highWaterDay === day && Number.isSafeInteger(fields.highWaterCount) && fields.highWaterCount === observed.length && typeof fields.highWaterDigest === "string" && fields.highWaterDigest === canonicalSha256(observed) && (!requireFull || observed.length === actual.length);
-}
-
-function observationCoverageCandidate(rows, actual, from, until) {
-  const groups = new Map();
-  for (const row of rows) {
-    const list = groups.get(row.payload.source) ?? [];
-    list.push(row);
-    groups.set(row.payload.source, list);
-  }
-  const intervals = [];
-  for (const group of groups.values()) {
-    const paired = observationIntervals(group);
-    if (paired === null || paired.some((interval) => !observationHighWaterValid(interval.last, actual, from.slice(0, 10)))) continue;
-    intervals.push(...paired);
-  }
-  intervals.sort((left, right) => left.start - right.start || left.end - right.end || left.last.id.localeCompare(right.last.id));
-  let cursor = Date.parse(from);
-  for (const interval of intervals) {
-    if (interval.start > cursor) return null;
-    cursor = Math.max(cursor, interval.end);
-  }
-  if (cursor < Date.parse(until) - 1) return null;
-  const terminal = intervals.reduce((best, interval) => best === null || interval.end > best.end ? interval : best, null);
-  if (terminal === null || !observationHighWaterValid(terminal.last, actual, from.slice(0, 10), true)) return null;
-  const selected = intervals.flatMap((interval) => interval.ordered).sort(observationChronologicalCompare);
-  return { rows: selected, startSequence: intervals[0].ordered[0].payload.sequence, stopSequence: terminal.last.payload.sequence };
-}
-
-async function telemetryRootForState(core, partition, containerRoot, suppliedState = null) {
-  const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
-  return state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
-}
-
-const MAX_BOUNDARY_DAYS_PER_STOP = 3;
-
-function observationDay(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
-}
-
-function observationSessionKey(day, sessionId) {
-  return safeObservationPart(`${day.replace(/-/gu, "")}.${safeObservationPart(sessionId, "unknown-session")}`, "unknown-session");
-}
-
-function observationSourceForDay(host, sessionId, day, channel) {
-  const hostPart = safeObservationPart(host, "unknown-host");
-  const sessionKey = observationSessionKey(day, sessionId);
-  return {
-    source: `${OBSERVATION_BOUNDARY_PREFIX}${hostPart}:${sessionKey}:${channel}`,
-    sessionKey,
-  };
-}
-
-function observationSessionKeyDay(session) {
-  if (typeof session !== "string" || !/^\d{8}\./u.test(session)) return null;
-  return `${session.slice(0, 4)}-${session.slice(4, 6)}-${session.slice(6, 8)}`;
-}
-
-function observationBoundaryRows(records, host, sessionId, channel) {
-  const hostPart = safeObservationPart(host, "unknown-host");
-  const sessionPart = safeObservationPart(sessionId, "unknown-session");
-  const maximumSessionPart = sessionPart.slice(0, 23);
-  const prefix = `${OBSERVATION_BOUNDARY_PREFIX}${hostPart}:`;
-  return records.filter((record) => {
-    const session = record.session;
-    const source = record.payload?.source;
-    return String(source).startsWith(prefix)
-      && String(source).endsWith(`:${channel}`)
-      && typeof session === "string"
-      && /^\d{8}\./u.test(session)
-      && session.slice(9) === maximumSessionPart
-      && String(source).endsWith(`:${session}:${channel}`);
-  });
-}
-
-function observationLastBoundaryRow(rows) {
-  return [...rows].sort((left, right) => Number(left.payload.sequence) - Number(right.payload.sequence) || left.at.localeCompare(right.at) || left.id.localeCompare(right.id)).at(-1) ?? null;
-}
-
-function observationLatestStop(rows) {
-  return rows.filter((record) => record.payload.phase === "stop")
-    .sort((left, right) => left.at.localeCompare(right.at) || Number(left.payload.sequence) - Number(right.payload.sequence) || left.id.localeCompare(right.id))
-    .at(-1) ?? null;
-}
-
-// TCRN-CROSS-INC-385 R1: the session's open interval on a channel starts at the latest start
-// among the session's sources whose last row is a start, unless that start is older than the
-// session's latest stop on the channel. A start at that stop's own instant (the resumed start
-// STORY-464 R2 writes) stays open. The Stop and SessionStart branches judge it by this one rule.
-function observationOpenStart(sessionRows, previousStop) {
-  const open = sessionRows
-    .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
-    .filter(({ record, day }) => day !== null && record.payload.phase === "start")
-    .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
-    .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
-    .at(-1) ?? null;
-  return open !== null && previousStop !== null && Date.parse(open.record.at) < Date.parse(previousStop.at) ? null : open;
-}
-
-// TCRN-CROSS-INC-385 R2: a UTC day is sealed for a channel once a receipt covers it from its
-// midnight: a per-channel v2 receipt for that channel, or a four-channel v1 receipt. The
-// collector writes no further boundary row into any source of such a day.
-function observationDaySealed(records, day, channel) {
-  const coveredFrom = `${day}T00:00:00.000Z`;
-  return records.some((record) => record.kind === "observation-coverage" && record.payload?.coveredFrom === coveredFrom
-    && (record.payload.coverageVersion === "tcrn.telemetry-observation-coverage.v1"
-      || (record.payload.coverageVersion === OBSERVATION_CHANNEL_COVERAGE_VERSION && record.payload.channel === channel)));
-}
-
-function observationDaysBetween(from, until) {
-  const fromValue = Date.parse(`${from}T00:00:00.000Z`);
-  const untilValue = Date.parse(`${until}T00:00:00.000Z`);
-  if (!Number.isFinite(fromValue) || !Number.isFinite(untilValue)) return [];
-  if (fromValue > untilValue) return [from];
-  const days = [];
-  for (let cursor = fromValue; cursor <= untilValue && days.length <= MAX_BOUNDARY_DAYS_PER_STOP; cursor += 86_400_000) {
-    days.push(new Date(cursor).toISOString().slice(0, 10));
-  }
-  return days;
-}
-
-function observationActualForDay(records, channel, day, through) {
-  const throughValue = Date.parse(through);
-  return records.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel
-    && !String(record.payload?.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)
-    && observationDay(record.at) === day
-    && (!Number.isFinite(throughValue) || Date.parse(record.at) <= throughValue))
-    .sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-}
-
-function observationHighWaterPayload(records, channel, day, at, source, phase, sequence, through) {
-  const actual = observationActualForDay(records, channel, day, through);
-  return {
-    source,
-    availability: "available",
-    phase,
-    sequence,
-    highWaterDay: day,
-    highWaterCount: actual.length,
-    highWaterDigest: canonicalSha256(actual),
-    highWaterAt: actual.at(-1)?.at ?? null,
-  };
-}
-
-/** Record the real host-session boundaries used by the daily coverage proof. */
-export async function recordObservationBoundary({
-  partition = DEFAULT_PARTITION,
-  containerRoot = PLATFORM_ROOT,
-  sessionId = "anonymous",
-  host = process.env.TCRN_HOST ?? "claude",
-  phase,
-  at = new Date().toISOString(),
-  workspaceState = null,
-} = {}) {
-  if (phase !== "start" && phase !== "stop") return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_INVALID" };
-  const core = await languageModule();
-  if (typeof core?.createTelemetryRecord !== "function" || typeof core?.appendTelemetryRecord !== "function" || typeof core?.readTelemetryRecords !== "function" || typeof core?.activeBinding !== "function") return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE" };
-  try {
-    const root = await telemetryRootForState(core, partition, containerRoot, workspaceState);
-    if (root === null) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE" };
-    const atDay = observationDay(at);
-    if (atDay === null) return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_INVALID" };
-    const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
-    const records = [...read.records];
-    const created = [];
-    const alreadyOpen = [];
-    if (phase === "start") {
-      // TCRN-CROSS-STORY-464 (MIN-223 D3): a SessionStart is judged per channel with the
-      // Stop branch's own open-interval and latest-stop selection and its three-day bound.
-      // R1: an open interval inside the bound stays open and no second start is written.
-      // R2: otherwise a latest stop inside the bound is resumed from, at that stop's instant
-      // and in the source of that instant's UTC day, as a Stop resumes; the interval a Stop
-      // later closes then holds exactly the rows the Stop alone would write. Outside the
-      // bound, or with no earlier boundary, the start is written at the current instant.
-      const insideBound = (day) => {
-        const days = observationDaysBetween(day, atDay);
-        return days.length > 0 && days.length <= MAX_BOUNDARY_DAYS_PER_STOP;
-      };
-      for (const channel of OBSERVATION_CHANNELS) {
-        const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
-        const previousStop = observationLatestStop(sessionRows);
-        const open = observationOpenStart(sessionRows, previousStop);
-        if (open !== null && insideBound(open.day)) {
-          alreadyOpen.push(channel);
-          continue;
-        }
-        const stopDay = previousStop === null ? null : observationDay(previousStop.at);
-        const resumed = stopDay !== null && insideBound(stopDay);
-        const startAt = resumed ? previousStop.at : at;
-        // TCRN-CROSS-INC-385 R2: the resumed start keeps the last stop's instant; when that
-        // stop's day is already sealed for the channel it goes into the first unsealed day after.
-        const startDay = resumed ? observationDaysBetween(stopDay, atDay).find((day) => !observationDaySealed(records, day, channel)) ?? atDay : atDay;
-        const target = observationSourceForDay(host, sessionId, startDay, channel);
-        const rows = records.filter((record) => record.payload?.source === target.source);
-        const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
-        created.push(core.createTelemetryRecord({
-          at: startAt,
-          kind: channel,
-          session: target.sessionKey,
-          payload: observationHighWaterPayload(records, channel, startDay, startAt, target.source, "start", sequence, startAt),
-        }));
-      }
-    } else {
-      // Inspect every channel before constructing any stop rows. A stale, empty, or
-      // divergent channel invalidates the whole invocation; partial stop coverage is
-      // never evidence of a real boundary.
-      const plans = OBSERVATION_CHANNELS.map((channel) => {
-        const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
-        const previousStop = observationLatestStop(sessionRows);
-        const open = observationOpenStart(sessionRows, previousStop);
-        const startAt = open?.record.at ?? previousStop?.at ?? at;
-        const startDay = open?.day ?? observationDay(startAt) ?? atDay;
-        return {
-          channel,
-          startAt,
-          startDay,
-          days: observationDaysBetween(startDay, atDay),
-          hasPriorBoundary: open !== null || previousStop !== null,
-        };
-      });
-      const gap = plans.find(({ days, hasPriorBoundary }) => !hasPriorBoundary || days.length === 0 || days.length > MAX_BOUNDARY_DAYS_PER_STOP) ?? null;
-      const currentDayResume = plans.every(({ channel }) => {
-        const target = observationSourceForDay(host, sessionId, atDay, channel);
-        const last = observationLastBoundaryRow(records.filter((record) => record.payload?.source === target.source));
-        return last?.payload.phase === "start" && last.at === at;
-      });
-      if (gap !== null || currentDayResume) {
-        // On a gap, resume at the actual Stop instant. The new starts are the only
-        // records allowed here: no backdated rows, Stop rows, or coverage receipt.
-        // Repeating the exact invocation sees the same four starts and is a no-op.
-        if (!currentDayResume) {
-          for (const channel of OBSERVATION_CHANNELS) {
-            const target = observationSourceForDay(host, sessionId, atDay, channel);
-            const rows = records.filter((record) => record.payload?.source === target.source);
-            const last = observationLastBoundaryRow(rows);
-            if (last?.payload.phase === "start" && last.at === at) continue;
-            const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
-            created.push(core.createTelemetryRecord({
-              at,
-              kind: channel,
-              session: target.sessionKey,
-              payload: observationHighWaterPayload(records, channel, atDay, at, target.source, "start", sequence, at),
-            }));
-          }
-        }
-        const resumedReceipts = [];
-        for (const record of created) {
-          const receipt = await core.appendTelemetryRecord(root, record);
-          resumedReceipts.push(receipt);
-          if (!receipt.duplicate) records.push(record);
-        }
-        return {
-          ok: false,
-          reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
-          unknown: true,
-          resumed: true,
-          from: gap?.startDay ?? (currentDayResume
-            ? OBSERVATION_CHANNELS.flatMap((channel) => observationBoundaryRows(records, host, sessionId, channel)
-              .map((record) => observationSessionKeyDay(record.session))
-              .filter((day) => day !== null && day !== atDay))
-              .sort()
-              .at(0) ?? atDay
-            : atDay),
-          until: atDay,
-          count: resumedReceipts.length,
-          duplicate: currentDayResume || resumedReceipts.some((receipt) => receipt.duplicate),
-        };
-      }
-      for (const { channel, startAt, startDay, days } of plans) {
-        for (const day of days) {
-          // TCRN-CROSS-INC-385 R2: a day already sealed for the channel takes no further row;
-          // the other days of the interval are written as before.
-          if (observationDaySealed(records, day, channel)) continue;
-          const target = observationSourceForDay(host, sessionId, day, channel);
-          const rows = records.filter((record) => record.payload?.source === target.source);
-          const last = observationLastBoundaryRow(rows);
-          let sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
-          if (last?.payload.phase !== "start") {
-            created.push(core.createTelemetryRecord({
-              at: startAt,
-              kind: channel,
-              session: target.sessionKey,
-              payload: observationHighWaterPayload(records, channel, day, startAt, target.source, "start", sequence, startAt),
-            }));
-            sequence += 1;
-          }
-          created.push(core.createTelemetryRecord({
-            at,
-            kind: channel,
-            session: target.sessionKey,
-            payload: observationHighWaterPayload(records, channel, day, at, target.source, "stop", sequence, at),
-          }));
-        }
-      }
-    }
-    const receipts = [];
-    for (const record of created) {
-      const receipt = await core.appendTelemetryRecord(root, record);
-      receipts.push(receipt);
-      if (!receipt.duplicate) records.push(record);
-    }
-    // TCRN-CROSS-STORY-452 R1: the verify channel's self-check comes from the batch entry's
-    // own verify emitter in its self-check mode; no gate runs. It fails open.
-    try {
-      const { emitBatchVerifyTelemetry } = await import("./final-gate-plan.mjs");
-      await emitBatchVerifyTelemetry({ root, sessionId: String(sessionId), at, selfCheck: { host: dispatchHostName(host) } });
-    } catch { /* an unavailable emitter leaves the verify channel unknown, never zero */ }
-    const coverage = phase === "stop" ? await sealObservationDay(root, { at }) : null;
-    // TCRN-CROSS-STORY-464: a SessionStart that writes nothing says why, and one that leaves
-    // some channel open names it; the caller's handling is unchanged.
-    if (phase === "start" && receipts.length === 0) return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_ALREADY_OPEN", phase, sessionId: String(sessionId), count: 0, duplicate: false, alreadyOpen };
-    return { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RECORDED", phase, sessionId: String(sessionId), count: receipts.length, duplicate: receipts.some((receipt) => receipt.duplicate), ...(alreadyOpen.length === 0 ? {} : { alreadyOpen }), ...(coverage === null ? {} : { coverage }) };
-  } catch (error) {
-    return { ok: false, reasonCode: "TELEMETRY_BOUNDARY_UNAVAILABLE", error: String(error?.reasonCode ?? error?.message ?? error) };
-  }
 }
 
 async function emitTelemetry(writer, event) {
   if (typeof writer !== "function") return { availability: "unavailable", id: null };
   try { return await writer(event); } catch { return { availability: "unavailable", id: null }; }
-}
-
-export async function sealObservationDay(root, { at = new Date().toISOString(), coveredFrom, coveredUntil } = {}) {
-  const core = await languageModule();
-  if (core?.createTelemetryRecord === undefined || core?.appendTelemetryRecord === undefined || core?.readTelemetryRecords === undefined) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN" };
-  const current = new Date(at);
-  if (Number.isNaN(current.getTime())) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN" };
-  current.setUTCHours(0, 0, 0, 0);
-  const until = coveredUntil ?? current.toISOString();
-  const fromDate = new Date(current);
-  fromDate.setUTCDate(fromDate.getUTCDate() - 1);
-  const from = coveredFrom ?? fromDate.toISOString();
-  const fromValue = Date.parse(from);
-  const untilValue = Date.parse(until);
-  if (!Number.isFinite(fromValue) || !Number.isFinite(untilValue) || untilValue - fromValue !== 86_400_000 || current.getTime() < untilValue || !from.endsWith("T00:00:00.000Z") || !until.endsWith("T00:00:00.000Z")) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until };
-  const read = await core.readTelemetryRecords(root, { limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
-  const targetFile = `${from.slice(0, 10)}.ndjson`;
-  const entries = read.records.filter((record) => record.kind !== "observation-coverage" && Date.parse(record.at) >= fromValue && Date.parse(record.at) < untilValue)
-    .sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-  const proofEntries = read.records.filter((record) => record.kind !== "observation-coverage" && ((Date.parse(record.at) >= fromValue && Date.parse(record.at) < untilValue) || String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)));
-  const missingChannels = [];
-  const invalidChannels = [];
-  const channelCheckpoints = {};
-  for (const channel of OBSERVATION_CHANNELS) {
-    const allRows = proofEntries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
-    if (allRows.length === 0) { missingChannels.push(channel); continue; }
-    const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-    if (actual.length === 0) { invalidChannels.push(channel); continue; }
-    const identities = [...new Set(allRows.map((record) => observationSourceIdentity(record, channel)).filter(Boolean))].sort();
-    const candidate = identities.map((identity) => ({ identity, rows: allRows.filter((record) => observationSourceIdentity(record, channel) === identity) }))
-      .map(({ identity, rows }) => ({ identity, proof: observationCoverageCandidate(rows, actual, from, until) }))
-      .find((entry) => entry.proof !== null);
-    if (candidate === undefined) { invalidChannels.push(channel); continue; }
-    const { proof } = candidate;
-    channelCheckpoints[channel] = { availability: "available", source: candidate.identity, startSequence: proof.startSequence, stopSequence: proof.stopSequence, recordCount: proof.rows.length, sourceDigest: canonicalSha256(proof.rows), highWaterDay: from.slice(0, 10), highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual) };
-  }
-  const problems = read.problems.filter((problem) => problem.path.endsWith(`/${targetFile}`));
-  const sourceDigest = canonicalSha256(entries);
-  const channels = await sealObservationChannels(core, root, read.records, { at, from, until, entries, proofEntries, unreadable: problems.length > 0 });
-  const summary = channels.some((entry) => entry.ok) ? await sealDaySummary(root, from.slice(0, 10)) : null;
-  if (problems.length > 0 || entries.length === 0 || missingChannels.length > 0 || invalidChannels.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_UNPROVEN", coveredFrom: from, coveredUntil: until, missingChannels, invalidChannels, recordCount: entries.length, sourceDigest, channels, summary };
-  const existing = read.records.filter((record) => record.kind === "observation-coverage" && record.payload.coveredFrom === from && record.payload.coveredUntil === until && record.payload.coverageVersion !== OBSERVATION_CHANNEL_COVERAGE_VERSION);
-  const matching = existing.find((record) => record.payload.sourceDigest === sourceDigest && record.payload.recordCount === entries.length);
-  if (matching !== undefined) return { ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: true, record: matching, channels, summary };
-  if (existing.length > 0) return { ok: false, reasonCode: "TELEMETRY_COVERAGE_CONFLICT", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, channels, summary };
-  const receipt = await core.appendTelemetryRecord(root, core.createTelemetryRecord({
-    at,
-    kind: "observation-coverage",
-    session: `observation-seal-${from.slice(0, 10)}`,
-    payload: { source: "telemetry:observation-collector", availability: "available", coverageVersion: "tcrn.telemetry-observation-coverage.v1", coveredFrom: from, coveredUntil: until, channels: ["retrieval", "reference", "trigger", "verify"], channelCheckpoints, recordCount: entries.length, sourceDigest, collectionErrors: 0 },
-  }));
-  return { ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", coveredFrom: from, coveredUntil: until, recordCount: entries.length, sourceDigest, duplicate: receipt.duplicate, record: receipt.record, channels, summary };
-}
-
-const OBSERVATION_CHANNEL_COVERAGE_VERSION = "tcrn.telemetry-observation-coverage.v2";
-
-// TCRN-CROSS-STORY-454 R5: a sealed day keeps its fitness summary beyond raw retention. Only
-// this seal path writes it; it fails open like every other telemetry write here.
-async function sealDaySummary(root, day) {
-  try {
-    const knowledge = await import(resolve(SCRIPT_DIRECTORY, "../dist/build/packages/core/src/knowledge-core.js"));
-    return typeof knowledge.sealFitnessDaySummary === "function" ? await knowledge.sealFitnessDaySummary(root, day) : null;
-  } catch (error) {
-    return { reasonCode: "TELEMETRY_SUMMARY_UNAVAILABLE", error: String(error?.reasonCode ?? error?.message ?? error) };
-  }
-}
-
-// TCRN-CROSS-STORY-453 R1/R2/R4: every channel is judged alone and sealed on its own v2
-// receipt, so one missing channel blocks no other. Inside a channel the v1 rules stand
-// unchanged (interval union over the whole UTC day from one trusted host source, boundary
-// phase and sequence, high water, no fragments); a channel with no real record seals only as
-// an observed zero, which needs a valid ok self-check from its own write path. The receipt
-// keeps the channel's count and digest for the day. One receipt per channel and day: a
-// repeat is a duplicate, a different one a conflict. Nothing is backfilled.
-async function sealObservationChannels(core, root, records, { at, from, until, entries, proofEntries, unreadable }) {
-  const telemetry = await telemetryModule();
-  const results = [];
-  for (const channel of OBSERVATION_CHANNELS) {
-    const refuse = (reasonCode = "TELEMETRY_COVERAGE_UNPROVEN") => results.push({ channel, ok: false, reasonCode });
-    const rows = proofEntries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX));
-    const actual = entries.filter((record) => OBSERVATION_CHANNEL_BY_KIND[record.kind] === channel && !String(record.payload.source).startsWith(OBSERVATION_BOUNDARY_PREFIX)).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id));
-    const selfCheckIds = actual.length > 0 ? [] : entries.filter((record) => record.kind === telemetry?.COLLECTOR_SELF_CHECK_KIND && record.payload.channel === channel && record.payload.verdict === "ok" && telemetry.collectorSelfCheckProblem(record) === null).map((record) => record.id).sort().slice(0, 64);
-    if (unreadable || rows.length === 0 || (actual.length === 0 && selfCheckIds.length === 0)) { refuse(); continue; }
-    const identities = [...new Set(rows.map((record) => observationSourceIdentity(record, channel)).filter(Boolean))].sort();
-    const candidate = identities.map((identity) => ({ identity, proof: observationCoverageCandidate(rows.filter((record) => observationSourceIdentity(record, channel) === identity), actual, from, until) }))
-      .find((entry) => entry.proof !== null);
-    if (candidate === undefined) { refuse(); continue; }
-    const outcome = actual.length > 0 ? "records" : "observed-zero";
-    const payload = {
-      source: "telemetry:observation-collector",
-      availability: "available",
-      coverageVersion: OBSERVATION_CHANNEL_COVERAGE_VERSION,
-      coveredFrom: from,
-      coveredUntil: until,
-      channel,
-      outcome,
-      checkpoint: { availability: "available", source: candidate.identity, startSequence: candidate.proof.startSequence, stopSequence: candidate.proof.stopSequence, recordCount: candidate.proof.rows.length, sourceDigest: canonicalSha256(candidate.proof.rows), highWaterDay: from.slice(0, 10), highWaterCount: actual.length, highWaterDigest: canonicalSha256(actual) },
-      selfCheckIds,
-      recordCount: actual.length,
-      sourceDigest: canonicalSha256(actual),
-      collectionErrors: 0,
-    };
-    const existing = records.filter((record) => record.kind === "observation-coverage" && record.payload.coverageVersion === OBSERVATION_CHANNEL_COVERAGE_VERSION && record.payload.channel === channel && record.payload.coveredFrom === from && record.payload.coveredUntil === until);
-    const matching = existing.find((record) => record.payload.outcome === outcome && record.payload.recordCount === actual.length && record.payload.sourceDigest === payload.sourceDigest);
-    if (matching !== undefined) { results.push({ channel, ok: true, reasonCode: "TELEMETRY_COVERAGE_ALREADY_RECORDED", outcome, duplicate: true, id: matching.id }); continue; }
-    if (existing.length > 0) { refuse("TELEMETRY_COVERAGE_CONFLICT"); continue; }
-    const receipt = await core.appendTelemetryRecord(root, core.createTelemetryRecord({ at, kind: "observation-coverage", session: `observation-seal-${from.slice(0, 10)}-${channel}`, payload }));
-    results.push({ channel, ok: true, reasonCode: receipt.duplicate ? "TELEMETRY_COVERAGE_ALREADY_RECORDED" : "TELEMETRY_COVERAGE_RECORDED", outcome, duplicate: receipt.duplicate, id: receipt.record.id });
-  }
-  return results;
 }
 
 async function queryLanguageAnswer(prompt, settings, host) {
@@ -1006,7 +507,6 @@ export async function runInjection({
   const call = await invokeRecall(query);
   if (!call.ok) {
     await emitTelemetry(telemetry, { kind: "retrieval", observationPhase: "stop", observationSource: retrievalSource, payload: { stage: "stop" } });
-    await emitSelfCheck(telemetry, "retrieval", { host, verdict: "failed", reasonCode: call.reasonCode });
     return { ok: false, reasonCode: call.reasonCode, error: call.error, injected: false, candidates: [], injectedBytes: 0 };
   }
   let payload = recallPayload(call);
@@ -1043,7 +543,6 @@ export async function runInjection({
       queryTranslations,
     },
   });
-  await emitSelfCheck(telemetry, "retrieval", { host });
   const lines = [];
   for (const candidate of candidates) {
     // The kind and the key are spoken because the answer now spans three record
@@ -1093,38 +592,6 @@ async function workspaceStateForInjection(partition, containerRoot) {
     try { return await core.validateWorkspace(workspaceForPartition(partition, containerRoot)); } catch { /* fail-open hook */ }
   }
   return null;
-}
-
-// STORY-387: SessionStart and Stop are bounded production opportunities to close the
-// previous UTC day. The collector seals actual channel records; no empty file or
-// missing host input is converted into zero activity.
-async function sessionObservationCoverage(event, partition, containerRoot, suppliedState = null) {
-  if (event !== "SessionStart" && event !== "Stop") return null;
-  const core = await languageModule();
-  if (typeof core?.activeBinding !== "function") return null;
-  try {
-    const state = suppliedState ?? await workspaceStateForInjection(partition, containerRoot);
-    const root = state?.metadata === undefined ? null : core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
-    return root === null ? null : await sealObservationDay(root);
-  } catch {
-    return null;
-  }
-}
-
-// STORY-377: SessionStart is the once-per-day trigger for the bounded knowledge
-// retirement sweep. The marker in the knowledge store makes repeated starts on the
-// same UTC day a no-op; a missing or unavailable store keeps the hook fail-open.
-async function sessionRetirementSweep(event, partition, containerRoot) {
-  if (event !== "SessionStart") return null;
-  const core = await languageModule();
-  if (typeof core?.retireKnowledgeSweep !== "function") return null;
-  try {
-    return await core.retireKnowledgeSweep(workspaceForPartition(partition, containerRoot), {
-      at: new Date().toISOString(),
-    });
-  } catch {
-    return null;
-  }
 }
 
 async function economyModelForHost(settings, host) {
@@ -1216,8 +683,6 @@ export async function runSessionInjection({
   let l0 = null;
   let recallResult = { ok: true, injected: false, candidates: [], injectedBytes: 0 };
   let decisionReason = "NO_CONTEXT";
-  let retirementSweep = null;
-  let observationCoverage = null;
   let contextFailure = false;
   const explicitBinding = dispatchContext ?? context ?? {
     ...hookInput,
@@ -1235,9 +700,6 @@ export async function runSessionInjection({
     const effectiveSettings = settings ?? await configuredSettingRecords(partition, containerRoot);
     const economyModel = await economyModelForHost(effectiveSettings, host);
     const telemetry = await telemetryWriter(partition, containerRoot, sessionId, workspaceState);
-    const observationBoundary = event === "SessionStart" ? await recordObservationBoundary({ partition, containerRoot, sessionId, host, workspaceState, phase: "start" }) : null;
-    observationCoverage = await sessionObservationCoverage(event, partition, containerRoot, workspaceState);
-    retirementSweep = await sessionRetirementSweep(event, partition, containerRoot);
     // A malformed or unbound hook payload receives a stable refusal and no
     // context/model work.  Direct library callers with no hook payload retain
     // the legacy main-session behaviour for compatibility.
@@ -1280,7 +742,6 @@ export async function runSessionInjection({
     if (dispatch.ok === true && event === "PostToolUse") {
       const referenceSource = "knowledge-inject:reference";
       await emitTelemetry(telemetry, { kind: "reference", observationPhase: "start", observationSource: referenceSource, payload: { stage: "start" } });
-      await emitSelfCheck(telemetry, "reference", { host });
       const correlation = pullCorrelation(hookInput, lease.session.emittedIds, lease.session.pulledIds);
       if (correlation !== null) {
         lease.session.pulledIds.push(correlation.id);
@@ -1298,7 +759,6 @@ export async function runSessionInjection({
         decisionReason = parts.length > 0 ? "BUDGET_SATURATED_L0_ONLY" : "BUDGET_SATURATED";
       } else {
         await emitTelemetry(telemetry, { kind: "trigger", observationPhase: "start", observationSource: "knowledge-inject:trigger", payload: { event: "UserPromptSubmit", stage: "start" } });
-        await emitSelfCheck(telemetry, "trigger", { host });
         try {
           recallResult = await runInjection({
             prompt,
@@ -1415,9 +875,6 @@ export async function runSessionInjection({
       delivery: { mode: pendingMode ? "pending" : "immediate", state: deliveryState, ids: uniqueInjectedIds, attempt: lease.session.deliveryAttempts },
       ...(dispatch.bound === true || dispatch.ok !== true ? { dispatchContext: dispatch } : {}),
       sessionId,
-      ...(observationCoverage === null ? {} : { observationCoverage }),
-      ...(observationBoundary === null ? {} : { observationBoundary }),
-      ...(retirementSweep === null ? {} : { retirementSweep }),
       telemetry: {
         ...(recallResult.telemetry ?? {}),
         judgments: lease.session.judgments.length,
@@ -1475,7 +932,7 @@ export function parseArgv(argv) {
     host: typeof flags.host === "string" ? flags.host : (process.env.TCRN_HOST ?? "claude"),
     selfTest: flags["self-test"] === true,
     verifyChannel: flags["verify-channel"] === true,
-    observationBoundary: typeof flags["observation-boundary"] === "string" ? flags["observation-boundary"] : null,
+    observationBoundary: flags["observation-boundary"] === undefined ? null : String(flags["observation-boundary"]),
     at: typeof flags.at === "string" ? flags.at : undefined,
     containerRoot: typeof flags["container-root"] === "string" ? flags["container-root"] : PLATFORM_ROOT,
     role: typeof flags.role === "string" ? flags.role : undefined,
@@ -1498,7 +955,11 @@ if (import.meta.url === pathToFileURL(resolve(process.argv[1] ?? "")).href) {
   };
   try {
     if (options.observationBoundary !== null) {
-      out(await recordObservationBoundary({ partition: options.partition, containerRoot: options.containerRoot, sessionId: options.sessionId ?? "anonymous", host: options.host, phase: options.observationBoundary, at: options.at }));
+      // TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-257): the observation boundary is retired. The
+      // argument is still recognised, with or without a value, so a caller installed before the
+      // change (the v1.2.0 Stop capture hook spawns it) is answered here and never falls through
+      // to the injection path below. Nothing is written.
+      out({ ok: true, reasonCode: "TELEMETRY_BOUNDARY_RETIRED", written: 0 });
     } else if (options.verifyChannel) {
       // Red surfaces: registration missing / command cannot start / chain returns nothing.
       const registered = registeredHookCommands();

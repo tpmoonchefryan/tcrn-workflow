@@ -742,7 +742,6 @@ export {
 export {
   appendTelemetryRecord,
   createTelemetryRecord,
-  readObservationDayVerdicts,
   readTelemetryRecordById,
   readTelemetryRecords,
   readTelemetryStats,

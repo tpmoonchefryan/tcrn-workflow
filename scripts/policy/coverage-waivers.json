@@ -923,6 +923,66 @@
       "testName": "__assertions__",
       "reason": "TCRN-CROSS-STORY-373 removes the obsolete model-plan and vendor-directory assertions while adding dispatch configuration, advanced overrides, and raw host-probe error assertions; the new test file retains the receipt and DOM contract paths.",
       "replacement": "portal/tests/ui-presence.test.mjs:STORY-373 the dispatch surface replaces the old model page and directory; portal/tests/ui-presence.test.mjs:STORY-373 mode save returns the engine receipt and host probe shows raw host failure"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: a host session boundary reconciles four real channel high-water marks",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- a SessionStart and a Stop writing the host session boundary rows whose high-water marks a seal reconciles -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: continuous and overlapping trusted sessions form one coverage interval",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal joining overlapping trusted sessions into one coverage interval -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393 U5: repeated start-stop pairs in one trusted session form one coverage interval",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal joining repeated start-stop pairs of one session -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393 U5: contiguous intervals from separate sessions on one host cover one day",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal joining contiguous intervals of separate sessions on one host -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: gaps and incompatible host sources never combine into a full day",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal refusing gaps and mixed host sources -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: a late boundary with a bad high-water digest cannot extend coverage",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal refusing a late boundary with a bad high-water digest -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: only actual full-day four-channel observations can seal a UTC day",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the four-channel day seal, its duplicate and its conflict -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: missing and unavailable upstream observations stay unproven",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal leaving missing and unavailable channels unproven -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "STORY-393: partial, gapped, and reverse-phase upstream coverage never seals",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): the collector no longer writes observation boundary rows, per-day seal receipts, collector self-checks or fitness summaries, so this case's subject -- the day seal refusing partial, gapped and reverse-phase boundaries -- retires with the writer. The replacement asserts that the hooks write none of them. The core readers the case also exercised retire in TCRN-CROSS-SUB-258.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep"
+    },
+    {
+      "path": "tests/telemetry.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): tests/telemetry.test.mjs loses the assertions of the 36 observation-boundary, seal, self-check and per-channel verdict cases (nine of them baseline names, waived above); what remains asserts the dispatch telemetry hook, the store and done evidence, unchanged. The replacements assert that the hooks, the batch entry and the retired arguments write no observation record at all.",
+      "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep; tests/knowledge-inject.test.mjs:MIN-225: the retired observation-boundary argument is answered and writes nothing; tests/final-gate-plan-batch-verify.test.mjs:MIN-225: the batch verify emitter has no self-check mode and a legacy self-check call writes nothing; tests/p3-cli-read-surface.test.mjs:MIN-225: telemetry-observation keeps its catalog entry and refuses as retired without reading telemetry"
     }
   ]
 }

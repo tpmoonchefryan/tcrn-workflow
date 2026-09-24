@@ -9,14 +9,15 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, writeFile, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
-  extractQueryTokens, promptTriggers, matchedTriggerKeywords, parseInjectionProtocol, recordObservationBoundary, runInjection, runSessionInjection, serializeInjectionProtocol, truncateToBudget
+  extractQueryTokens, promptTriggers, matchedTriggerKeywords, parseInjectionProtocol, runInjection, runSessionInjection, serializeInjectionProtocol, truncateToBudget
 } from "../scripts/knowledge-inject.mjs";
-import * as telemetryCore from "../dist/build/packages/core/src/telemetry.js";
 import { filterCandidatesByDispatchContext, normalizeDispatchContext } from "../scripts/injection-session.mjs";
 import {
   acquireWorkspaceLease,
@@ -255,52 +256,110 @@ test("STORY-419 protocol truncation is explicit and never looks like delivered c
   assert.equal(parsed.value.injected, undefined);
 });
 
-// TCRN-CROSS-STORY-452 R1-R3 (SUB-225): each channel's self-check is written by the write path
-// of that channel's real records, in the hook event that carries them, at most once per
-// session, UTC day and channel (a failed one once per reason code). A host that never
-// delivers an event never gets that channel's self-check. Red leg: no writer emits one.
-test("STORY-452 SUB-225: each channel self-checks through its own write path and only in its own hook event", async (t) => {
-  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-self-check-writers-")));
+// TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-257): the hooks keep writing the four channel events and
+// nothing else. The expected rows are the non-observation part of the same sequences measured on
+// v1.2.0 (514ebfb), where the SessionStart also wrote four boundary starts, each channel wrote a
+// collector self-check and the SessionStart sweep moved the knowledge store marker. As in
+// production, no workspace state is handed in: each hook reads it from the container. The second
+// session keeps the failure paths in view: a recall that fails and a tool call that pulls nothing.
+const MIN225_FOUR_CHANNEL_ROWS = Object.freeze([
+  "injection-bytes|availability,budget,budgetExceeded,candidateCount,injectedBytes,source",
+  "pull|availability,id,phase,sequence,source,verb",
+  "reference|availability,phase,sequence,source,stage",
+  "retrieval-hit|availability,candidateCount,candidateIds,phase,queryTranslations,sequence,source",
+  "retrieval|availability,phase,sequence,source,stage",
+  "trigger|availability,event,phase,sequence,source,stage",
+  "trigger|availability,event,phase,sequence,source,stage",
+]);
+const MIN225_FOUR_CHANNEL_PHASES = Object.freeze([
+  "injection-bytes|knowledge-inject:injection-bytes|-|-",
+  "pull|knowledge-inject:reference|stop|2",
+  "reference|knowledge-inject:reference|start|1",
+  "retrieval-hit|knowledge-inject:retrieval|stop|2",
+  "retrieval|knowledge-inject:retrieval|start|1",
+  "trigger|knowledge-inject:trigger|start|1",
+  "trigger|knowledge-inject:trigger|stop|2",
+]);
+const MIN225_FAILURE_ROWS = Object.freeze([
+  "reference|availability,phase,sequence,source,stage",
+  "reference|availability,phase,sequence,source,stage",
+  "retrieval|availability,phase,sequence,source,stage",
+  "retrieval|availability,phase,sequence,source,stage",
+  "trigger|availability,event,phase,sequence,source,stage",
+  "trigger|availability,event,phase,sequence,source,stage",
+]);
+const MIN225_FAILURE_PHASES = Object.freeze([
+  "reference|knowledge-inject:reference|start|3",
+  "reference|knowledge-inject:reference|stop|4",
+  "retrieval|knowledge-inject:retrieval|start|3",
+  "retrieval|knowledge-inject:retrieval|stop|4",
+  "trigger|knowledge-inject:trigger|start|3",
+  "trigger|knowledge-inject:trigger|stop|4",
+]);
+const INJECT_SCRIPT_PATH = fileURLToPath(new URL("../scripts/knowledge-inject.mjs", import.meta.url));
+
+// A container-shaped fixture: the hooks resolve `<container>/.tcrn-workspace/cross-project`, so a
+// run given this container never reaches the platform container's own chain or knowledge store.
+async function isolatedHookContainer(t, externalKey) {
+  const base = await realpath(await mkdtemp(join(tmpdir(), "tcrn-min225-hooks-")));
   t.after(() => rm(base, { recursive: true, force: true }));
-  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => ({ kind, path: join(base, kind) }));
+  const partition = join(base, ".tcrn-workspace", "cross-project");
+  const roots = ["framework", "workspace", "transient", "evidence-locator", "release-trust"].map((kind) => ({ kind, path: join(partition, kind) }));
   for (const root of roots) await mkdir(root.path, { recursive: true });
-  await initializeWorkspace({ roots, externalKey: "STORY-452-WRITERS", createdAt: "2026-09-01T00:00:00Z" });
-  const transient = join(base, "transient");
-  const workspaceState = await materializeWorkspace(join(base, "workspace"));
-  const candidate = { id: "knowledge:000000000000000000000452", kind: "card", key: "K452", status: "active", title: "Self-check", summary: "Self-check" };
-  const common = { stateDirectory: join(transient, "session-state"), workspaceState, settings: [], budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false, host: "claude" };
-  const checks = async () => (await readTelemetryRecords(transient, { kind: "collector-self-check", limit: 100 })).records
-    .map((record) => `${record.session}|${record.payload.channel}|${record.payload.verdict}|${record.payload.reasonCode ?? ""}|${record.payload.source}`).sort();
+  const workspace = join(partition, "workspace");
+  await initializeWorkspace({ roots, externalKey, createdAt: "2026-09-01T00:00:00Z" });
+  const lease = await acquireWorkspaceLease(workspace, { now: "2026-09-01T00:00:01Z" });
+  try {
+    await createProject(workspace, lease, { expectedVersion: 0, occurredAt: "2026-09-01T00:00:01Z", externalKey: `${externalKey}-PROJECT`, name: "MIN-225 hooks" });
+  } finally {
+    await lease.release();
+  }
+  await initializeKnowledgeStore(workspace, { disposableAcknowledged: true });
+  const storePath = join(workspace, ".tcrn-workflow", "knowledge", "store.json");
+  return { base, workspace, transient: join(partition, "transient"), storePath, storeBefore: readFileSync(storePath, "utf8") };
+}
 
-  const found = async () => ({ ok: true, result: { records: [candidate] } });
-  await runSessionInjection({ ...common, prompt: "self-check prompt", sessionId: "s452", event: "UserPromptSubmit", recall: found });
-  await runSessionInjection({ ...common, prompt: "another self-check prompt", sessionId: "s452", event: "UserPromptSubmit", recall: found });
-  assert.deepEqual(await checks(), [
-    "s452|retrieval|ok||knowledge-inject:retrieval",
-    "s452|trigger|ok||knowledge-inject:trigger",
-  ], "a prompt self-checks retrieval and trigger, once per session and day");
+test("MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep", async (t) => {
+  const fixture = await isolatedHookContainer(t, "FIXTURE-MIN-225-HOOK-EVENTS");
+  const candidate = { id: "knowledge:000000000000000000000225", kind: "card", key: "K225", status: "active", title: "Hooks", summary: "Hooks" };
+  const common = { partition: "cross-project", containerRoot: fixture.base, sessionId: "min225-hooks", stateDirectory: join(fixture.transient, "session-state"), settings: [], budget: 24_576, perPromptBytes: 1_600, judgeEnabled: false, host: "claude" };
+  const sessionStart = await runSessionInjection({ ...common, event: "SessionStart", prompt: "" });
+  const prompt = await runSessionInjection({ ...common, event: "UserPromptSubmit", prompt: "min225 hook sequence prompt", recall: async () => ({ ok: true, result: { records: [candidate] } }) });
+  const pull = await runSessionInjection({ ...common, event: "PostToolUse", prompt: "", hookInput: { tool_name: "work-show", tool_response: { ok: true, record: { id: candidate.id } } } });
+  const stop = await runSessionInjection({ ...common, event: "Stop", prompt: "" });
+  const failure = { ...common, sessionId: "min225-hooks-failure" };
+  const failedPrompt = await runSessionInjection({ ...failure, event: "UserPromptSubmit", prompt: "min225 failing recall prompt", recall: async () => ({ ok: false, reasonCode: "RECALL_UNAVAILABLE" }) });
+  const ignoredPull = await runSessionInjection({ ...failure, event: "PostToolUse", prompt: "", hookInput: { tool_name: "work-show", tool_response: "{}" } });
+  const read = await readTelemetryRecords(fixture.transient, { limit: Number.MAX_SAFE_INTEGER });
+  assert.deepEqual(read.problems, []);
+  const rows = (session) => read.records.filter((record) => record.session === session).map((record) => `${record.kind}|${Object.keys(record.payload).sort().join(",")}`).sort();
+  const phases = (session) => read.records.filter((record) => record.session === session).map((record) => `${record.kind}|${record.payload.source}|${record.payload.phase ?? "-"}|${record.payload.sequence ?? "-"}`).sort();
+  assert.deepEqual(rows("min225-hooks"), MIN225_FOUR_CHANNEL_ROWS, "exactly the four channel events, with their payload keys");
+  assert.deepEqual(phases("min225-hooks"), MIN225_FOUR_CHANNEL_PHASES, "and their phase and sequence");
+  assert.deepEqual(rows("min225-hooks-failure"), MIN225_FAILURE_ROWS, "a failed recall and an ignored pull still close their channel events");
+  assert.deepEqual(phases("min225-hooks-failure"), MIN225_FAILURE_PHASES);
+  assert.equal(read.records.length, MIN225_FOUR_CHANNEL_ROWS.length + MIN225_FAILURE_ROWS.length, "and nothing else in any session");
+  assert.equal(read.records.some((record) => String(record.payload.source).startsWith("telemetry:observation-collector:")), false, "no boundary row");
+  assert.equal(read.records.some((record) => record.kind === "observation-coverage" || record.kind === "collector-self-check"), false, "no seal receipt and no self-check");
+  assert.deepEqual(readdirSync(join(fixture.transient, "telemetry")).filter((name) => !/^\d{4}-\d{2}-\d{2}\.ndjson$/u.test(name)), [], "no telemetry/summaries");
+  assert.equal(readFileSync(fixture.storePath, "utf8"), fixture.storeBefore, "the knowledge store marker is untouched: SessionStart no longer sweeps");
+  assert.deepEqual([sessionStart, prompt, pull, stop, failedPrompt, ignoredPull].map((result) => result.decision), ["L0_CHANGED", "INJECTION_EMITTED", "PULL_RECORDED", "NO_CONTEXT", "RECALL_UNAVAILABLE", "PULL_IGNORED"]);
+  for (const result of [sessionStart, stop]) {
+    for (const field of ["observationBoundary", "observationCoverage", "retirementSweep"]) assert.equal(Object.hasOwn(result, field), false, field);
+  }
+});
 
-  await runSessionInjection({ ...common, prompt: "", sessionId: "s452", event: "PostToolUse", hookInput: { tool_name: "work-show", tool_response: "{}" } });
-  assert.ok((await checks()).includes("s452|reference|ok||knowledge-inject:reference"), "PostToolUse self-checks reference");
-  assert.equal((await checks()).length, 3);
-
-  await recordObservationBoundary({ sessionId: "s452", host: "claude", phase: "start", workspaceState });
-  assert.ok((await checks()).includes("s452|verify|ok||final-gate-plan:batch-verify"), "a session boundary self-checks verify through the batch verify emitter");
-
-  const unavailable = async () => ({ ok: false, reasonCode: "RECALL_UNAVAILABLE" });
-  await runSessionInjection({ ...common, prompt: "failing self-check prompt", sessionId: "s452-failed", event: "UserPromptSubmit", recall: unavailable });
-  await runSessionInjection({ ...common, prompt: "failing self-check prompt again", sessionId: "s452-failed", event: "UserPromptSubmit", recall: unavailable });
-  const failed = (await checks()).filter((entry) => entry.startsWith("s452-failed|"));
-  assert.deepEqual(failed, [
-    "s452-failed|retrieval|failed|RECALL_UNAVAILABLE|knowledge-inject:retrieval",
-    "s452-failed|trigger|ok||knowledge-inject:trigger",
-  ], "a failed retrieval says why, once per reason code");
-
-  const day = (await readTelemetryRecords(transient, { kind: "collector-self-check", limit: 1 })).records[0].at.slice(0, 10);
-  const read = await telemetryCore.readObservationChannelDays(transient, day);
-  assert.deepEqual(read.refusedSelfChecks, [], "every written self-check passes the read-side check");
-  assert.equal(read.channels.find((entry) => entry.channel === "verify").reading, "observed-zero");
-  assert.deepEqual(read.channels.find((entry) => entry.channel === "retrieval").selfChecks, { ok: 1, failed: 1 });
+test("MIN-225: the retired observation-boundary argument is answered and writes nothing", async (t) => {
+  const fixture = await isolatedHookContainer(t, "FIXTURE-MIN-225-BOUNDARY-ARGUMENT");
+  const target = ["--partition", "cross-project", "--container-root", fixture.base];
+  const boundary = [...target, "--session-id", "min225-boundary", "--host", "claude", "--at", "2026-09-24T12:00:00.000Z"];
+  for (const argv of [["--observation-boundary", "start", ...boundary], ["--observation-boundary", "stop", ...boundary], [...target, "--observation-boundary"]]) {
+    const run = spawnSync(process.execPath, [INJECT_SCRIPT_PATH, ...argv], { encoding: "utf8", timeout: 60_000 });
+    assert.equal(run.status, 0, `${argv.join(" ")}: ${run.stderr}`);
+    assert.deepEqual(JSON.parse(run.stdout), { ok: true, reasonCode: "TELEMETRY_BOUNDARY_RETIRED", written: 0, protocolVersion: "tcrn.injection-protocol.v2" }, argv.join(" "));
+  }
+  assert.equal(existsSync(join(fixture.transient, "telemetry")), false, "no telemetry record of any kind");
+  assert.equal(readFileSync(fixture.storePath, "utf8"), fixture.storeBefore);
 });
 
 // TCRN-CROSS-STORY-459 AC1 (SUB-235): the judge telemetry record carries the failure detail

@@ -7,8 +7,10 @@
 // candidate, which is the ruling stated as a machine check rather than as prose.
 
 import assert from "node:assert/strict";
+import childProcess from "node:child_process";
 import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -155,37 +157,35 @@ test("STORY-365 correction 1: the Codex Stop payload carries no transcript_path,
   }
 });
 
-test("STORY-393 B2/U6: host argv wins and replayed Stop payloads do not write another boundary", async () => {
+// TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-257): the Stop hook no longer writes an observation
+// boundary. Until v1.2.0 it spawned `knowledge-inject.mjs --observation-boundary stop` for every
+// Stop that was not a replay; the spy below records every spawnSync the hook makes, so the child
+// is caught even when a spawned copy would write nothing. The host argv rules still hold.
+test("MIN-225: a Stop writes no observation boundary and spawns no boundary child", async () => {
   assert.equal(hostFromArgv(["--host", "codex"], { host: "claude" }, {}), "codex");
   assert.equal(hostFromArgv([], {}, { TCRN_HOST: "codex" }), "codex");
   assert.equal(hostFromArgv([], {}, {}), "unknown-host");
   assert.deepEqual([containerRootFromArgv(["--container-root", "/governed/container"]), containerRootFromArgv(["--container-root=/governed/container"])], ["/governed/container", "/governed/container"]);
-  const fixture = await containerFixture("FIXTURE-CAPTURE-REPLAY");
+  const fixture = await containerFixture("FIXTURE-CAPTURE-NO-BOUNDARY");
+  const spawned = [];
+  const original = childProcess.spawnSync;
+  childProcess.spawnSync = function spawnSyncSpy(command, args, ...rest) {
+    spawned.push([command, ...(Array.isArray(args) ? args : [])]);
+    return original.call(this, command, args, ...rest);
+  };
+  syncBuiltinESMExports();
   try {
     const input = { hook_event_name: "Stop", session_id: "capture-session", host: "codex" };
-    const first = runCaptureHook(input, { containerRoot: fixture.container, now: () => instant(2) });
-    assert.deepEqual(first.observationBoundary, {
-      ok: false,
-      reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
-      unknown: true,
-      resumed: true,
-      from: "2026-09-02",
-      until: "2026-09-02",
-      count: 4,
-      duplicate: false,
-      protocolVersion: "tcrn.injection-protocol.v2",
-    }, JSON.stringify(first));
+    for (const [index, payload] of [input, { ...input, stop_hook_active: true }, { ...input, stopHookActive: true }].entries()) {
+      const report = runCaptureHook(payload, { containerRoot: fixture.container, now: () => instant(2, index) });
+      assert.deepEqual(report, { ok: true, reasonCode: "NO_LESSON_DECLARED", written: 0, attempts: [] }, JSON.stringify(report));
+    }
+    assert.deepEqual(spawned.filter((argv) => argv.includes("--observation-boundary")), [], "no boundary child is spawned");
     const telemetryRoot = join(fixture.container, ".tcrn-workspace", "cross-project", "transient");
-    const before = await readTelemetryRecords(telemetryRoot, { limit: Number.MAX_SAFE_INTEGER });
-    assert.equal(before.records.filter((record) => record.payload.source.includes(":codex:")).length, 4);
-
-    const snake = runCaptureHook({ ...input, stop_hook_active: true }, { containerRoot: fixture.container, now: () => instant(2, 1) });
-    const camel = runCaptureHook({ ...input, stopHookActive: true }, { containerRoot: fixture.container, now: () => instant(2, 2) });
-    assert.deepEqual(snake.observationBoundary, { ok: true, reasonCode: "TELEMETRY_BOUNDARY_SKIPPED_REPLAY", skipped: true });
-    assert.deepEqual(camel.observationBoundary, { ok: true, reasonCode: "TELEMETRY_BOUNDARY_SKIPPED_REPLAY", skipped: true });
-    const after = await readTelemetryRecords(telemetryRoot, { limit: Number.MAX_SAFE_INTEGER });
-    assert.equal(after.records.length, before.records.length, "replayed Stop payloads do not add a second boundary");
+    assert.deepEqual((await readTelemetryRecords(telemetryRoot, { limit: Number.MAX_SAFE_INTEGER })).records, [], "and no boundary row is written");
   } finally {
+    childProcess.spawnSync = original;
+    syncBuiltinESMExports();
     await fixture.close();
   }
 });

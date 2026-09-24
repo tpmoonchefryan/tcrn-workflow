@@ -3,6 +3,23 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
+## Unreleased
+
+The hooks and the batch entry no longer write observation boundary rows,
+per-channel or four-channel seal receipts, `collector-self-check` records or
+`telemetry/summaries/<day>.json`, and SessionStart no longer runs the
+retirement sweep (TCRN-CROSS-MIN-225 D3, TCRN-CROSS-SUB-257). A caller that
+still passes `--observation-boundary` to `knowledge-inject.mjs` is answered
+`TELEMETRY_BOUNDARY_RETIRED`, and a legacy `selfCheck` call to the batch
+verify emitter is answered `TELEMETRY_SELF_CHECK_RETIRED`; neither writes
+anything. `telemetry-observation` keeps its catalog entry unchanged from
+1.2.0, validates its arguments, and then refuses with
+`TELEMETRY_OBSERVATION_RETIRED` without reading the workspace or telemetry.
+The four channel events keep their payloads. Records already written,
+including the boundary rows, receipts and self-checks an installed 1.2.0 hook
+keeps writing until both hosts are upgraded, stay readable through
+`telemetry-list` and `telemetry-stats`.
+
 ## 1.2.0 — minor candidate
 
 This release seals and reads the observation evidence behind automatic

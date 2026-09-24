@@ -2222,12 +2222,13 @@ function scopedBudgetNativeProblems(input, acquired) {
 }
 
 /**
- * The batch entry's verify emitter: one passing verify record after a formal run. With
- * `selfCheck` it writes the verify channel's collector self-check through this same function
- * instead, and runs no gate (TCRN-CROSS-STORY-452 R1); a session boundary calls it that way
- * with the telemetry root it already holds. Telemetry never changes the batch result.
+ * The batch entry's verify emitter: one passing verify record after a formal run. Telemetry
+ * never changes the batch result. The collector self-check mode is retired (TCRN-CROSS-MIN-225
+ * D3, TCRN-CROSS-SUB-257): a call that still passes `selfCheck`, as the v1.2.0 session boundary
+ * did, is answered by name and writes nothing, so it can never leave a passing verify record.
  */
 export async function emitBatchVerifyTelemetry({ workspace = null, root = null, sessionId = null, selfCheck = null, at = new Date().toISOString() } = {}) {
+  if (selfCheck !== null) return { reasonCode: "TELEMETRY_SELF_CHECK_RETIRED", written: false };
   try {
     const session = typeof sessionId === "string" && sessionId.length > 0 ? sessionId : "unknown-batch-session";
     const core = await import("../dist/build/packages/core/src/index.js");
@@ -2237,10 +2238,6 @@ export async function emitBatchVerifyTelemetry({ workspace = null, root = null, 
       const state = await core.materializeWorkspace(workspace);
       telemetryRoot = core.activeBinding(state.metadata).find((entry) => entry.kind === "transient")?.path ?? null;
       if (telemetryRoot === null) return null;
-    }
-    if (selfCheck !== null) {
-      const telemetry = await import("../dist/build/packages/core/src/telemetry.js");
-      return await telemetry.appendCollectorSelfCheck(telemetryRoot, { at, session, channel: "verify", host: String(selfCheck.host ?? "unknown-host"), source: "final-gate-plan:batch-verify", verdict: "ok", reasonCode: null });
     }
     const record = core.createTelemetryRecord({
       at,

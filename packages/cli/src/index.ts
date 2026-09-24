@@ -123,7 +123,6 @@ import {
   resolveQueryLanguage,
   templateBindingFromWorkRecord,
   readTelemetryRecordById,
-  readObservationDayVerdicts,
   readTelemetryRecords,
   appendTelemetryRecord,
   createTelemetryRecord,
@@ -2911,8 +2910,12 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     }));
     return;
   }
-  // TCRN-CROSS-STORY-453 R3: one UTC day's per-channel observation verdicts (sealed,
-  // observed-zero, idle, unproven) with each receipt id and its validity. Read-only.
+  // TCRN-CROSS-STORY-453 R3 added this read of one UTC day's per-channel observation verdicts.
+  // TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-257) retires the per-channel observation days it read:
+  // the catalog entry stays byte-identical to v1.2.0 until a release that installs the change can
+  // shrink the catalog, the arguments are still validated, and the verb then refuses by name
+  // without opening the workspace or reading any telemetry. Records already written stay readable
+  // through telemetry-list and telemetry-stats.
   if (command === "telemetry-observation") {
     const values = parseArguments(rest, ["workspace", "day"]);
     required(values, ["workspace", "day"]);
@@ -2920,18 +2923,7 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     if (!/^\d{4}-\d{2}-\d{2}$/u.test(day) || Number.isNaN(Date.parse(`${day}T00:00:00.000Z`)) || new Date(`${day}T00:00:00.000Z`).toISOString().slice(0, 10) !== day) {
       fail("CLI_ARGUMENT_MALFORMED", "day");
     }
-    const state = await validateWorkspace(values.workspace ?? "");
-    const transient = activeBinding(state.metadata).find((root) => root.kind === "transient");
-    if (transient === undefined) fail("CLI_COMMAND_FAILED", "workspace has no transient root for telemetry");
-    const result = await readObservationDayVerdicts(transient.path, day);
-    io.write(canonicalJson({
-      reasonCode: "TELEMETRY_OBSERVATION_READY",
-      workspaceId: state.metadata.workspaceId,
-      version: state.version,
-      headEventHash: state.headEventHash,
-      ...result,
-    } as unknown as JsonValue));
-    return;
+    fail("TELEMETRY_OBSERVATION_RETIRED", "telemetry-observation is retired: observation days are no longer sealed or judged (TCRN-CROSS-MIN-225); read telemetry-list or telemetry-stats instead");
   }
   if (command === "telemetry-stats") {
     const values = parseArguments(rest, ["workspace", "kind", "class", "since"]);

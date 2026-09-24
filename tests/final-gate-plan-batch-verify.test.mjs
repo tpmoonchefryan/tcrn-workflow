@@ -25,7 +25,6 @@ import {
   readNativeBatchState,
 } from "../scripts/final-gate-plan.mjs";
 import * as finalGatePlan from "../scripts/final-gate-plan.mjs";
-import * as telemetryCore from "../dist/build/packages/core/src/telemetry.js";
 
 const createdAt = "2026-08-19T18:00:00Z";
 const boundaryPrefix = "telemetry:observation-collector:";
@@ -124,24 +123,25 @@ test("missing or unusable workspace leaves the qualified batch result unchanged"
   assert.equal(nonexistent.reasonCode, "BATCH_FORMAL_GATE_COMPLETED");
 });
 
-// TCRN-CROSS-STORY-452 R1 (SUB-225): the verify channel's self-check comes from the batch
-// entry's own verify emitter, in a mode that runs no gate and writes no verify record. Red
-// leg: no self-check mode, or one that writes a passing verify record instead.
-test("STORY-452 SUB-225: the batch verify emitter self-checks the verify channel without running a gate", async (context) => {
-  const fixture = await workspace("batch-verify-self-check");
+// TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-257): the verify emitter has no collector self-check mode
+// any more. A caller that still passes `selfCheck` (the v1.2.0 session boundary did) gets a named
+// answer and nothing is written -- above all no passing verify record, which the formal path alone
+// writes, unchanged.
+test("MIN-225: the batch verify emitter has no self-check mode and a legacy self-check call writes nothing", async (context) => {
+  const fixture = await workspace("batch-verify-no-self-check");
   context.after(() => rm(fixture.base, { recursive: true, force: true }));
   const state = await materializeWorkspace(fixture.root);
   const transient = activeBinding(state.metadata).find((entry) => entry.kind === "transient").path;
-  for (const expected of ["TELEMETRY_SELF_CHECK_RECORDED", "TELEMETRY_SELF_CHECK_ALREADY_RECORDED"]) {
-    const receipt = await finalGatePlan.emitBatchVerifyTelemetry?.({ root: transient, sessionId: "self-check-session", selfCheck: { host: "claude" } });
-    assert.equal(receipt?.reasonCode, expected, "one ok self-check per session, UTC day and channel");
+  for (const call of [
+    { root: transient, sessionId: "legacy-self-check", selfCheck: { host: "claude" } },
+    { workspace: fixture.root, sessionId: "legacy-self-check", selfCheck: { host: "codex" } },
+  ]) {
+    assert.deepEqual(await finalGatePlan.emitBatchVerifyTelemetry(call), { reasonCode: "TELEMETRY_SELF_CHECK_RETIRED", written: false });
   }
-  assert.deepEqual(await nonBoundaryVerifyRecords(fixture), [], "a self-check is not a verify record");
-  const checks = (await readTelemetryRecords(transient, { kind: "collector-self-check", limit: 10 })).records;
-  assert.equal(checks.length, 1);
-  assert.deepEqual({ ...checks[0].payload }, { source: "final-gate-plan:batch-verify", channel: "verify", host: "claude", verdict: "ok", reasonCode: null, availability: "available" });
-  const reading = (await telemetryCore.readObservationChannelDays(transient, checks[0].at.slice(0, 10))).channels.find((entry) => entry.channel === "verify");
-  assert.equal(reading.reading, "observed-zero");
+  assert.deepEqual((await readTelemetryRecords(transient, { limit: Number.MAX_SAFE_INTEGER })).records, [], "no self-check and no verify record");
+  const result = await executeQualifiedBatch({ ...batchInput(fixture.root), sessionId: "formal-batch-session" }, async () => ({ ok: true }));
+  assert.equal(result.status, "completed");
+  assert.deepEqual((await readTelemetryRecords(transient, { limit: Number.MAX_SAFE_INTEGER })).records.map((record) => [record.kind, record.session, record.payload.source, record.payload.passed]), [["verify", "formal-batch-session", "final-gate-plan:batch-verify", true]], "the formal run still writes its one verify record, under its own session");
 });
 
 // TCRN-CROSS-STORY-460 R4 (SUB-239). The fixture below goes through the engine the way the
