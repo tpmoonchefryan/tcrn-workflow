@@ -493,3 +493,48 @@ test("STORY-460 AC4: running hook processes are host hooks, not running agents, 
   const withAgents = summarize([...hooks, agent, task], { selfPid: 1, selfPgid: null });
   assert.deepEqual(withAgents.agents.records.map((row) => row.pid).sort(), [300, 301], "a real agent is still seen");
 });
+
+// TCRN-CROSS-INC-384 (SUB-250): the knowledge-inject child reads the chain through the engine
+// CLI, and in a live session that CLI process (its command line holds the engine path) still
+// read as a running agent. Within one snapshot, a process under a host-hook ancestor is part
+// of the hook; a governed write under a hook stays in writes, and an engine CLI read with no
+// hook ancestor is still orchestration. Red leg: drop the ancestry.
+function hookedSnapshot() {
+  const cli = `${process.execPath} ${REPOSITORY_ROOT}/scripts/tcrn-workflow.mjs`;
+  const workspace = "/container/.tcrn-workspace/cross-project/workspace";
+  return [
+    { pid: 500, ppid: 1, pgid: 500, state: "S", command: "claude" },
+    { pid: 501, ppid: 500, pgid: 501, state: "S", command: "/bin/sh -c if [ -f \"${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs\" ]; then node \"${CLAUDE_PROJECT_DIR}/TCRN Platform/tcrn-workflow/scripts/knowledge-inject-hook.mjs\"; fi" },
+    { pid: 502, ppid: 501, pgid: 501, state: "S", command: `node ${REPOSITORY_ROOT}/scripts/knowledge-inject-hook.mjs --container-root /container --host claude` },
+    { pid: 503, ppid: 502, pgid: 501, state: "S", command: `${process.execPath} ${REPOSITORY_ROOT}/scripts/knowledge-inject.mjs --hook-input {} --container-root /container --host claude` },
+    { pid: 504, ppid: 503, pgid: 501, state: "S", command: `${cli} settings-catalog --workspace ${workspace}` },
+    { pid: 505, ppid: 503, pgid: 501, state: "S", command: `${cli} recall --workspace ${workspace} --query hook` },
+  ];
+}
+
+test("INC-384: engine CLI reads started under a host hook are part of the hook, not running agents", () => {
+  const summary = operationalBatchEntry.summarizeProcesses(hookedSnapshot(), { selfPid: 1, selfPgid: null });
+  assert.deepEqual(summary.agents.records.map((row) => row.pid), [], "no hook-started read is a running agent");
+  const reads = summary.scopeObservations.outOfScope.filter((row) => row.pid === 504 || row.pid === 505);
+  assert.deepEqual(reads.map(({ pid, scope, role, active, scopeBasis, hookAncestorPid }) => ({ pid, scope, role, active, scopeBasis, hookAncestorPid })), [
+    { pid: 504, scope: "unrelated", role: "host-hook", active: false, scopeBasis: "host-hook-descendant", hookAncestorPid: 503 },
+    { pid: 505, scope: "unrelated", role: "host-hook", active: false, scopeBasis: "host-hook-descendant", hookAncestorPid: 503 },
+  ]);
+  assert.deepEqual(summary.writes.records, []);
+});
+
+test("INC-384: a governed write under a hook stays in writes and a read with no hook ancestor is still orchestration", () => {
+  const cli = `${process.execPath} ${REPOSITORY_ROOT}/scripts/tcrn-workflow.mjs`;
+  const workspace = "/container/.tcrn-workspace/cross-project/workspace";
+  const capture = [
+    { pid: 510, ppid: 500, pgid: 510, state: "S", command: `node ${REPOSITORY_ROOT}/scripts/knowledge-capture-hook.mjs --container-root /container --host claude` },
+    { pid: 511, ppid: 510, pgid: 510, state: "S", command: `${cli} knowledge-capture --workspace ${workspace} --from-file /tmp/card.json` },
+  ];
+  const mainSessionRead = { pid: 520, ppid: 500, pgid: 520, state: "S", command: `${cli} work-show --workspace ${workspace} --id work:000000000000000000000384` };
+  const orphanRead = { pid: 521, ppid: 9999, pgid: 521, state: "S", command: `${cli} status --workspace ${workspace}` };
+  const loopA = { pid: 530, ppid: 531, pgid: 530, state: "S", command: `${cli} work-list --workspace ${workspace}` };
+  const loopB = { pid: 531, ppid: 530, pgid: 530, state: "S", command: `${cli} status --workspace ${workspace}` };
+  const summary = operationalBatchEntry.summarizeProcesses([...hookedSnapshot(), ...capture, mainSessionRead, orphanRead, loopA, loopB], { selfPid: 1, selfPgid: null });
+  assert.deepEqual(summary.writes.records.map((row) => row.pid), [511], "the batch still waits for a real write a hook started");
+  assert.deepEqual(summary.agents.records.map((row) => [row.pid, row.role]).sort((left, right) => left[0] - right[0]), [[511, "orchestration"], [520, "orchestration"], [521, "orchestration"], [530, "orchestration"], [531, "orchestration"]], "no hook ancestor, a missing parent, or a parent cycle keeps the existing rule");
+});

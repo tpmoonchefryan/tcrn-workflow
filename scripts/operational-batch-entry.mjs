@@ -239,9 +239,39 @@ function processSnapshot() {
   return { ok: true, ...summarizeProcesses(rows, { selfPid: process.pid, selfPgid }) };
 }
 
+// TCRN-CROSS-INC-384 (STORY-460 AC4): a hook's own children are part of the hook. The
+// knowledge-inject child reads the chain through the engine CLI, whose command line holds the
+// engine path and so read as orchestration. Within one ps snapshot, a process with a host-hook
+// ancestor on its ppid chain (bounded, cycle-safe) is a hook descendant, unless its command is
+// or may be a governed write: that one keeps its own rule and stays in agents and writes, so
+// the batch still waits for a real write. A process whose parent is not in the snapshot keeps
+// its own rule too.
+const HOOK_ANCESTOR_DEPTH_LIMIT = 32;
+const HOOK_DESCENDANT_EXEMPT_ROLES = new Set(["formal-entry", "host-hook", "host-service"]);
+
+function hostHookAncestor(row, byPid) {
+  const seen = new Set([row.pid]);
+  let parent = byPid.get(row.ppid);
+  for (let depth = 0; parent !== undefined && depth < HOOK_ANCESTOR_DEPTH_LIMIT && !seen.has(parent.pid); depth += 1) {
+    if (parent.role === "host-hook" && parent.scopeBasis === "registered-host-hook") return parent;
+    seen.add(parent.pid);
+    parent = byPid.get(parent.ppid);
+  }
+  return null;
+}
+
+function withHookDescendants(classified) {
+  const byPid = new Map(classified.map((row) => [row.pid, row]));
+  return classified.map((row) => {
+    if (HOOK_DESCENDANT_EXEMPT_ROLES.has(row.role) || GOVERNED_WRITE_COMMAND.test(row.command) || row.likelyGovernedWrite === true) return row;
+    const ancestor = hostHookAncestor(row, byPid);
+    return ancestor === null ? row : { ...row, scope: "unrelated", role: "host-hook", active: false, scopeBasis: "host-hook-descendant", hookAncestorPid: ancestor.pid };
+  });
+}
+
 /** The classification a process snapshot reports, from its rows; shared by processSnapshot and its tests. */
 function summarizeProcesses(rows, { selfPid = process.pid, selfPgid = null } = {}) {
-  const classified = rows.map((row) => classifyProcess(row, { selfPid, selfPgid }));
+  const classified = withHookDescendants(rows.map((row) => classifyProcess(row, { selfPid, selfPgid })));
   const agentRows = classified.filter((row) => row.pid !== selfPid && row.scope !== "unrelated" && row.scope !== "unknown");
   const unknownRows = classified.filter((row) => row.scope === "unknown");
   const writeRows = classified.filter((row) => row.scope !== "unrelated" && (GOVERNED_WRITE_COMMAND.test(row.command) || row.likelyGovernedWrite === true));
