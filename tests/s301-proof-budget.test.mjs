@@ -95,15 +95,15 @@ test("STORY-301: reading the budget policy does not change it", async () => {
 test("EPIC135: the approved budget thresholds classify every real boundary", async () => {
   const policy = await readPolicy();
   assert.equal(policy.warningRatio, 2.4);
-  assert.equal(policy.hardRatio, 2.5329);
-  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-INC-387-MIN222-D1-host-claude-cli-measured-ratio-20260924");
+  assert.equal(policy.hardRatio, 2.5354);
+  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-INC-388-MIN222-D1-reader-date-order-measured-ratio-20260924");
   const cases = [
     [2.3728, true, "verified"],
     [2.4, true, "verified"],
     [2.4001, true, "warning"],
     [2.5, true, "warning"],
-    [2.5329, true, "warning"],
-    [2.5330, false, "rejected"],
+    [2.5354, true, "warning"],
+    [2.5355, false, "rejected"],
   ];
   for (const [ratio, ok, status] of cases) {
     const proofLines = Math.round(ratio * 10_000);
@@ -156,7 +156,7 @@ test("TCRN-CROSS-STORY-435/436: finite ratio authorization includes current work
   assert.equal(validateProofBudgetScopeBinding(binding, policy).ok, true);
 
   const scoped = evaluateProofBudget({
-    proofLines: 70_230,
+    proofLines: 70_248,
     productLines: 27_706,
     policy,
     scopeBindingSha256: bindingSha256,
@@ -166,7 +166,7 @@ test("TCRN-CROSS-STORY-435/436: finite ratio authorization includes current work
   assert.equal(scoped.warning.scopeBindingSha256, bindingSha256);
   assert.equal(isNonBlockingProofBudgetWarning(scoped, { policy, scopeBindingSha256: bindingSha256 }), true);
   assert.equal(isNonBlockingProofBudgetWarning(scoped, { policy }), false);
-  assert.equal(evaluateProofBudget({ proofLines: 70_230, productLines: 27_706, policy, scopeBindingSha256: "0".repeat(64) }).ok, false);
+  assert.equal(evaluateProofBudget({ proofLines: 70_248, productLines: 27_706, policy, scopeBindingSha256: "0".repeat(64) }).ok, false);
 
   const future = structuredClone(binding);
   future.allowedWork = [...future.allowedWork, { externalKey: "TCRN-CROSS-STORY-437", id: "work:437" }];
@@ -226,7 +226,7 @@ test("EPIC135: push-gate budget exemption requires one terminal receipt and no o
 test("TCRN-CROSS-STORY-430: scoped exceeded notice is shared by P1/push and never hides a real error", async () => {
   const policy = await readPolicy();
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
-  const result = evaluateProofBudget({ proofLines: 70_230, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 });
+  const result = evaluateProofBudget({ proofLines: 70_248, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 });
   const budgetNotice = { command: "budget", ...result.warning };
   const reasonCodeByTask = {
     "format-check": "FORMAT_VERIFIED", lint: "LINT_VERIFIED", typecheck: "TYPECHECK_VERIFIED", build: "BUILD_VERIFIED",
@@ -421,7 +421,7 @@ test("EPIC135: formal batch aggregation preserves authorized budget notices but 
 
   const binding = policy.ratioPolicy.scopedDisposition.binding;
   const bindingSha256 = proofBudgetScopeBindingDigest(policy);
-  const scoped = evaluateProofBudget({ proofLines: 70_230, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 });
+  const scoped = evaluateProofBudget({ proofLines: 70_248, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 });
   const boundInput = {
     ...input,
     series: "INIT-051",
@@ -489,7 +489,7 @@ test("TCRN-CROSS-STORY-435/436: operational qualification uses native work state
     candidate: { id: "candidate-scope", status: "stable", digest: "tree-scope" },
     queueDigest: "queue-scope",
   };
-  const warning = evaluateProofBudget({ proofLines: 70_230, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 }).warning;
+  const warning = evaluateProofBudget({ proofLines: 70_248, productLines: 27_706, policy, scopeBindingSha256: bindingSha256 }).warning;
   let runnerCalls = 0;
   const result = await executeOperationalBatch(input, async () => {
     runnerCalls += 1;

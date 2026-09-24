@@ -580,11 +580,11 @@ function byInstant(left: TelemetryRecord, right: TelemetryRecord): number {
 
 /**
  * TCRN-CROSS-STORY-453 R3: each channel's verdict for one UTC day. `records` holds the day's
- * records, the boundary rows around it and its seal receipts (the day file, the one before and
- * the three after). A valid v2 receipt gives sealed or observed-zero; a v1 receipt, judged by
- * the v1 rules, seals all four channels; otherwise the day is idle (no boundary row for the day
- * and no self-check from any host, STORY-454 R2) or the channel is unproven. Receipts are listed with
- * their validity. Read-only.
+ * records, the boundary rows around it and its seal receipts, in date order (the day files from
+ * four days before to three after, TCRN-CROSS-INC-388). A valid v2 receipt gives sealed or
+ * observed-zero; a v1 receipt, judged by the v1 rules, seals all four channels; otherwise the
+ * day is idle (no boundary row for the day and no self-check from any host, STORY-454 R2) or the
+ * channel is unproven. Receipts are listed with their validity. Read-only.
  */
 export function observationDayVerdicts(records: readonly TelemetryRecord[], day: string, { unreadable = false }: { readonly unreadable?: boolean } = {}): ObservationDayVerdicts {
   const from = `${day}T00:00:00.000Z`;
@@ -614,12 +614,18 @@ export function observationDayVerdicts(records: readonly TelemetryRecord[], day:
   return { day, idle, channels };
 }
 
-/** Read-only: reads the day file, the one before and the three after, then observationDayVerdicts. */
+// TCRN-CROSS-INC-388: the day files both readers take for a day, in date order as the collector
+// seals, since observationIntervals checks each group in read order. A covering start can lie four
+// files back: a SessionStart resumes into the first unsealed day after the last stop (up to two
+// days on) at that stop's instant, and a later Stop writes up to two days past it.
+const OBSERVATION_READ_OFFSETS = Object.freeze([-4, -3, -2, -1, 0, 1, 2, 3]);
+
+/** Read-only: reads the day files from four days before to three after in date order, then observationDayVerdicts; unreadable and problems are the day file's own. */
 export async function readObservationDayVerdicts(root: string, day: string): Promise<ObservationDayVerdicts & { readonly problems: TelemetryReadResult["problems"] }> {
   const target = await readTelemetryDay(root, day);
-  const records = [...target.records];
-  for (const offset of [-1, 1, 2, 3]) {
-    records.push(...(await readTelemetryDay(root, new Date(Date.parse(`${day}T00:00:00.000Z`) + offset * 86_400_000).toISOString().slice(0, 10))).records);
+  const records: TelemetryRecord[] = [];
+  for (const offset of OBSERVATION_READ_OFFSETS) {
+    records.push(...(offset === 0 ? target : await readTelemetryDay(root, shiftDay(day, offset))).records);
   }
   return { ...observationDayVerdicts(records, day, { unreadable: target.problems.length > 0 }), problems: target.problems };
 }
@@ -719,8 +725,9 @@ function shiftDay(day: string, offset: number): string {
  * counted backwards from the day before `at`. An observation day is a channel day read as
  * sealed or observed-zero; idle and unproven days are neither counted nor a break in the
  * window, and are listed apart. The scan covers at least `windowDays` calendar days and goes
- * further back only while a class is short and older day files exist. Records after `at` are
- * not read. Read-only.
+ * further back only while a class is short and older day files exist. Each day is judged on
+ * the day files readObservationDayVerdicts reads, four before to three after in date order
+ * (TCRN-CROSS-INC-388). Records after `at` are not read. Read-only.
  */
 export async function readObservationWindows(root: string, at: string, windowDays: number): Promise<ObservationWindows> {
   if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650) fail("TELEMETRY_FILTER_INVALID", "windowDays must be a positive bounded integer");
@@ -746,7 +753,7 @@ export async function readObservationWindows(root: string, at: string, windowDay
     const short = Object.values(days).some((list) => list.length < windowDays);
     if (scanned >= windowDays && (!short || earliest === null || day < earliest)) break;
     const summary = files.has(day) ? undefined : summaries.get(day);
-    const around = [-1, 0, 1, 2, 3].flatMap((offset) => files.get(shiftDay(day, offset))?.records ?? []);
+    const around = OBSERVATION_READ_OFFSETS.flatMap((offset) => files.get(shiftDay(day, offset))?.records ?? []);
     const verdicts = summary === undefined
       ? observationDayVerdicts(around, day, { unreadable: (files.get(day)?.problems.length ?? 0) > 0 })
       : { day, idle: Object.values(summary.channels).every((verdict) => verdict === "idle"), channels: OBSERVATION_CHANNELS.map((channel) => ({ channel, verdict: summary.channels[channel]!, receipts: [] })) };

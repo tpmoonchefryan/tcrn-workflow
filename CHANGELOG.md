@@ -38,6 +38,17 @@ it; known limitation: a cross-day SessionStart made before the previous day is
 sealed and never followed by a Stop still leaves that session's rows for the
 previous day unpaired, and the day then seals only if other sessions cover it.
 
+The two core readers of an observation day, `readObservationDayVerdicts` (behind
+`telemetry-observation` and the fitness summary a seal writes) and
+`readObservationWindows` (behind the fitness window and `retire-proposals`), now
+read the day files in date order, from four days before the day to three after
+(TCRN-CROSS-INC-388). They used to read the day's own file first and only one
+day back, so a session group whose covering start lay in an earlier file was
+read after its stops and voided: a day the collector sealed across midnight, or
+after a session resumed past sealed days, read as unproven.
+`telemetry-observation` and the seal-time summary now agree with the receipts
+the collector writes; the rules that judge the rows are unchanged.
+
 ## 1.1.3 — patch candidate
 
 This append-only patch repairs the time-attestation store after the

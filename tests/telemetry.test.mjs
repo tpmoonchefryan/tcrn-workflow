@@ -714,6 +714,7 @@ test("TCRN-CROSS-INC-385 R2: a SessionStart whose last stop day is sealed resume
   for (const fixture of [stopOnly, resumed]) {
     assert.deepEqual(await inc385ChannelSeals(fixture, INC385_SEALED_DAY), INC385_ALL_SEALED);
     assertPhasesAlternate(await boundaryRows(fixture), "third day");
+    assert.deepEqual(await inc385ChannelSeals(fixture, "2026-09-23"), INC385_ALL_SEALED, "TCRN-CROSS-INC-388: the day the Stop sealed after the resume reads sealed on a valid receipt per channel");
   }
 });
 
@@ -732,6 +733,96 @@ test("TCRN-CROSS-INC-385 guard: an open start beyond the three-day bound with no
     duplicate: false,
   }, "the open start is still the session interval, reported as the gap start");
   assert.equal((await boundaryRows(fixture)).filter((row) => row.payload.phase === "stop").length, 0, "a gap never writes a backdated stop");
+});
+
+// TCRN-CROSS-INC-388: the two core readers take a day's files in date order, from four days
+// before the day to three after, so they judge the rows the collector sealed. The shapes are
+// the collector's own, replayed in isolated fixtures: A, B and C are the step6-b probe-375
+// ones, E the decompose-r4 probe-lookback one. Each is [actual record instants, [session,
+// phase, instant] boundary steps]; recordObservationBoundary writes every boundary row.
+const INC388_A = [["2026-09-23T12:00:00.000Z"], [
+  ["session-a", "start", "2026-09-22T23:00:00.000Z"], ["session-a", "stop", "2026-09-23T10:00:00.000Z"], ["session-a", "stop", "2026-09-24T00:30:00.000Z"],
+]];
+const INC388_B = [["2026-09-21T12:00:00.000Z", "2026-09-23T12:00:00.000Z"], [
+  ["session-b", "start", "2026-09-21T08:00:00.000Z"], ["session-b", "stop", "2026-09-21T22:00:00.000Z"],
+  ["session-b", "stop", "2026-09-23T09:00:00.000Z"], ["session-b", "stop", "2026-09-24T00:30:00.000Z"],
+]];
+const INC388_C = [["2026-09-23T03:00:00.000Z", "2026-09-23T11:00:00.000Z", "2026-09-23T15:00:00.000Z", "2026-09-23T20:00:00.000Z"], [
+  ["session-m", "start", "2026-09-22T20:00:00.000Z"], ["session-m", "stop", "2026-09-22T21:00:00.000Z"], ["session-m", "stop", "2026-09-22T23:30:00.000Z"],
+  ["session-m", "stop", "2026-09-23T01:00:00.000Z"], ["session-m", "stop", "2026-09-23T05:00:00.000Z"], ["session-m", "stop", "2026-09-23T12:00:00.000Z"],
+  ["session-s", "start", "2026-09-23T14:00:00.000Z"], ["session-s", "stop", "2026-09-23T14:30:00.000Z"],
+  ["session-m", "stop", "2026-09-23T18:00:00.000Z"], ["session-m", "stop", "2026-09-23T23:50:00.000Z"], ["session-m", "stop", "2026-09-24T00:20:00.000Z"],
+]];
+// E (#415): session a stops last on 09-21 while session o seals 09-21 and 09-22; a SessionStart
+// late on 09-23 resumes a into the first unsealed day with its 09-21 stop instant, and the next
+// Stop comes two UTC days later, so the covering starts of 09-24 and 09-25 lie three and four
+// files back.
+const INC388_E = [["2026-09-21T12:00:00.000Z", "2026-09-22T12:00:00.000Z", "2026-09-23T12:00:00.000Z", "2026-09-24T11:00:00.000Z", "2026-09-25T12:00:00.000Z"], [
+  ["o", "start", "2026-09-20T23:00:00.000Z"], ["o", "stop", "2026-09-21T06:00:00.000Z"], ["o", "stop", "2026-09-21T18:00:00.000Z"],
+  ["a", "start", "2026-09-21T20:00:00.000Z"], ["a", "stop", "2026-09-21T22:00:00.000Z"],
+  ["o", "stop", "2026-09-22T00:30:00.000Z"], ["o", "stop", "2026-09-22T06:00:00.000Z"], ["o", "stop", "2026-09-22T18:00:00.000Z"], ["o", "stop", "2026-09-23T00:30:00.000Z"],
+  ["a", "start", "2026-09-23T23:50:00.000Z"], ["a", "stop", "2026-09-25T09:00:00.000Z"], ["a", "stop", "2026-09-25T20:00:00.000Z"], ["a", "stop", "2026-09-26T00:30:00.000Z"],
+]];
+const INC388_SEALED = Object.fromEntries(OBSERVATION_CHANNELS.map((channel) => [channel, ["sealed", "v1=true", "v2=true"]]));
+
+// Replays a shape; `recorded` lists the days a Stop sealed with RECORDED on all four channels.
+async function inc388Replay(t, [instants, steps]) {
+  const fixture = await workspaceFixture(t);
+  await inc385ActualRecords(fixture, instants);
+  const recorded = [];
+  for (const [session, phase, at] of steps) {
+    const { coverage } = await boundaryAt(fixture, session, phase, at);
+    if (coverage?.channels?.length === 4 && coverage.channels.every((entry) => entry.reasonCode === "TELEMETRY_COVERAGE_RECORDED")) recorded.push(coverage.coveredFrom.slice(0, 10));
+  }
+  return { fixture, recorded };
+}
+
+// Each channel's verdict followed by every receipt it lists, as version=validity.
+async function inc388Reading(fixture, day) {
+  const read = await telemetryCore.readObservationDayVerdicts(fixture.transient, day);
+  return Object.fromEntries(read.channels.map((entry) => [entry.channel, [entry.verdict, ...entry.receipts.map((receipt) => `${receipt.coverageVersion.slice(-2)}=${receipt.valid}`)]]));
+}
+
+test("TCRN-CROSS-INC-388 R1: a day covered across midnight reads as the collector sealed it, with valid v1 and v2 receipts", async (t) => {
+  for (const [label, shape] of [["A", INC388_A], ["C", INC388_C]]) {
+    const { fixture, recorded } = await inc388Replay(t, shape);
+    assert.deepEqual(recorded, ["2026-09-23"], `${label}: the collector sealed 2026-09-23 on all four channels`);
+    assert.deepEqual(await inc388Reading(fixture, "2026-09-23"), INC388_SEALED, `${label}: the reader judges the rows the collector sealed`);
+  }
+});
+
+test("TCRN-CROSS-INC-388 R2: a day whose covering start lies two files back reads sealed and counts as an observation day", async (t) => {
+  const { fixture, recorded } = await inc388Replay(t, INC388_B);
+  assert.deepEqual(recorded, ["2026-09-23"], "the collector sealed 2026-09-23 on all four channels");
+  assert.deepEqual(await inc388Reading(fixture, "2026-09-23"), INC388_SEALED, "the covering start in the 2026-09-21 file is read");
+  const windows = await telemetryCore.readObservationWindows(fixture.transient, "2026-09-25T12:00:00.000Z", 3);
+  for (const kind of ["card", "rule", "verify"]) assert.ok(windows.classes[kind].observationDays.includes("2026-09-23"), `${kind}: ${JSON.stringify(windows.classes[kind].observationDays)}`);
+  assert.equal(windows.unprovenDays.includes("2026-09-23"), false, JSON.stringify(windows.unprovenDays));
+});
+
+test("TCRN-CROSS-INC-388 #405: the fitness summary written when the day is sealed records every channel as sealed", async (t) => {
+  const { fixture, recorded } = await inc388Replay(t, INC388_A);
+  assert.deepEqual(recorded, ["2026-09-23"]);
+  const summary = JSON.parse(await readFile(join(fixture.transient, "telemetry", "summaries", "2026-09-23.json"), "utf8"));
+  assert.deepEqual(summary.channels, Object.fromEntries(OBSERVATION_CHANNELS.map((channel) => [channel, "sealed"])), "the summary agrees with the receipts the same Stop wrote");
+});
+
+test("TCRN-CROSS-INC-388 judgement unchanged: a start appended by hand to one channel day source leaves that channel unproven and the other three sealed", async (t) => {
+  const { fixture, recorded } = await inc388Replay(t, INC388_C);
+  assert.deepEqual(recorded, ["2026-09-23"]);
+  const last = (await boundaryRows(fixture)).filter((row) => row.kind === "retrieval" && row.payload.source.endsWith(":20260923.session-m:retrieval")).at(-1);
+  await appendTelemetryRecord(fixture.transient, createTelemetryRecord({ at: "2026-09-23T13:00:00.000Z", kind: "retrieval", session: last.session, payload: { ...last.payload, phase: "start", sequence: last.payload.sequence + 1 } }));
+  assert.deepEqual(await inc385ChannelSeals(fixture, "2026-09-23"), { ...INC385_ALL_SEALED, retrieval: ["unproven", [false]] }, "a group out of phase still fails its own channel alone");
+});
+
+test("TCRN-CROSS-INC-388 #415: after a SessionStart resumes past two sealed days, the days a later Stop seals read sealed from four files back", async (t) => {
+  const { fixture, recorded } = await inc388Replay(t, INC388_E);
+  assert.deepEqual(recorded, ["2026-09-21", "2026-09-22", "2026-09-24", "2026-09-25"], "the collector sealed 2026-09-24 and 2026-09-25 on all four channels");
+  assert.deepEqual(await inc385ChannelSeals(fixture, "2026-09-24"), INC385_ALL_SEALED, "2026-09-24: the covering start is three files back");
+  assert.deepEqual(await inc385ChannelSeals(fixture, "2026-09-25"), INC385_ALL_SEALED, "2026-09-25: the covering start is four files back");
+  const windows = await telemetryCore.readObservationWindows(fixture.transient, "2026-09-27T12:00:00.000Z", 3);
+  for (const kind of ["card", "rule", "verify"]) assert.deepEqual(["2026-09-24", "2026-09-25"].filter((day) => windows.classes[kind].observationDays.includes(day)), ["2026-09-24", "2026-09-25"], `${kind}: ${JSON.stringify(windows.classes[kind].observationDays)}`);
+  assert.deepEqual(["2026-09-24", "2026-09-25"].filter((day) => windows.unprovenDays.includes(day)), [], JSON.stringify(windows.unprovenDays));
 });
 
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
