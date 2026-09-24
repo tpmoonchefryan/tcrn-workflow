@@ -36,6 +36,19 @@ function reportFor(report, path) {
   return report.reports.find((entry) => entry.path === path) ?? null;
 }
 
+// MIN-223 D1 (A1): the INC-155 block records how the baseline relates to the
+// coverage surface, not how many entries the baseline holds. expectedFiles and
+// currentFiles are the baseline size itself, so registering or retiring a test
+// file changed the recorded output without any change in what the case proves.
+function completenessRelation(completeness) {
+  return {
+    ok: completeness.ok,
+    missingFiles: completeness.missingFiles,
+    staleFiles: completeness.staleFiles,
+    currentMinusExpected: completeness.currentFiles - completeness.expectedFiles,
+  };
+}
+
 async function main() {
   const directory = await mkdtemp(join(tmpdir(), "tcrn-inc155-coverage-"));
   try {
@@ -62,7 +75,7 @@ async function main() {
 
     const restored = await runCoverage();
     const result = {
-      schemaVersion: "tcrn.inc155-coverage-meta-proof.v1",
+      schemaVersion: "tcrn.inc155-coverage-meta-proof.v2",
       cases: [
         {
           name: "delete one s244 test block",
@@ -74,7 +87,7 @@ async function main() {
           name: "new test file without baseline entry",
           exitCode: missingFile.exitCode,
           reasonCode: missingFile.report.reasonCode,
-          baselineCompleteness: missingFile.report.baselineCompleteness,
+          baselineCompleteness: completenessRelation(missingFile.report.baselineCompleteness),
         },
         {
           name: "empty assertions while keeping test names",
@@ -87,7 +100,7 @@ async function main() {
           exitCode: restored.exitCode,
           reasonCode: restored.report.reasonCode,
           ok: restored.report.ok,
-          baselineCompleteness: restored.report.baselineCompleteness,
+          baselineCompleteness: completenessRelation(restored.report.baselineCompleteness),
         },
       ],
     };
@@ -101,6 +114,9 @@ async function main() {
       && missingCase.exitCode !== 0
       && missingCase.reasonCode === "COVERAGE_BASELINE_INCOMPLETE"
       && missingCase.baselineCompleteness.missingFiles.includes(s244Path)
+      && missingCase.baselineCompleteness.currentMinusExpected === 1
+      && missingCase.baselineCompleteness.missingFiles.length === 1
+      && missingCase.baselineCompleteness.missingFiles[0] === s244Path
       && assertionCase.exitCode !== 0
       && assertionCase.reasonCode === "COVERAGE_CONSERVATION_VIOLATION"
       && assertionCase.target?.path === s213Path
@@ -108,7 +124,10 @@ async function main() {
       && assertionCase.target.removedTests.length === 0
       && restoredCase.exitCode === 0
       && restoredCase.ok === true
-      && restoredCase.baselineCompleteness.ok === true;
+      && restoredCase.baselineCompleteness.ok === true
+      && restoredCase.baselineCompleteness.currentMinusExpected === 0
+      && restoredCase.baselineCompleteness.missingFiles.length === 0
+      && restoredCase.baselineCompleteness.staleFiles.length === 0;
     if (!valid) process.exitCode = 1;
   } finally {
     await rm(directory, { recursive: true, force: true });

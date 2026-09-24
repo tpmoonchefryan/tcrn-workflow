@@ -25,7 +25,7 @@
 
 ```verbatim:node scripts/coverage-conservation-proof.mjs
 {
-  "schemaVersion": "tcrn.inc155-coverage-meta-proof.v1",
+  "schemaVersion": "tcrn.inc155-coverage-meta-proof.v2",
   "cases": [
     {
       "name": "delete one s244 test block",
@@ -60,12 +60,11 @@
       "reasonCode": "COVERAGE_BASELINE_INCOMPLETE",
       "baselineCompleteness": {
         "ok": false,
-        "expectedFiles": 138,
-        "currentFiles": 139,
         "missingFiles": [
           "tests/s244-model-plan.test.mjs"
         ],
-        "staleFiles": []
+        "staleFiles": [],
+        "currentMinusExpected": 1
       }
     },
     {
@@ -98,10 +97,9 @@
       "ok": true,
       "baselineCompleteness": {
         "ok": true,
-        "expectedFiles": 139,
-        "currentFiles": 139,
         "missingFiles": [],
-        "staleFiles": []
+        "staleFiles": [],
+        "currentMinusExpected": 0
       }
     }
   ]
@@ -110,7 +108,7 @@
 
 关键红点分别是：删除 s244 test 块红并指名文件（即使当前计数因新增测试未下降）；不更新基线红并列出新文件；
 保留 test 名但抽空断言仍红且 `removedTests=[]`、`assertionLoss=27`；恢复后
-137/137 完整性与守恒同时转绿。
+覆盖面与基线逐项相等（`currentMinusExpected=0`，缺失与陈旧均为空），完整性与守恒同时转绿。
 
 2026-09-11（TCRN-CROSS-INC-296）按脚本完整输出重录以上块：遗漏一项时
 136/137 为红，恢复后 137/137 为绿。原文后续的历史 128 条目说明保留为当时事实；
@@ -125,6 +123,8 @@
 第二十八次重录（2026-09-19，TCRN-CROSS-INC-325）：本批新增两个测试文件，经 TCRN-CROSS-INC-343（引擎提交 29b50fad）登记进覆盖基线，coverage-baseline.json 条目数由 136 变 138；块内第二个用例("new test file without baseline entry")与第四个用例("restore all mutations")的 baselineCompleteness 均为基线条目总数的派生值，随之整体重录：前者 expectedFiles 由 135 变 137、currentFiles 由 136 变 138，后者 expectedFiles 与 currentFiles 均由 136 变 138。train 第 6/7 腿（真实 coverage-conservation.mjs 及其测试）本身为绿，这不是覆盖回归，只是逐字块随基线增长整体重录。
 
 第二十九次重录（2026-09-23，TCRN-CROSS-INC-380）：TCRN-CROSS-SUB-216（引擎提交 51e81cac）新增 tests/inc378-attestation-repair.test.mjs 并登记进覆盖基线，coverage-baseline.json 条目数由 138 变 139；块内第二个用例("new test file without baseline entry")与第四个用例("restore all mutations")的 baselineCompleteness 均为基线条目总数的派生值，随之整体重录：前者 expectedFiles 由 137 变 138、currentFiles 由 138 变 139，后者 expectedFiles 与 currentFiles 均由 138 变 139。train 第 6/7 腿（真实 coverage-conservation.mjs 及其测试）本身为绿，这不是覆盖回归，只是逐字块随基线增长整体重录。
+
+第三十次重录（2026-09-24，TCRN-CROSS-SUB-247）：按 TCRN-CROSS-MIN-223 D1（Owner 就 OQ-EV1-2 选 A1），`scripts/coverage-conservation-proof.mjs` 的输出改为 `tcrn.inc155-coverage-meta-proof.v2`：第二个用例("new test file without baseline entry")与第四个用例("restore all mutations")的 baselineCompleteness 不再显示 expectedFiles、currentFiles 这两个基线条目总数，只写完整性关系 ok、missingFiles、staleFiles 与 currentMinusExpected（currentFiles 减 expectedFiles）；脚本自己的结构判定补上两条：前者差 1 且缺失项恰为 s244，后者差 0、ok 为 true、缺失与陈旧均为空，既有判定一条未删。块据此整体重录，覆盖基线仍为 139 个文件；这是最后一次按条目数的重录。此后登记或删除测试文件不再需要重录本块；`tests/s213-settings.test.mjs` 或 `tests/s244-model-plan.test.mjs` 自身的测试数、断言数变化，或计数方法变化，仍须在同一提交重录（STORY-463 R2 的其余部分照旧）。逐字比对的判定（INC-156）不变，块仍按脚本输出重录，不由程序改写。
 
 ## 边界
 
