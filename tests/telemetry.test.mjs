@@ -596,6 +596,144 @@ test("STORY-464 R1 and R2: outside the three-day bound a SessionStart starts at 
   assert.equal(rows.filter((row) => row.session === "20260915.edge-stop").length, 0);
 });
 
+// TCRN-CROSS-INC-385 (MIN-223 D3: the collector changes, the judgement does not). R1: an open
+// start older than the session's latest stop on its channel is no open interval, in the Stop and
+// SessionStart branches alike; a start at that stop's own instant is the resumed start and stays
+// open. R2: a UTC day already sealed for a channel takes no further boundary row from the
+// collector. The sealed-day fixture is the accept-r2 probe-464 one: two sessions cover the day
+// and the second one's Stop after midnight seals it.
+const INC385_SEALED_DAY = "2026-09-22";
+const INC385_ALL_SEALED = Object.fromEntries(OBSERVATION_CHANNELS.map((channel) => [channel, ["sealed", [true]]]));
+
+async function inc385ActualRecords(fixture, instants) {
+  for (const channel of OBSERVATION_CHANNELS) {
+    for (const at of instants) {
+      await appendTelemetryRecord(fixture.transient, createTelemetryRecord({ at, kind: ACTUAL_KIND[channel], session: `inc385-actual-${channel}`, payload: { source: `inc385-actual:${channel}`, availability: "available" } }));
+    }
+  }
+}
+
+async function inc385SealedDay(t) {
+  const fixture = await workspaceFixture(t);
+  await inc385ActualRecords(fixture, ["2026-09-22T12:00:00.000Z", "2026-09-22T21:30:00.000Z"]);
+  await boundaryAt(fixture, "inc385-a", "start", "2026-09-22T00:00:00.000Z");
+  await boundaryAt(fixture, "inc385-a", "stop", "2026-09-22T22:00:00.000Z");
+  await boundaryAt(fixture, "inc385-b", "start", "2026-09-22T21:00:00.000Z");
+  const seal = await boundaryAt(fixture, "inc385-b", "stop", "2026-09-23T00:30:00.000Z");
+  assert.deepEqual(seal.coverage?.channels?.map((entry) => entry.reasonCode), Array(4).fill("TELEMETRY_COVERAGE_RECORDED"), JSON.stringify(seal.coverage));
+  return fixture;
+}
+
+// Each channel's verdict and the validity of its own per-channel (v2) receipts.
+async function inc385ChannelSeals(fixture, day) {
+  const read = await telemetryCore.readObservationDayVerdicts(fixture.transient, day);
+  return Object.fromEntries(read.channels.map((entry) => [entry.channel, [entry.verdict, entry.receipts.filter((receipt) => receipt.coverageVersion === "tcrn.telemetry-observation-coverage.v2").map((receipt) => receipt.valid)]]));
+}
+
+function inc385DayRows(rows, day) {
+  return rows.filter((row) => row.session.startsWith(`${day.replace(/-/gu, "")}.`));
+}
+
+test("TCRN-CROSS-INC-385 R1: an open start older than the last stop no longer turns every other Stop into a gap resume", async (t) => {
+  const fixture = await workspaceFixture(t);
+  const start = await boundaryAt(fixture, "inc385-dangling", "start", "2026-09-10T08:00:00.000Z");
+  assert.equal(start.count, 4, JSON.stringify(start));
+  const stops = ["09", "10", "11", "12", "13"].map((hour) => `2026-09-15T${hour}:00:00.000Z`);
+  const reasons = [];
+  for (const at of stops) reasons.push((await boundaryAt(fixture, "inc385-dangling", "stop", at)).reasonCode);
+  assert.deepEqual(reasons, ["TELEMETRY_BOUNDARY_GAP_RESUMED", ...Array(4).fill("TELEMETRY_BOUNDARY_RECORDED")]);
+  const today = inc385DayRows(await boundaryRows(fixture), "2026-09-15");
+  const expected = [["start", stops[0]], ["stop", stops[1]], ["start", stops[1]], ["stop", stops[2]], ["start", stops[2]], ["stop", stops[3]], ["start", stops[3]], ["stop", stops[4]]];
+  for (const channel of OBSERVATION_CHANNELS) {
+    assert.deepEqual(today.filter((row) => row.kind === channel).map((row) => [row.payload.phase, row.at]), expected, `${channel}: the day source runs on from its first start without a hole`);
+  }
+  assertPhasesAlternate(today, "stale open start");
+});
+
+test("TCRN-CROSS-INC-385 R2: after a day is sealed a Stop, a SessionStart, or both add no row to it and it stays sealed", async (t) => {
+  for (const [label, steps] of [
+    ["Stop only", [["stop", "2026-09-23T00:50:00.000Z"]]],
+    ["SessionStart only", [["start", "2026-09-23T00:50:00.000Z"]]],
+    ["SessionStart then Stop", [["start", "2026-09-23T00:50:00.000Z"], ["stop", "2026-09-23T01:00:00.000Z"]]],
+  ]) {
+    const fixture = await inc385SealedDay(t);
+    const sealedRows = inc385DayRows(await boundaryRows(fixture), INC385_SEALED_DAY);
+    for (const [phase, at] of steps) {
+      const result = await boundaryAt(fixture, "inc385-a", phase, at);
+      assert.equal(result.reasonCode, "TELEMETRY_BOUNDARY_RECORDED", `${label}: ${JSON.stringify(result)}`);
+    }
+    const rows = await boundaryRows(fixture);
+    assert.deepEqual(inc385DayRows(rows, INC385_SEALED_DAY), sealedRows, `${label}: the sealed day keeps its rows`);
+    assert.deepEqual(await inc385ChannelSeals(fixture, INC385_SEALED_DAY), INC385_ALL_SEALED, `${label}: the day still reads sealed on a valid receipt per channel`);
+    assertPhasesAlternate(rows, label);
+  }
+});
+
+test("TCRN-CROSS-INC-385 R1 and R2: a start written before another session seals the day never reopens it and later Stops stay in phase", async (t) => {
+  const fixture = await workspaceFixture(t);
+  await inc385ActualRecords(fixture, ["2026-09-22T12:00:00.000Z"]);
+  await boundaryAt(fixture, "inc385-a", "start", "2026-09-22T06:00:00.000Z");
+  await boundaryAt(fixture, "inc385-a", "stop", "2026-09-22T22:00:00.000Z");
+  await boundaryAt(fixture, "inc385-b", "start", "2026-09-22T00:00:00.000Z");
+  const early = await boundaryAt(fixture, "inc385-a", "start", "2026-09-23T00:10:00.000Z");
+  assert.equal(early.count, 4, JSON.stringify(early));
+  const seal = await boundaryAt(fixture, "inc385-b", "stop", "2026-09-23T00:30:00.000Z");
+  assert.deepEqual(seal.coverage?.channels?.map((entry) => entry.reasonCode), Array(4).fill("TELEMETRY_COVERAGE_RECORDED"), JSON.stringify(seal.coverage));
+  const sealedRows = inc385DayRows(await boundaryRows(fixture), INC385_SEALED_DAY);
+  for (const at of ["2026-09-23T01:00:00.000Z", "2026-09-23T02:00:00.000Z", "2026-09-23T03:00:00.000Z"]) {
+    const stop = await boundaryAt(fixture, "inc385-a", "stop", at);
+    assert.equal(stop.reasonCode, "TELEMETRY_BOUNDARY_RECORDED", JSON.stringify(stop));
+  }
+  const rows = await boundaryRows(fixture);
+  assert.deepEqual(inc385DayRows(rows, INC385_SEALED_DAY), sealedRows, "the sealed day keeps its rows");
+  assert.deepEqual(await inc385ChannelSeals(fixture, INC385_SEALED_DAY), INC385_ALL_SEALED);
+  const later = inc385DayRows(rows, "2026-09-23");
+  assertPhasesAlternate(later, "after the seal");
+  for (const [source, list] of boundarySources(later)) {
+    const starts = list.filter((row) => row.payload.phase === "start").map((row) => row.at);
+    assert.equal(new Set(starts).size, starts.length, `${source}: no start repeats the instant of an existing start`);
+  }
+});
+
+test("TCRN-CROSS-INC-385 R2: a SessionStart whose last stop day is sealed resumes into the first unsealed day and writes what a lone Stop writes", async (t) => {
+  const stopOnly = await inc385SealedDay(t);
+  const resumed = await inc385SealedDay(t);
+  for (const fixture of [stopOnly, resumed]) await inc385ActualRecords(fixture, ["2026-09-23T12:00:00.000Z"]);
+  const start = await boundaryAt(resumed, "inc385-a", "start", "2026-09-24T01:00:00.000Z");
+  assert.equal(start.count, 4, JSON.stringify(start));
+  const opened = (await boundaryRows(resumed)).filter((row) => row.session === "20260923.inc385-a");
+  assert.deepEqual(opened.map((row) => [row.payload.sequence, row.payload.phase, row.at]), Array(4).fill([1, "start", "2026-09-22T22:00:00.000Z"]), "the resumed start keeps the last stop instant, in the first unsealed day after it");
+  const seals = [];
+  for (const fixture of [stopOnly, resumed]) {
+    const stop = await boundaryAt(fixture, "inc385-a", "stop", "2026-09-24T02:00:00.000Z");
+    assert.equal(stop.reasonCode, "TELEMETRY_BOUNDARY_RECORDED", JSON.stringify(stop));
+    seals.push(stop.coverage?.channels?.map((entry) => entry.reasonCode));
+  }
+  assert.deepEqual(await boundaryRows(resumed), await boundaryRows(stopOnly), "SessionStart then Stop writes exactly the rows of the Stop alone");
+  assert.deepEqual(seals, Array(2).fill(Array(4).fill("TELEMETRY_COVERAGE_RECORDED")), "the next day seals as usual");
+  for (const fixture of [stopOnly, resumed]) {
+    assert.deepEqual(await inc385ChannelSeals(fixture, INC385_SEALED_DAY), INC385_ALL_SEALED);
+    assertPhasesAlternate(await boundaryRows(fixture), "third day");
+  }
+});
+
+test("TCRN-CROSS-INC-385 guard: an open start beyond the three-day bound with no later stop still resumes as a gap from its own day", async (t) => {
+  const fixture = await workspaceFixture(t);
+  await boundaryAt(fixture, "inc385-guard", "start", "2026-09-10T08:00:00.000Z");
+  const gap = await boundaryAt(fixture, "inc385-guard", "stop", "2026-09-14T09:00:00.000Z");
+  assert.deepEqual(gap, {
+    ok: false,
+    reasonCode: "TELEMETRY_BOUNDARY_GAP_RESUMED",
+    unknown: true,
+    resumed: true,
+    from: "2026-09-10",
+    until: "2026-09-14",
+    count: 4,
+    duplicate: false,
+  }, "the open start is still the session interval, reported as the gap start");
+  assert.equal((await boundaryRows(fixture)).filter((row) => row.payload.phase === "stop").length, 0, "a gap never writes a backdated stop");
+});
+
 test("STORY-372: telemetry-list filters and done evidence keeps a snapshot after telemetry expires", async (t) => {
   const fixture = await workspaceFixture(t);
   const telemetry = createTelemetryRecord({ at: INSTANT(4), kind: "subagent-stop", session: "session-evidence", payload: payload() });

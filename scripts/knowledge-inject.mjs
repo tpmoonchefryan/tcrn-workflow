@@ -508,6 +508,30 @@ function observationLatestStop(rows) {
     .at(-1) ?? null;
 }
 
+// TCRN-CROSS-INC-385 R1: the session's open interval on a channel starts at the latest start
+// among the session's sources whose last row is a start, unless that start is older than the
+// session's latest stop on the channel. A start at that stop's own instant (the resumed start
+// STORY-464 R2 writes) stays open. The Stop and SessionStart branches judge it by this one rule.
+function observationOpenStart(sessionRows, previousStop) {
+  const open = sessionRows
+    .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
+    .filter(({ record, day }) => day !== null && record.payload.phase === "start")
+    .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
+    .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
+    .at(-1) ?? null;
+  return open !== null && previousStop !== null && Date.parse(open.record.at) < Date.parse(previousStop.at) ? null : open;
+}
+
+// TCRN-CROSS-INC-385 R2: a UTC day is sealed for a channel once a receipt covers it from its
+// midnight: a per-channel v2 receipt for that channel, or a four-channel v1 receipt. The
+// collector writes no further boundary row into any source of such a day.
+function observationDaySealed(records, day, channel) {
+  const coveredFrom = `${day}T00:00:00.000Z`;
+  return records.some((record) => record.kind === "observation-coverage" && record.payload?.coveredFrom === coveredFrom
+    && (record.payload.coverageVersion === "tcrn.telemetry-observation-coverage.v1"
+      || (record.payload.coverageVersion === OBSERVATION_CHANNEL_COVERAGE_VERSION && record.payload.channel === channel)));
+}
+
 function observationDaysBetween(from, until) {
   const fromValue = Date.parse(`${from}T00:00:00.000Z`);
   const untilValue = Date.parse(`${until}T00:00:00.000Z`);
@@ -579,21 +603,18 @@ export async function recordObservationBoundary({
       };
       for (const channel of OBSERVATION_CHANNELS) {
         const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
-        const open = sessionRows
-          .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
-          .filter(({ record, day }) => day !== null && record.payload.phase === "start")
-          .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
-          .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
-          .at(-1) ?? null;
+        const previousStop = observationLatestStop(sessionRows);
+        const open = observationOpenStart(sessionRows, previousStop);
         if (open !== null && insideBound(open.day)) {
           alreadyOpen.push(channel);
           continue;
         }
-        const previousStop = observationLatestStop(sessionRows);
         const stopDay = previousStop === null ? null : observationDay(previousStop.at);
         const resumed = stopDay !== null && insideBound(stopDay);
         const startAt = resumed ? previousStop.at : at;
-        const startDay = resumed ? stopDay : atDay;
+        // TCRN-CROSS-INC-385 R2: the resumed start keeps the last stop's instant; when that
+        // stop's day is already sealed for the channel it goes into the first unsealed day after.
+        const startDay = resumed ? observationDaysBetween(stopDay, atDay).find((day) => !observationDaySealed(records, day, channel)) ?? atDay : atDay;
         const target = observationSourceForDay(host, sessionId, startDay, channel);
         const rows = records.filter((record) => record.payload?.source === target.source);
         const sequence = Math.max(0, ...rows.map((record) => record.payload.sequence).filter((value) => Number.isSafeInteger(value) && value >= 1)) + 1;
@@ -610,13 +631,8 @@ export async function recordObservationBoundary({
       // never evidence of a real boundary.
       const plans = OBSERVATION_CHANNELS.map((channel) => {
         const sessionRows = observationBoundaryRows(records, host, sessionId, channel);
-        const open = sessionRows
-          .map((record) => ({ record, day: observationSessionKeyDay(record.session) }))
-          .filter(({ record, day }) => day !== null && record.payload.phase === "start")
-          .filter(({ record }) => observationLastBoundaryRow(sessionRows.filter((candidate) => candidate.payload.source === record.payload.source))?.id === record.id)
-          .sort((left, right) => left.record.at.localeCompare(right.record.at) || left.record.id.localeCompare(right.record.id))
-          .at(-1) ?? null;
         const previousStop = observationLatestStop(sessionRows);
+        const open = observationOpenStart(sessionRows, previousStop);
         const startAt = open?.record.at ?? previousStop?.at ?? at;
         const startDay = open?.day ?? observationDay(startAt) ?? atDay;
         return {
@@ -677,6 +693,9 @@ export async function recordObservationBoundary({
       }
       for (const { channel, startAt, startDay, days } of plans) {
         for (const day of days) {
+          // TCRN-CROSS-INC-385 R2: a day already sealed for the channel takes no further row;
+          // the other days of the interval are written as before.
+          if (observationDaySealed(records, day, channel)) continue;
           const target = observationSourceForDay(host, sessionId, day, channel);
           const rows = records.filter((record) => record.payload?.source === target.source);
           const last = observationLastBoundaryRow(rows);

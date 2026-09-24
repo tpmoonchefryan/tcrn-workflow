@@ -95,15 +95,15 @@ test("STORY-301: reading the budget policy does not change it", async () => {
 test("EPIC135: the approved budget thresholds classify every real boundary", async () => {
   const policy = await readPolicy();
   assert.equal(policy.warningRatio, 2.4);
-  assert.equal(policy.hardRatio, 2.5324);
-  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-INC-374-D3-agents-zero-coverage-measured-ratio-20260922");
+  assert.equal(policy.hardRatio, 2.5328);
+  assert.equal(policy.exceptions.at(-1)?.id, "TCRN-CROSS-INC-385-MIN222-D1-collector-open-start-and-sealed-day-measured-ratio-20260924");
   const cases = [
     [2.3728, true, "verified"],
     [2.4, true, "verified"],
     [2.4001, true, "warning"],
     [2.5, true, "warning"],
-    [2.5324, true, "warning"],
-    [2.5325, false, "rejected"],
+    [2.5328, true, "warning"],
+    [2.5329, false, "rejected"],
   ];
   for (const [ratio, ok, status] of cases) {
     const proofLines = Math.round(ratio * 10_000);

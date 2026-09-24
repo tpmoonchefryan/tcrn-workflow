@@ -28,6 +28,16 @@ missing. How many observation days a window lacks is
 that number for the card window and lists the idle and unproven days beside it
 (TCRN-CROSS-INC-381).
 
+The observation collector follows two more rules, with the seal and its reading
+unchanged (TCRN-CROSS-INC-385): a session's open start that is older than the
+session's latest stop on the channel no longer counts as an open interval, so a
+Stop resumes from that stop instead of alternating with gap resumes, and a UTC
+day already sealed for a channel receives no further boundary row, so a resumed
+start keeps the last stop's instant but goes into the first unsealed day after
+it; known limitation: a cross-day SessionStart made before the previous day is
+sealed and never followed by a Stop still leaves that session's rows for the
+previous day unpaired, and the day then seals only if other sessions cover it.
+
 ## 1.1.3 — patch candidate
 
 This append-only patch repairs the time-attestation store after the
