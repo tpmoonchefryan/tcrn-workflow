@@ -178,18 +178,28 @@ and `delete` steps, repair and restore — therefore holds `attestation.lock` in
 directory.
 
 The lock (TCRN-CROSS-STORY-457) is one canonical JSON line,
-`{"createdAt","pid","schemaVersion":"tcrn.attestation-lock.v1","start"}` followed
+`{"createdAt","pid","schemaVersion":"tcrn.attestation-lock.v2","start"}` followed
 by LF: the holder's process id, the start time `ps -o lstart= -p <pid>` reports for
 it (`null` when `ps` cannot say) and the moment it was placed. The writer writes it
 whole into a private file and links it into place, so the lock never exists half
 written; the link refuses when a lock is already there. The pre-STORY-457 form,
 the process id followed by LF, is still read: it names a pid and no start time.
 
+`ps` formats that start time in the time zone and locale of whoever runs it, so the
+same process reads differently to writers in different environments
+(TCRN-CROSS-INC-382). The start is therefore always read with `LC_ALL=C` and
+`TZ=UTC` set on the `ps` call: the start a v2 lock records and the start the check
+reads for its pid are the same reading, whatever the writer's or the reader's own
+environment. A `tcrn.attestation-lock.v1` line, written before this reading was
+fixed, is still read, but its start was taken in its writer's environment and is
+never compared: a v1 lock is judged by its pid alone.
+
 - A lock is **stale**, and is taken over, when its holder is not running
   (`holder-not-running`); when the holder's pid is running but `ps` reports a
-  different start time for it, that is, the pid now belongs to an unrelated
-  process (`holder-pid-reused`); or when the lock cannot be read as either form and
-  is older than 5,000 ms (`unparseable-expired`). A stale lock is moved aside,
+  different start time for it than a v2 lock records, both read with `LC_ALL=C`
+  and `TZ=UTC`, that is, the pid now belongs to an unrelated process
+  (`holder-pid-reused`); or when the lock cannot be read as any of its forms and is
+  older than 5,000 ms (`unparseable-expired`). A stale lock is moved aside,
   checked to still be the same lock, and removed; a lock another waiter took over
   in the meantime is put back. `writeAttestationReceipt` returns the reason and the
   holder's pid as `staleLock`.
@@ -199,8 +209,9 @@ the process id followed by LF, is still read: it names a pid and no start time.
   when the lock names one.
 - When `ps` cannot report a start time (no such tool, or no answer within
   2,000 ms), the reuse check is skipped and the lock is judged by its pid alone, as
-  before; the fallback never clears a live holder. A pre-STORY-457 lock is judged
-  the same way.
+  before. A v1 lock and a pre-STORY-457 lock are judged the same way. Because a start
+  is compared only when both sides were read the same way, neither this fallback
+  nor a writer in another time zone or locale ever clears a live holder.
 - A writer releases only the lock it placed.
 
 Tests: `INC-378 twelve writes started together in one process lose no receipt`;
@@ -211,7 +222,10 @@ over and the reason is reported`; `STORY-457 AC2 and AC5: a pid reused by an
 unrelated live process is stale at once, not after the timeout`; `STORY-457 AC3: an
 unreadable lock older than the limit is taken over, a fresh one is waited for`;
 `STORY-457 AC4: a live holder whose start time matches is waited for and never
-cleared`.
+cleared`; `INC-382 a live holder in another time zone is waited for and refused,
+never taken over`; `INC-382 a live holder in another locale is waited for and
+refused, never taken over`; `INC-382 a v1 lock keeps its start uncompared and its
+live holder is waited for and refused`.
 
 ## Excluded from export and archive
 
@@ -268,13 +282,17 @@ writes no byte, and exits 0 whenever the directory can be read, printing
 - `legacyFiles`, `otherFiles` (each `name`, `bytes`, `sha256`) and
   `temporaryFiles` (write residue);
 - `lock` (TCRN-CROSS-STORY-457): null without a lock, otherwise its `state`
-  (`live`, `stale` or `unparseable`, judged as in Directory lock), `holderPid`,
-  the `start` time and `createdAt` it recorded (null when the lock does not carry
-  them), `staleReason` (`holder-not-running`, `holder-pid-reused`,
-  `unparseable-expired`, or null) and `ageMs`. The lock never moves `consistent`.
-  There is no verb that clears a lock: every path that meets a stale one takes it
-  over (writers, repair, restore) or reads past it (the store check before a
-  lease), so a stale lock blocks nothing and a live holder's lock is never removed;
+  (`live`, `stale` or `unparseable`, judged as in Directory lock, with the same
+  `LC_ALL=C`, `TZ=UTC` start reading), `holderPid`, the `start` time and
+  `createdAt` it recorded (null when the lock does not carry them), `staleReason`
+  (`holder-not-running`, `holder-pid-reused`, `unparseable-expired`, or null) and
+  `ageMs`. The lock never moves `consistent`. There is no verb that clears a lock:
+  every path that meets a stale one takes it over (writers, repair, restore) or
+  reads past it (the store check before a lease), so a stale lock blocks nothing;
+  and since a start is compared only when both sides read it the same way
+  (TCRN-CROSS-INC-382), a live holder's lock is never removed, whatever time zone
+  or locale its writer or its reader runs in (test: `INC-382 attestation-verify
+  reads a live holder from another time zone or locale as live`);
 - `chainHead`: the workspace `version`, `headEventHash`, and `receiptPresent`
   (a record for the head is in the segments the manifest names or, in a directory
   with no manifest, a legacy file is named for it);

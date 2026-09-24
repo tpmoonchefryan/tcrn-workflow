@@ -32,7 +32,11 @@ const ATTESTATION_LOCK_POLL_MS = 10;
 // older than this is stale. A writer now places its lock whole, so only a pre-STORY-457
 // writer ever showed an empty lock, and only for the instant between creating and writing it.
 export const ATTESTATION_LOCK_UNREADABLE_STALE_MS = 5_000;
-export const ATTESTATION_LOCK_VERSION = "tcrn.attestation-lock.v1" as const;
+// TCRN-CROSS-INC-382: a v2 lock records the start time read with LC_ALL=C and TZ=UTC, the
+// reading the check compares. A v1 lock's start was read with its writer's own time zone and
+// locale, so it is still read but never compared.
+export const ATTESTATION_LOCK_VERSION = "tcrn.attestation-lock.v2" as const;
+const ATTESTATION_LOCK_VERSION_V1 = "tcrn.attestation-lock.v1";
 
 export interface AttestationFileRecord {
   readonly name: string;
@@ -127,6 +131,8 @@ export interface AttestationLockHolder {
   readonly pid: number;
   readonly start: string | null;
   readonly createdAt: string | null;
+  // True only for a start read the way the check reads it (a v2 lock).
+  readonly startComparable: boolean;
 }
 
 export interface AttestationLockState {
@@ -140,9 +146,14 @@ export interface AttestationLockState {
 // The start time `ps` reports for a pid, or null when it cannot say (no such process, no
 // `ps`). With null the pid-reuse check is skipped: the lock is then judged by the pid alone,
 // as before, so the fallback never clears a live holder (STORY-457 Assumptions).
+// TCRN-CROSS-INC-382: `ps` formats lstart in the caller's time zone and locale, so one
+// process read differently to two writers in different environments. It is read with
+// LC_ALL=C and TZ=UTC, for the lock and for the check alike.
+const PROCESS_START_ENV = { LC_ALL: "C", TZ: "UTC" } as const;
+
 function processStart(pid: number): Promise<string | null> {
   return new Promise((settle) => {
-    execFile("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 }, (error, stdout) => {
+    execFile("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000, env: { ...process.env, ...PROCESS_START_ENV } }, (error, stdout) => {
       const text = typeof stdout === "string" ? stdout.trim() : "";
       settle(error === null && text.length > 0 ? text : null);
     });
@@ -155,14 +166,14 @@ function ownProcessStart(): Promise<string | null> {
   return ownStart;
 }
 
-// Both lock formats: the canonical tcrn.attestation-lock.v1 line, and the pre-STORY-457
-// "<pid>\n", which names a pid and nothing to check it against.
+// Every lock format: the canonical v2 line, the v1 line (INC-382: read, its start never
+// compared), and the pre-STORY-457 "<pid>\n", which names a pid and nothing to check it against.
 function parseAttestationLock(text: string): AttestationLockHolder | null {
-  if (/^[1-9]\d*\n$/u.test(text)) return { pid: Number(text), start: null, createdAt: null };
+  if (/^[1-9]\d*\n$/u.test(text)) return { pid: Number(text), start: null, createdAt: null, startComparable: false };
   try {
     const value = JSON.parse(text) as Record<string, unknown>;
-    if (text.endsWith("\n") && value.schemaVersion === ATTESTATION_LOCK_VERSION && Number.isSafeInteger(value.pid) && Number(value.pid) > 0 && (value.start === null || typeof value.start === "string") && typeof value.createdAt === "string") {
-      return { pid: Number(value.pid), start: value.start as string | null, createdAt: value.createdAt };
+    if (text.endsWith("\n") && (value.schemaVersion === ATTESTATION_LOCK_VERSION || value.schemaVersion === ATTESTATION_LOCK_VERSION_V1) && Number.isSafeInteger(value.pid) && Number(value.pid) > 0 && (value.start === null || typeof value.start === "string") && typeof value.createdAt === "string") {
+      return { pid: Number(value.pid), start: value.start as string | null, createdAt: value.createdAt, startComparable: value.schemaVersion === ATTESTATION_LOCK_VERSION };
     }
   } catch {
     // Not a lock this engine wrote: judged by its age below.
@@ -172,9 +183,10 @@ function parseAttestationLock(text: string): AttestationLockHolder | null {
 
 /**
  * TCRN-CROSS-STORY-457 R2: the lock as it stands. Stale when its holder is not running, when
- * the holder's pid now belongs to a process that started at another time, or when it cannot
- * be read and is older than ATTESTATION_LOCK_UNREADABLE_STALE_MS; a fresh unreadable lock and
- * a live holder are waited for. Read-only; undefined when there is no lock.
+ * the holder's pid now belongs to a process that started at another time (judged only from a
+ * start read the way this check reads it, INC-382), or when it cannot be read and is older
+ * than ATTESTATION_LOCK_UNREADABLE_STALE_MS; a fresh unreadable lock and a live holder are
+ * waited for. Read-only; undefined when there is no lock.
  */
 export async function assessAttestationLock(path: string): Promise<AttestationLockState | undefined> {
   let text: string;
@@ -195,7 +207,7 @@ export async function assessAttestationLock(path: string): Promise<AttestationLo
   const holder = parseAttestationLock(text);
   if (holder === null) return { state: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "stale" : "unparseable", holder, staleReason: ageMs > ATTESTATION_LOCK_UNREADABLE_STALE_MS ? "unparseable-expired" : null, ageMs, text };
   if (!processIsAlive(holder.pid)) return { state: "stale", holder, staleReason: "holder-not-running", ageMs, text };
-  if (holder.start !== null) {
+  if (holder.start !== null && holder.startComparable) {
     const start = holder.pid === process.pid ? await ownProcessStart() : await processStart(holder.pid);
     if (start !== null && start !== holder.start) return { state: "stale", holder, staleReason: "holder-pid-reused", ageMs, text };
   }

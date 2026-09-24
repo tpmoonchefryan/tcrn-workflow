@@ -304,12 +304,14 @@ test("INC-378 a lock held by a live process is refused without a byte changed, a
 // over, with the reason reported -- when the holder is not running, when its pid now belongs
 // to a process that started at another time, or when the lock cannot be read and is older
 // than the limit. A live holder is still waited for and refused at the timeout.
+// TCRN-CROSS-INC-382: a lock records, and the check compares, the start time read with
+// LC_ALL=C and TZ=UTC (tcrn.attestation-lock.v2); these cases use that reading.
 function processStart(pid) {
-  return execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8" }).trim();
+  return execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", TZ: "UTC" } }).trim();
 }
 
-function lockText(pid, start) {
-  return `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid, schemaVersion: "tcrn.attestation-lock.v1", start })}\n`;
+function lockText(pid, start, schemaVersion = "tcrn.attestation-lock.v2") {
+  return `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid, schemaVersion, start })}\n`;
 }
 
 async function longLived(context) {
@@ -377,4 +379,67 @@ test("STORY-457 AC4: a live holder whose start time matches is waited for and ne
     (error) => error?.reasonCode === "ATTESTATION_LOCKED" && error.message.includes(String(holder.pid)),
   );
   assert.deepEqual(await fileDigests(directory), before, "the live holder's lock is untouched");
+});
+
+// TCRN-CROSS-INC-382 (SUB-251): `ps` formats a start time in the caller's time zone and
+// locale, so a writer in another environment read a live holder's recorded start differently
+// and took its lock over as a reused pid. The start is now read with LC_ALL=C and TZ=UTC for
+// the lock and for the check alike; a start recorded any other way (a v1 lock) is not
+// compared, and its holder is judged by its pid alone. Red leg: read the start with the
+// caller's environment again.
+const ELSEWHERE_TZ = new Date().getTimezoneOffset() === 0 ? "Asia/Kathmandu" : "UTC";
+const LOCK_HOLDER = [
+  "const [storageUrl, directory, holdMs] = process.argv.slice(1);",
+  "const { withAttestationLock } = await import(storageUrl);",
+  "await withAttestationLock(directory, async () => {",
+  "  process.stdout.write(\"held\\n\");",
+  "  await new Promise((resolve) => setTimeout(resolve, Number(holdMs)));",
+  "});",
+].join("\n");
+
+async function holdLockElsewhere(context, directory, env) {
+  const storageUrl = new URL("../dist/build/packages/core/src/attestation-storage.js", import.meta.url).href;
+  const child = spawn(process.execPath, ["--input-type=module", "--eval", LOCK_HOLDER, storageUrl, directory, "20000"], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+  context.after(() => child.kill("SIGKILL"));
+  const stderr = [];
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => stderr.push(chunk));
+  await new Promise((resolve, reject) => {
+    child.stdout.once("data", resolve);
+    child.once("close", (code) => reject(new Error(`holder exited with ${code} before it held the lock\n${stderr.join("")}`)));
+  });
+  return child;
+}
+
+async function assertHolderKept(context, label, env) {
+  const directory = await inc378Directory(context, label);
+  await migratedStore(directory, [syntheticReceipt(syntheticHash(label, 0))]);
+  const holder = await holdLockElsewhere(context, directory, env);
+  const before = await fileDigests(directory);
+  await assert.rejects(
+    writeAttestationReceipt(directory, syntheticReceipt(syntheticHash(label, 1)), { lockTimeoutMs: 1_500 }),
+    (error) => error?.reasonCode === "ATTESTATION_LOCKED" && error.message.includes(String(holder.pid)),
+  );
+  assert.deepEqual(await fileDigests(directory), before, "the live holder's lock and the store are unchanged");
+}
+
+test("INC-382 a live holder in another time zone is waited for and refused, never taken over", async (context) => {
+  await assertHolderKept(context, "s382-tz", { TZ: ELSEWHERE_TZ });
+});
+
+test("INC-382 a live holder in another locale is waited for and refused, never taken over", async (context) => {
+  await assertHolderKept(context, "s382-locale", { LC_ALL: "zh_CN.UTF-8" });
+});
+
+test("INC-382 a v1 lock keeps its start uncompared and its live holder is waited for and refused", async (context) => {
+  const directory = await inc378Directory(context, "s382-v1");
+  await migratedStore(directory, [syntheticReceipt(syntheticHash("s382-v1", 0))]);
+  const holder = await longLived(context);
+  await writeFile(join(directory, "attestation.lock"), lockText(holder.pid, "Thu Jan  1 00:00:00 1970", "tcrn.attestation-lock.v1"), "utf8");
+  const before = await fileDigests(directory);
+  await assert.rejects(
+    writeAttestationReceipt(directory, syntheticReceipt(syntheticHash("s382-v1", 1)), { lockTimeoutMs: 300 }),
+    (error) => error?.reasonCode === "ATTESTATION_LOCKED" && error.message.includes(String(holder.pid)),
+  );
+  assert.deepEqual(await fileDigests(directory), before, "a start read another way is never evidence of a reused pid");
 });

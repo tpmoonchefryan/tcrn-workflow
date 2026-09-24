@@ -355,8 +355,9 @@ test("STORY-457 R3: attestation-verify reports the lock state, the holder and th
   const holder = spawn(process.execPath, ["--eval", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
   context.after(() => holder.kill("SIGKILL"));
   await new Promise((settle) => setTimeout(settle, 100));
-  const start = execFileSync("ps", ["-o", "lstart=", "-p", String(holder.pid)], { encoding: "utf8" }).trim();
-  const lockLine = (pid, recorded) => `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid, schemaVersion: "tcrn.attestation-lock.v1", start: recorded })}\n`;
+  // TCRN-CROSS-INC-382: the lock records, and the check compares, the start read with LC_ALL=C and TZ=UTC.
+  const start = execFileSync("ps", ["-o", "lstart=", "-p", String(holder.pid)], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", TZ: "UTC" } }).trim();
+  const lockLine = (pid, recorded) => `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid, schemaVersion: "tcrn.attestation-lock.v2", start: recorded })}\n`;
   const readLock = async () => {
     const before = await digests(fx.attestDir);
     const result = await verify(fx);
@@ -383,6 +384,50 @@ test("STORY-457 R3: attestation-verify reports the lock state, the holder and th
   await rm(lock);
   const cleared = await verify(fx);
   assert.equal(cleared.value.lock, null);
+});
+
+// TCRN-CROSS-INC-382 (SUB-251): attestation-verify reads the lock with the judgement the
+// writers use. A live holder that placed its lock in another time zone or locale reads live,
+// its recorded start being the LC_ALL=C, TZ=UTC reading; a v1 lock, whose start was read with
+// its writer's own environment, is judged by its pid alone. Red leg: read the start with the
+// caller's environment again.
+test("INC-382 attestation-verify reads a live holder from another time zone or locale as live", async (context) => {
+  const fx = await fixture(context);
+  await segmentedStore(fx, 2);
+  const lock = join(fx.attestDir, "attestation.lock");
+  const storageUrl = new URL("../dist/build/packages/core/src/attestation-storage.js", import.meta.url).href;
+  const holdScript = [
+    "const [storageUrl, directory] = process.argv.slice(1);",
+    "const { withAttestationLock } = await import(storageUrl);",
+    "await withAttestationLock(directory, async () => { process.stdout.write(\"held\\n\"); await new Promise((resolve) => setTimeout(resolve, 20000)); });",
+  ].join("\n");
+  const pinnedStart = (pid) => execFileSync("ps", ["-o", "lstart=", "-p", String(pid)], { encoding: "utf8", env: { ...process.env, LC_ALL: "C", TZ: "UTC" } }).trim();
+  const lockState = async () => {
+    const result = await verify(fx);
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(result.value.consistent, true);
+    const { ageMs, ...rest } = result.value.lock;
+    assert.ok(Number.isSafeInteger(ageMs) && ageMs >= 0);
+    return rest;
+  };
+  for (const env of [{ TZ: new Date().getTimezoneOffset() === 0 ? "Asia/Kathmandu" : "UTC" }, { LC_ALL: "zh_CN.UTF-8" }]) {
+    const holder = spawn(process.execPath, ["--input-type=module", "--eval", holdScript, storageUrl, fx.attestDir], { env: { ...process.env, ...env }, stdio: ["pipe", "pipe", "pipe"] });
+    context.after(() => holder.kill("SIGKILL"));
+    await new Promise((resolve, reject) => {
+      holder.stdout.once("data", resolve);
+      holder.once("close", (code) => reject(new Error(`holder exited with ${code} before it held the lock`)));
+    });
+    const state = await lockState();
+    assert.deepEqual([state.state, state.holderPid, state.start, state.staleReason], ["live", holder.pid, pinnedStart(holder.pid), null], JSON.stringify(env));
+    holder.kill("SIGKILL");
+    await once(holder, "exit");
+    await rm(lock);
+  }
+  const live = spawn(process.execPath, ["--eval", "setTimeout(() => {}, 60000)"], { stdio: "ignore" });
+  context.after(() => live.kill("SIGKILL"));
+  await new Promise((settle) => setTimeout(settle, 100));
+  await writeFile(lock, `${canonicalJson({ createdAt: "2026-09-23T00:00:00.000Z", pid: live.pid, schemaVersion: "tcrn.attestation-lock.v1", start: "Thu Jan  1 00:00:00 1970" })}\n`, "utf8");
+  assert.deepEqual(await lockState(), { state: "live", holderPid: live.pid, start: "Thu Jan  1 00:00:00 1970", createdAt: "2026-09-23T00:00:00.000Z", staleReason: null }, "a v1 start is not compared");
 });
 
 // TCRN-CROSS-STORY-458 R3 (SUB-233): attestation-verify lists the single writes that have no
