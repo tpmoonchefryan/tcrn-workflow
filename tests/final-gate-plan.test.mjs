@@ -92,3 +92,58 @@ test("STORY-460 AC3: a doctor root red only for a roster exception passes and na
   const failed = issueGateReceipt(createGateReceiptAuthority(), { entry, invocation, inputs, result: twoReds, roster: ROSTER });
   assert.equal(failed.status, "failed");
 });
+
+// TCRN-CROSS-INC-383 (SUB-249). The receipt above says completed, yet the operational runner
+// still required the root to exit 0: recordExecution threw GATE_PLAN_TERMINAL_EVIDENCE_INVALID
+// for a platform-layout root red only on the launchd exception. A receipt completed by a
+// roster exception now passes the runner with its real exit code and accepted codes, which
+// are re-read from the tracked roster; a receipt issued against another roster does not pass.
+// Red leg: take the exception allowance out of the trusted-receipt checks.
+const FIXTURE_ROSTER_PATH = resolve(REPOSITORY_ROOT, "tests/fixtures/acceptance-gate-groups.json");
+const FIXTURE_ROSTER = JSON.parse(readFileSync(FIXTURE_ROSTER_PATH, "utf8"));
+const LAYOUT_INVOCATION = { executable: "node", argv: ["scripts/platform-doctor.mjs", "--platform-root", resolve(REPOSITORY_ROOT, "../..")], cwd: REPOSITORY_ROOT, command: "node scripts/platform-doctor.mjs --platform-root <container>" };
+
+async function runLayoutRoot(doctorResult, issuingRoster = FIXTURE_ROSTER) {
+  const inputs = { sourceDigest: "source-383", environmentDigest: "environment-383", commandDigest: "command-383", baselineDigest: "baseline-383" };
+  const authority = createGateReceiptAuthority();
+  const plan = finalGatePlan.buildDynamicGatePlan({ roster: FIXTURE_ROSTER, containment: CONTAINMENT, inputs, changedFiles: ["docs/platform-container-layout.md"], dependencies: [], configuration: [], generated: [], environment: [], crossRepoChanges: [], candidateReady: true, executionPermission: true, operational: true, requireCompleteImpact: true, gateInvocations: { "platform-layout": LAYOUT_INVOCATION }, receiptAuthority: authority });
+  const receipts = [];
+  let executed = null;
+  let thrown = null;
+  try {
+    executed = await finalGatePlan.executeSelectedRoots(plan, async (entry) => {
+      const receipt = issueGateReceipt(authority, { entry, invocation: entry.invocation, inputs: entry.inputs ?? inputs, result: doctorResult, roster: issuingRoster });
+      receipts.push(receipt);
+      return receipt;
+    }, { getInputs: async () => inputs, rosterPath: FIXTURE_ROSTER_PATH });
+  } catch (error) {
+    thrown = error.reasonCode ?? String(error.message);
+  }
+  const outcome = thrown !== null ? `failed:${thrown}` : executed.executable === true && executed.blocked.length === 0 ? "completed" : "failed";
+  return { plan, executed, receipts, outcome };
+}
+
+test("INC-383: the operational runner accepts a receipt completed by a roster exception", async () => {
+  const launchdOnly = doctor([{ name: "launchd", ok: false, reasonCode: "PLATFORM_LAUNCHD_NOT_ON_DUTY" }, { name: "hooks", ok: true }]);
+  const { plan, executed, receipts, outcome } = await runLayoutRoot(launchdOnly);
+  assert.deepEqual(plan.selected.map(({ id }) => id), ["platform-layout"]);
+  assert.equal(plan.integrity.requireInputObserver, true);
+  assert.equal(outcome, "completed", JSON.stringify(executed?.blocked ?? outcome));
+  assert.deepEqual(executed.blocked, []);
+  assert.deepEqual(executed.executed.map(({ id, ok, status, exitCode, acceptedExceptions }) => ({ id, ok, status, exitCode, acceptedExceptions })), [{ id: "platform-layout", ok: true, status: "completed", exitCode: 1, acceptedExceptions: ["PLATFORM_LAUNCHD_NOT_ON_DUTY"] }]);
+  const document = JSON.parse(readFileSync(receipts[0].terminalEvidence.path, "utf8"));
+  assert.deepEqual([document.status, document.ok, document.exitCode, document.acceptedExceptions], ["completed", true, 1, ["PLATFORM_LAUNCHD_NOT_ON_DUTY"]], "the receipt keeps the real exit code and the accepted codes");
+});
+
+test("INC-383: another red, or an exception the tracked roster does not accept, still fails the runner", async () => {
+  const withOtherRed = doctor([{ name: "launchd", ok: false, reasonCode: "PLATFORM_LAUNCHD_NOT_ON_DUTY" }, { name: "acceptanceVerdicts", ok: false, reasonCode: "PLATFORM_ACCEPTANCE_LANE_UNPROVEN" }]);
+  const other = await runLayoutRoot(withOtherRed);
+  assert.equal(other.receipts[0].status, "failed");
+  assert.match(other.outcome, /^failed/u);
+
+  const budgetOnly = doctor([{ name: "proofBudget", ok: false, reasonCode: "PLATFORM_PROOF_BUDGET_EXCEEDED" }]);
+  const forgedRoster = { groups: FIXTURE_ROSTER.groups.map((group) => group.id === "platform-layout" ? { ...group, acceptedExceptions: [{ acceptedAt: "2026-09-24", reasonCode: "PLATFORM_PROOF_BUDGET_EXCEEDED", reason: "NOT_IN_THE_TRACKED_ROSTER" }] } : group) };
+  const forged = await runLayoutRoot(budgetOnly, forgedRoster);
+  assert.deepEqual([forged.receipts[0].status, forged.receipts[0].acceptedExceptions], ["completed", ["PLATFORM_PROOF_BUDGET_EXCEEDED"]], "the issuing call was handed a roster that accepts the code");
+  assert.equal(forged.outcome, "failed:GATE_PLAN_TERMINAL_EVIDENCE_INVALID", "the runner re-reads the tracked roster and refuses a self-reported exception");
+});

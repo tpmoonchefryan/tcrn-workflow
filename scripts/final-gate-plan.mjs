@@ -178,7 +178,7 @@ function runnerGovernanceNotices(result) {
  */
 export function applyRosterExceptions(gateId, result, roster = readRosterForExceptions()) {
   if (result?.ok === true) return { result, acceptedExceptions: [] };
-  const accepted = new Set((roster?.groups?.find((group) => group?.id === gateId)?.acceptedExceptions ?? []).map((exception) => exception?.reasonCode).filter((code) => typeof code === "string" && code.length > 0));
+  const accepted = rosterAcceptedCodes(roster, gateId);
   if (accepted.size === 0) return { result, acceptedExceptions: [] };
   let report;
   try { report = JSON.parse(String(result?.stdout ?? "").trim()); } catch { return { result, acceptedExceptions: [] }; }
@@ -189,6 +189,29 @@ export function applyRosterExceptions(gateId, result, roster = readRosterForExce
 
 function readRosterForExceptions() {
   try { return JSON.parse(readFileSync(defaultRosterPath, "utf8")); } catch { return null; }
+}
+
+function rosterAcceptedCodes(roster, gateId) {
+  return new Set((roster?.groups?.find((group) => group?.id === gateId)?.acceptedExceptions ?? []).map((exception) => exception?.reasonCode).filter((code) => typeof code === "string" && code.length > 0));
+}
+
+/**
+ * TCRN-CROSS-INC-383 (STORY-460 AC3, #240 B2): a receipt completed by a roster exception.
+ * It is completed and ok with a non-zero exit code, names the codes it accepted, and every
+ * one of them is accepted for its gate by the roster re-read here from the checked-in path;
+ * neither the receipt nor a caller decides what was accepted. The trusted terminal artifact,
+ * the measured runner row and evidence reuse all ask this one predicate.
+ */
+function completedByRosterException(receipt, gateId, rosterPath = defaultRosterPath) {
+  if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) return false;
+  if (String(receipt.status ?? "").toLowerCase() !== "completed" || receipt.ok !== true) return false;
+  if (!Number.isSafeInteger(receipt.exitCode) || receipt.exitCode === 0) return false;
+  const claimed = receipt.acceptedExceptions;
+  if (typeof gateId !== "string" || !Array.isArray(claimed) || claimed.length === 0) return false;
+  let roster;
+  try { roster = JSON.parse(readFileSync(rosterPath, "utf8")); } catch { return false; }
+  const accepted = rosterAcceptedCodes(roster, gateId);
+  return claimed.every((code) => typeof code === "string" && accepted.has(code));
 }
 
 export function issueGateReceipt(authority, { entry, result: rawResult, inputs, invocation, roster } = {}) {
@@ -704,7 +727,7 @@ function evidenceValue(evidence, key) {
   return evidence?.[key] ?? evidence?.result?.[key];
 }
 
-function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = null, expectedCommand = null, expectedInvocation = null, expectedPhase = null, authority = null } = {}) {
+function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = null, expectedCommand = null, expectedInvocation = null, expectedPhase = null, authority = null, rosterPath = defaultRosterPath } = {}) {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return null;
   const artifactPath = batchString(candidate.path ?? candidate.file ?? candidate.storePath ?? candidate.artifactPath);
   const digest = batchString(candidate.sha256 ?? candidate.digest ?? candidate.hash);
@@ -733,8 +756,8 @@ function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = nu
     try { document = JSON.parse(bytes.toString("utf8")); } catch { return null; }
     if (!document || typeof document !== "object" || Array.isArray(document)) return null;
     const documentStatus = String(document.status ?? document.state ?? "").toLowerCase();
-    if (!TERMINAL_EVIDENCE_STATES.has(documentStatus) || document.ok !== true || document.exitCode !== 0) return null;
     const documentGate = batchString(document.gateId ?? document.gate ?? document.rootId);
+    if (!TERMINAL_EVIDENCE_STATES.has(documentStatus) || document.ok !== true || (document.exitCode !== 0 && !completedByRosterException(document, documentGate, rosterPath))) return null;
     const documentCommand = batchString(document.command);
     if (documentGate === null || gateId !== null && documentGate !== gateId || documentCommand === null) return null;
     if (expectedCommand !== null && normalizeCommand(documentCommand) !== normalizeCommand(expectedCommand)) return null;
@@ -761,12 +784,12 @@ function trustedArtifactIdentity(candidate, { expectedInputs = null, gateId = nu
   }
 }
 
-function terminalEvidenceIdentity(evidence, { requireTrusted = false, expectedCommand = null, expectedInvocation = null, expectedPhase = null, authority = null } = {}) {
+function terminalEvidenceIdentity(evidence, { requireTrusted = false, expectedCommand = null, expectedInvocation = null, expectedPhase = null, authority = null, rosterPath = defaultRosterPath } = {}) {
   const candidates = [evidence?.terminalEvidence, evidence?.runnerEvidence, evidence?.receipt, evidence?.artifact, evidence?.result?.terminalEvidence, evidence?.result?.receipt];
   for (const candidate of candidates) {
     if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
     if (requireTrusted) {
-      const trusted = trustedArtifactIdentity(candidate, { expectedInputs: normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs), gateId: evidenceGateId(evidence), expectedCommand, expectedInvocation, expectedPhase, authority });
+      const trusted = trustedArtifactIdentity(candidate, { expectedInputs: normalizedDigestInput(evidence?.inputs ?? evidence?.result?.inputs), gateId: evidenceGateId(evidence), expectedCommand, expectedInvocation, expectedPhase, authority, rosterPath });
       if (trusted !== null) return trusted;
       continue;
     }
@@ -2604,7 +2627,7 @@ export function recordExecution(plan, results, { blocked: blockedOverride, roste
   const missing = [...selectedIds].filter((id) => !executedIds.includes(id));
   if (duplicate || unselected.length > 0 || missing.length > 0) throw planError("GATE_PLAN_EXECUTION_MISMATCH", JSON.stringify({ duplicate, unselected, missing }));
   if (plan?.integrity?.requireInputObserver === true) {
-    const invalid = rows.flatMap((row) => measuredResultProblems(row, row?.plannedInputs ?? row?.inputs ?? plan.inputs, { requireTrusted: true, expectedCommand: plan.selected?.find((entry) => entry.id === row?.id)?.command ?? null, expectedInvocation: plan.selected?.find((entry) => entry.id === row?.id)?.invocation ?? null, expectedGateId: row?.id ?? null, authority: context?.authority ?? null }));
+    const invalid = rows.flatMap((row) => measuredResultProblems(row, row?.plannedInputs ?? row?.inputs ?? plan.inputs, { requireTrusted: true, expectedCommand: plan.selected?.find((entry) => entry.id === row?.id)?.command ?? null, expectedInvocation: plan.selected?.find((entry) => entry.id === row?.id)?.invocation ?? null, expectedGateId: row?.id ?? null, authority: context?.authority ?? null, rosterPath }));
     if (invalid.length > 0) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", invalid.join("; "));
   }
   if (plan?.dynamic === true && rows.some((row) => /^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? "")))) throw planError("GATE_PLAN_TERMINAL_EVIDENCE_INVALID", "fixture root result cannot satisfy a production gate");
@@ -2682,14 +2705,14 @@ function executionPlanProblems(plan, { rosterPath = defaultRosterPath } = {}) {
   return problems;
 }
 
-function measuredResultProblems(row, expectedInputs, { requireTrusted = false, expectedCommand = null, expectedInvocation = null, expectedGateId = null, authority = null } = {}) {
+function measuredResultProblems(row, expectedInputs, { requireTrusted = false, expectedCommand = null, expectedInvocation = null, expectedGateId = null, authority = null, rosterPath = defaultRosterPath } = {}) {
   const problems = [];
   const rowInputs = row?.inputs ?? row?.inputDigests;
   if (!hasCompleteInputKey(rowInputs) || JSON.stringify(completeInputKey(rowInputs)) !== JSON.stringify(completeInputKey(expectedInputs))) problems.push("runner did not return the planned four input digests");
-  if (terminalEvidenceIdentity(row, { requireTrusted, expectedCommand, expectedInvocation, authority }) === null) problems.push(requireTrusted ? "runner did not return a readable immutable terminal artifact" : "runner did not return trusted terminal evidence");
+  if (terminalEvidenceIdentity(row, { requireTrusted, expectedCommand, expectedInvocation, authority, rosterPath }) === null) problems.push(requireTrusted ? "runner did not return a readable immutable terminal artifact" : "runner did not return trusted terminal evidence");
   if (!TERMINAL_EVIDENCE_STATES.has(row?.status) && row?.terminal !== true) problems.push("runner result is not terminal");
   if (expectedGateId !== null && row?.gateId !== expectedGateId) problems.push("runner result is bound to the wrong gate");
-  if (requireTrusted && row?.exitCode !== 0) problems.push("runner result did not report exitCode 0");
+  if (requireTrusted && row?.exitCode !== 0 && !completedByRosterException(row, row?.gateId, rosterPath)) problems.push("runner result did not report exitCode 0");
   if (/^FIXTURE_ROOT_/u.test(String(row?.reasonCode ?? ""))) problems.push("fixture root result cannot satisfy a production gate");
   return problems;
 }
@@ -2779,7 +2802,7 @@ export async function executeSelectedRoots(plan, runner, { getInputs, currentInp
       blocked.push({ id: entry.id, reason: "gate inputs changed while the root was running" });
     }
     if (plan?.integrity?.requireInputObserver === true) {
-      const measuredProblems = measuredResultProblems(row, expectedInputs, { requireTrusted: true, expectedCommand: entry.command, expectedInvocation: entry.invocation ?? null, expectedGateId: entry.id, authority: planContext?.authority ?? null });
+      const measuredProblems = measuredResultProblems(row, expectedInputs, { requireTrusted: true, expectedCommand: entry.command, expectedInvocation: entry.invocation ?? null, expectedGateId: entry.id, authority: planContext?.authority ?? null, rosterPath });
       if (measuredProblems.length > 0) {
         row.ok = false;
         row.reasonCode = "GATE_PLAN_TERMINAL_EVIDENCE_INVALID";
