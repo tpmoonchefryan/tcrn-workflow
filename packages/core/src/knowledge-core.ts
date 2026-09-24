@@ -42,8 +42,7 @@ import type { KnowledgeExpansions, KnowledgeLanguageProvider } from "./knowledge
 import { activeBinding, activeWorkspaceRoot, materializeWorkspace } from "./workspace.js";
 import type { ProjectRecord, WorkspaceState } from "./workspace.js";
 import { SETTINGS_CATALOG, resolveKnowledgeArticlesPath } from "./settings.js";
-import { COLLECTOR_SELF_CHECK_KIND, readObservationDayVerdicts, readObservationWindows, readTelemetryDay, writeObservationDaySummary } from "./telemetry.js";
-import type { FitnessSummaryRow, ObservationWindowClass } from "./telemetry.js";
+import { readTelemetryRecords } from "./telemetry.js";
 import type { TelemetryRecord } from "./telemetry.js";
 
 export const KNOWLEDGE_CORE_VERSION = "tcrn.knowledge-core.v1" as const;
@@ -169,47 +168,19 @@ export interface KnowledgeFitnessRecord {
   readonly observedEvents: number;
   readonly firstObservedAt: string | null;
   readonly lastActiveAt: string | null;
-  readonly observationStart: string | null;
-  readonly observationComplete: boolean;
-  readonly eligible: boolean;
   readonly retirement: KnowledgeRetirementRecord | undefined;
 }
 
+// TCRN-CROSS-MIN-225 D1 (TCRN-CROSS-SUB-258): fitness is a read-only statistic. The v1 window,
+// eligibility and proposal fields are gone, so the output is v2: a compatible meaning may not
+// change under the same identifier (docs/versioning/versioning-policy.md). `lastSweepAt` is the
+// store marker's historical value, listed read-only; nothing writes it any more.
 export interface KnowledgeFitnessResult {
-  readonly schemaVersion: "tcrn.knowledge-fitness.v1";
+  readonly schemaVersion: "tcrn.knowledge-fitness.v2";
   readonly reasonCode: "KNOWLEDGE_FITNESS_READY";
   readonly at: string;
-  readonly windowDays: number;
-  readonly minEvents: number;
-  readonly windowStart: string;
-  readonly windowEnd: string;
-  readonly windowComplete: boolean;
-  // Compatibility names (TCRN-CROSS-STORY-454): the idle and the unproven days, as day files.
-  readonly missingDays: readonly string[];
-  readonly invalidDays: readonly string[];
-  readonly idleDays: readonly string[];
-  readonly unprovenDays: readonly string[];
-  readonly windows: Readonly<Record<ObservationWindowClass, KnowledgeObservationWindow>>;
-  readonly refusals: readonly KnowledgeWindowRefusal[];
   readonly lastSweepAt: string | null;
   readonly records: readonly KnowledgeFitnessRecord[];
-  readonly proposals: readonly Readonly<Record<string, JsonValue>>[];
-}
-
-export interface KnowledgeObservationWindow {
-  readonly complete: boolean;
-  readonly observationDays: number;
-  readonly missingObservationDays: number;
-  readonly windowStart: string;
-  readonly windowEnd: string;
-}
-
-export interface KnowledgeWindowRefusal {
-  readonly class: ObservationWindowClass;
-  readonly reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT";
-  readonly observationDays: number;
-  readonly windowDays: number;
-  readonly missingObservationDays: number;
 }
 
 export class KnowledgeCoreError extends Error {
@@ -2694,12 +2665,12 @@ function addFitnessCounts(into: Map<string, FitnessCounts>, id: string, counts: 
   into.set(id, current);
 }
 
-// Fitness counts per raw telemetry id, before any card link: the same accounting whether the
-// records are read raw or summed from a retained per-day summary (STORY-454 R5).
+// Fitness counts per raw telemetry id, before any card link.
 function rawFitnessCounts(records: readonly TelemetryRecord[], into = new Map<string, FitnessCounts>()): Map<string, FitnessCounts> {
   for (const record of records) {
-    // TCRN-CROSS-STORY-452 R3: a self-check observes a write path, never a card.
-    if (record.kind === COLLECTOR_SELF_CHECK_KIND) continue;
+    // TCRN-CROSS-STORY-452 R3: a self-check observes a write path, never a card. The record class
+    // is retired (TCRN-CROSS-MIN-225); the ones already written are still skipped.
+    if (record.kind === "collector-self-check") continue;
     const payload = record.payload as Readonly<Record<string, unknown>>;
     const field = record.kind === "retrieval-hit" ? "retrievalCount"
       : record.kind === "pull" || record.kind === "reference" ? "referenceCount"
@@ -2714,22 +2685,7 @@ function rawFitnessCounts(records: readonly TelemetryRecord[], into = new Map<st
   return into;
 }
 
-function summaryFitnessCounts(rows: Readonly<Record<string, FitnessSummaryRow>>, into: Map<string, FitnessCounts>): Map<string, FitnessCounts> {
-  for (const [id, [retrievalCount, referenceCount, triggerCount, verifyFailureCount, observedEvents, firstObservedAt, lastActiveAt]] of Object.entries(rows)) {
-    addFitnessCounts(into, id, { retrievalCount, referenceCount, triggerCount, verifyFailureCount, observedEvents, firstObservedAt, lastActiveAt });
-  }
-  return into;
-}
-
-/** STORY-454 R5, called by the seal path only: keep the day's fitness summary beyond raw retention. */
-export async function sealFitnessDaySummary(telemetryRoot: string, day: string): Promise<{ readonly reasonCode: string }> {
-  const verdicts = await readObservationDayVerdicts(telemetryRoot, day);
-  const counts = rawFitnessCounts((await readTelemetryDay(telemetryRoot, day)).records.filter((record) => record.kind !== "observation-coverage"));
-  const rows = Object.fromEntries([...counts.entries()].sort(([left], [right]) => compareCanonicalText(left, right)).map(([id, entry]): [string, FitnessSummaryRow] => [id, [entry.retrievalCount, entry.referenceCount, entry.triggerCount, entry.verifyFailureCount, entry.observedEvents, entry.firstObservedAt, entry.lastActiveAt]]));
-  return writeObservationDaySummary(telemetryRoot, { schemaVersion: "tcrn.telemetry-fitness-summary.v1", day, channels: Object.fromEntries(verdicts.channels.map((entry) => [entry.channel, entry.verdict])), rows });
-}
-
-function fitnessRows(rawCounts: ReadonlyMap<string, FitnessCounts>, metadata: readonly KnowledgeUnitMetadata[], windowComplete: boolean, minEvents: number, windowStart: string, workspace: WorkspaceState): readonly KnowledgeFitnessRecord[] {
+function fitnessRows(rawCounts: ReadonlyMap<string, FitnessCounts>, metadata: readonly KnowledgeUnitMetadata[], workspace: WorkspaceState): readonly KnowledgeFitnessRecord[] {
   const linkedIds = new Map<string, string[]>();
   for (const entry of metadata) {
     for (const linkedId of [entry.id, ...entry.linkedWorkIds, ...entry.linkedDecisionIds, ...entry.linkedGateIds, ...entry.linkedEvidenceIds]) {
@@ -2747,234 +2703,45 @@ function fitnessRows(rawCounts: ReadonlyMap<string, FitnessCounts>, metadata: re
   return [...ids].sort(compareCanonicalText).map((id) => {
     const counts = byId.get(id) ?? emptyFitnessCounts();
     const entry = metadataById.get(id);
-    const smallCard = entry !== undefined && entry.lifecycle === "active" && ["fact", "guide", "summary"].includes(entry.kind) && entry.retrievalDisposition === "default";
-    const observationStart = entry === undefined ? counts.firstObservedAt
-      : counts.firstObservedAt === null || parseStrictInstant(entry.updatedAt) >= parseStrictInstant(counts.firstObservedAt) ? entry.updatedAt : counts.firstObservedAt;
-    const observationComplete = observationStart !== null && observationStart.slice(0, 10) <= windowStart.slice(0, 10);
-    const eligible = smallCard && windowComplete && observationComplete && counts.observedEvents >= minEvents && counts.retrievalCount === 0 && counts.referenceCount === 0;
     return {
       id,
       artifactKind: entry?.kind ?? "telemetry-only",
       lifecycle: entry?.lifecycle ?? null,
       baseDigest: entry?.bodySha256 ?? workspaceArtifactDigest(id, workspace) ?? (byId.has(id) ? canonicalSha256({ id, counts }) : null),
       ...counts,
-      observationStart,
-      observationComplete,
-      eligible,
       ...(entry?.retirement === undefined ? {} : { retirement: entry.retirement }),
     } as KnowledgeFitnessRecord;
   });
 }
 
-// STORY-454 R3: which observation window judges a record.
-function windowClassOf(id: string): ObservationWindowClass {
-  return /^rule:/u.test(id) ? "rule" : /^(?:verify-script|verify|gate):/u.test(id) ? "verify" : "card";
-}
-
-function retirementProposals(
-  records: readonly KnowledgeFitnessRecord[],
-  windows: Readonly<Record<ObservationWindowClass, KnowledgeObservationWindow>>,
-  minEvents: number,
-  windowDays: number,
-): readonly Readonly<Record<string, JsonValue>>[] {
-  return records
-    .filter((record) => windows[windowClassOf(record.id)].complete && record.observationComplete && record.observedEvents >= minEvents && record.retrievalCount === 0 && record.referenceCount === 0 &&
-      (record.eligible || record.artifactKind === "telemetry-only" &&
-        (/^(?:verify-script|verify|gate):/u.test(record.id) ? record.verifyFailureCount === 0 :
-          /^rule:/u.test(record.id) && record.triggerCount === 0)))
-    .map((record) => ({
-      id: record.id,
-      operation: "retire",
-      proposalKind: record.eligible ? "knowledge-retirement" : "removal-diff",
-      status: "pending",
-      automatic: record.eligible,
-      requiresOwnerReview: !record.eligible,
-      artifactKind: record.artifactKind,
-      baseDigest: record.baseDigest,
-      from: { lifecycle: record.lifecycle, body: record.lifecycle === "retired" ? "deleted" : "present" },
-      to: { lifecycle: "retired", body: "deleted" },
-      impact: { retrieval: record.retrievalCount, reference: record.referenceCount, trigger: record.triggerCount, verifyFailure: record.verifyFailureCount, observedEvents: record.observedEvents },
-      reason: record.eligible ? "zero-retrieval-zero-reference" : /^rule:/u.test(record.id) ? "never-triggered" : "never-failed",
-      retrievalCount: record.retrievalCount,
-      referenceCount: record.referenceCount,
-      observedEvents: record.observedEvents,
-      windowDays,
-      windowStart: windows[windowClassOf(record.id)].windowStart,
-      windowEnd: windows[windowClassOf(record.id)].windowEnd,
-    }));
-}
-
-function sameUtcObservationDay(left: string | undefined, right: string): boolean {
-  return left !== undefined && left.slice(0, 10) === right.slice(0, 10);
-}
-
-function fitnessSetting(workspace: WorkspaceState, key: "fitness.windowDays" | "fitness.minEvents", fallback: number): number {
-  const value = workspace.settings.find((entry) => entry.key === key)?.value;
-  return value === undefined ? fallback : Number(value);
-}
-
-function isTransientKnowledgeLock(error: unknown): boolean {
-  return error instanceof KnowledgeCoreError && (error.reasonCode === "KNOWLEDGE_LOCKED" || error.reasonCode === "KNOWLEDGE_PARTIAL_STATE");
-}
-
-async function retryKnowledgeLocks<T>(operation: () => Promise<T>, options: KnowledgeMutationOptions = {}): Promise<T> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (options.faultAt === undefined && attempt < 20 && isTransientKnowledgeLock(error)) {
-        await new Promise((resolveDelay) => setTimeout(resolveDelay, 10));
-        continue;
-      }
-      throw error;
-    }
-  }
-}
-
-async function retrySweepOperation<T>(workspaceRoot: string, operation: () => Promise<T>, options: KnowledgeMutationOptions): Promise<T> {
-  try {
-    return await retryKnowledgeLocks(operation, options);
-  } catch (error) {
-    if (options.faultAt !== undefined || !isTransientKnowledgeLock(error)) throw error;
-    try {
-      const recovered = await recoverKnowledgeStore(workspaceRoot, options);
-      if (recovered.recovered === true) return retryKnowledgeLocks(operation, options);
-    } catch (recoveryError) {
-      if (!isTransientKnowledgeLock(recoveryError)) throw recoveryError;
-    }
-    throw error;
-  }
-}
-
-export async function evaluateKnowledgeFitness(workspaceRoot: string, input: { readonly at: string; readonly windowDays?: number; readonly minEvents?: number }): Promise<KnowledgeFitnessResult> {
+// TCRN-CROSS-MIN-225 D1/D4 (TCRN-CROSS-SUB-258): fitness counts every readable telemetry record at or
+// before `at`, per artifact, as a read-only statistic. There is no window, no observation day, no
+// eligibility and no proposal. Unreadable lines are skipped, and the legacy observation records
+// (boundary rows, seal receipts, collector self-checks) name no artifact, so they count nowhere.
+export async function evaluateKnowledgeFitness(workspaceRoot: string, input: { readonly at: string }): Promise<KnowledgeFitnessResult> {
   assertEvaluationInstant(input.at);
+  const at = parseStrictInstant(input.at);
   const scan = await scanKnowledgeStore(workspaceRoot, { allowTrailing: true }, false, "metadata-only");
-  const windowDays = input.windowDays ?? fitnessSetting(scan.workspace, "fitness.windowDays", 90);
-  const minEvents = input.minEvents ?? fitnessSetting(scan.workspace, "fitness.minEvents", 1);
-  if (!Number.isSafeInteger(windowDays) || windowDays < 1 || windowDays > 3_650 || !Number.isSafeInteger(minEvents) || minEvents < 1) {
-    fail("KNOWLEDGE_INPUT_INVALID", "fitness window");
-  }
   const transient = activeBinding(scan.workspace.metadata).find((root) => root.kind === "transient");
-  const telemetryRoot = transient?.path ?? null;
-  const classes: readonly ObservationWindowClass[] = ["card", "rule", "verify"];
-  const refusalsOf = (windows: Readonly<Record<ObservationWindowClass, KnowledgeObservationWindow>>): readonly KnowledgeWindowRefusal[] => classes.filter((kind) => !windows[kind].complete)
-    .map((kind) => ({ class: kind, reasonCode: "KNOWLEDGE_OBSERVATION_WINDOW_SHORT", observationDays: windows[kind].observationDays, windowDays, missingObservationDays: windows[kind].missingObservationDays }));
-  if (telemetryRoot === null) {
-    const empty = { complete: false, observationDays: 0, missingObservationDays: windowDays, windowStart: input.at, windowEnd: input.at };
-    const windows = { card: empty, rule: empty, verify: empty };
-    return {
-      schemaVersion: "tcrn.knowledge-fitness.v1", reasonCode: "KNOWLEDGE_FITNESS_READY", at: input.at, windowDays, minEvents,
-      windowStart: input.at, windowEnd: input.at, windowComplete: false, missingDays: [], invalidDays: [], idleDays: [], unprovenDays: [], windows, refusals: refusalsOf(windows),
-      lastSweepAt: scan.marker.lastSweepAt ?? null, records: [], proposals: [],
-    };
-  }
-  // TCRN-CROSS-STORY-454: each record class is counted over its own last N relevant-channel
-  // observation days; idle and unproven days are neither counted nor a break in the window.
-  const observation = await readObservationWindows(telemetryRoot, input.at, windowDays);
-  const metadata = scan.units.map((unit) => unit.metadata);
-  const rows = (kind: ObservationWindowClass): readonly KnowledgeFitnessRecord[] => {
-    const window = observation.classes[kind];
-    const counts = window.summaries.reduce((into, summary) => summaryFitnessCounts(summary.rows, into), rawFitnessCounts(window.records));
-    return fitnessRows(counts, kind === "card" ? metadata : [], window.complete, minEvents, window.windowStart, scan.workspace).filter((record) => windowClassOf(record.id) === kind);
-  };
-  const records = [...rows("card"), ...rows("rule"), ...rows("verify")].sort((left, right) => compareCanonicalText(left.id, right.id));
-  const windows = Object.fromEntries(classes.map((kind) => {
-    const window = observation.classes[kind];
-    return [kind, { complete: window.complete, observationDays: window.observationDays.length, missingObservationDays: window.missingObservationDays, windowStart: window.windowStart, windowEnd: window.windowEnd }];
-  })) as unknown as Record<ObservationWindowClass, KnowledgeObservationWindow>;
+  const telemetry = transient === undefined ? [] : (await readTelemetryRecords(transient.path, { limit: Number.MAX_SAFE_INTEGER })).records
+    .filter((record) => parseStrictInstant(record.at) <= at);
   return {
-    schemaVersion: "tcrn.knowledge-fitness.v1", reasonCode: "KNOWLEDGE_FITNESS_READY", at: input.at, windowDays, minEvents,
-    windowStart: windows.card.windowStart, windowEnd: windows.card.windowEnd, windowComplete: windows.card.complete,
-    missingDays: observation.idleDays.map((day) => `${day}.ndjson`), invalidDays: observation.unprovenDays.map((day) => `${day}.ndjson`),
-    idleDays: observation.idleDays, unprovenDays: observation.unprovenDays, windows, refusals: refusalsOf(windows),
-    lastSweepAt: scan.marker.lastSweepAt ?? null, records,
-    proposals: retirementProposals(records, windows, minEvents, windowDays),
+    schemaVersion: "tcrn.knowledge-fitness.v2",
+    reasonCode: "KNOWLEDGE_FITNESS_READY",
+    at: input.at,
+    lastSweepAt: scan.marker.lastSweepAt ?? null,
+    records: fitnessRows(rawFitnessCounts(telemetry), scan.units.map((unit) => unit.metadata), scan.workspace),
   };
 }
 
-async function persistSweepTimestamp(workspaceRoot: string, at: string, options: KnowledgeMutationOptions): Promise<number> {
-  return retryKnowledgeLocks(async () => {
-    const initial = await mutationAdmissionScan(workspaceRoot, options);
-    if (sameUtcObservationDay(initial.marker.lastSweepAt, at)) return initial.marker.version;
-    const claim = await acquireMutationClaim(initial);
-    let released = false;
-    try {
-      const scan = await scanKnowledgeStore(workspaceRoot, options, true);
-      if (sameUtcObservationDay(scan.marker.lastSweepAt, at)) return scan.marker.version;
-      const marker: KnowledgeStoreMarker = { ...scan.marker, lastSweepAt: at, version: scan.marker.version + 1 };
-      const backend = storeBackendFor(scan.storeRoot, options);
-      await backend.writeKnowledgeMarker(canonicalJson(marker));
-      await writeIndex(backend, marker, scan.units.map((unit) => unit.metadata));
-      await releaseMutationClaim(scan.storeRoot, claim);
-      released = true;
-      return marker.version;
-    } finally {
-      if (!released) await releaseMutationClaim(initial.storeRoot, claim);
-    }
-  }, options);
-}
-
-export async function retireKnowledgeSweep(workspaceRoot: string, input: { readonly at: string; readonly windowDays?: number; readonly minEvents?: number }, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
-  const fitness = await retrySweepOperation(workspaceRoot, () => evaluateKnowledgeFitness(workspaceRoot, input), options);
-  const scan = await retrySweepOperation(workspaceRoot, () => scanKnowledgeStore(workspaceRoot, options, false, "metadata-only"), options);
-  // STORY-454 R4: fewer than N card observation days refuses the sweep outright and says how
-  // many are missing; the short classes are named in refusals either way.
-  const reasonCode = fitness.windows.card.complete ? "KNOWLEDGE_RETIRE_SWEEP_READY" : "KNOWLEDGE_RETIRE_SWEEP_REFUSED";
-  const refusals = fitness.refusals as unknown as JsonValue[];
-  if (sameUtcObservationDay(scan.marker.lastSweepAt, fitness.at)) {
-    return { schemaVersion: "tcrn.knowledge-retire-sweep.v1", reasonCode, at: fitness.at, windowComplete: fitness.windowComplete, refusals, lastSweepAt: scan.marker.lastSweepAt ?? null, eligible: [], retired: [], proposals: fitness.proposals as unknown as JsonValue[], records: fitness.records as unknown as JsonValue[] };
-  }
-  const retired: string[] = [];
-  for (const candidate of fitness.records.filter((entry) => entry.eligible)) {
-    let attempts = 0;
-    while (attempts < 2) {
-      attempts += 1;
-      const current = await retrySweepOperation(workspaceRoot, () => scanKnowledgeStore(workspaceRoot, options, false, "metadata-only"), options);
-      const unit = current.units.find((entry) => entry.metadata.id === candidate.id);
-      if (unit === undefined || unit.metadata.lifecycle !== "active") break;
-      if (candidate.baseDigest !== null && unit.metadata.bodySha256 !== candidate.baseDigest) break;
-      const retirement: KnowledgeRetirementRecord = {
-        schemaVersion: "tcrn.knowledge-retirement.v1",
-        id: candidate.id,
-        reason: "zero-retrieval-zero-reference",
-        retrievalCount: candidate.retrievalCount,
-        referenceCount: candidate.referenceCount,
-        observedEvents: candidate.observedEvents,
-        windowDays: fitness.windowDays,
-        windowStart: fitness.windowStart,
-        windowEnd: fitness.windowEnd,
-        sweptAt: fitness.at,
-      };
-      try {
-        await retrySweepOperation(workspaceRoot, () => retireKnowledgeUnit(workspaceRoot, {
-          expectedVersion: current.marker.version,
-          expectedRevision: unit.metadata.revision,
-          occurredAt: fitness.at,
-          id: candidate.id,
-          retirement,
-        }, options), options);
-        retired.push(candidate.id);
-        break;
-      } catch (error) {
-        if (error instanceof KnowledgeCoreError && error.reasonCode === "KNOWLEDGE_CAS_MISMATCH" && attempts < 2) continue;
-        throw error;
-      }
-    }
-  }
-  const version = await persistSweepTimestamp(workspaceRoot, fitness.at, options);
-  return {
-    schemaVersion: "tcrn.knowledge-retire-sweep.v1",
-    reasonCode,
-    at: fitness.at,
-    windowComplete: fitness.windowComplete,
-    refusals,
-    lastSweepAt: fitness.at,
-    version,
-    eligible: fitness.records.filter((entry) => entry.eligible).map((entry) => entry.id),
-    retired,
-    proposals: fitness.proposals as unknown as JsonValue[],
-    records: fitness.records as unknown as JsonValue[],
-  };
+// TCRN-CROSS-MIN-225 D1 (TCRN-CROSS-SUB-258): knowledge retires only through write-time conflict
+// detection and --supersedes. The sweep reads the store once, metadata only, to confirm it is
+// readable; it reads no telemetry, writes nothing (the marker's lastSweepAt included) and retires
+// nothing, whatever instant it is given.
+export async function retireKnowledgeSweep(workspaceRoot: string, input: { readonly at: string }, options: KnowledgeMutationOptions = {}): Promise<Readonly<Record<string, JsonValue>>> {
+  assertEvaluationInstant(input.at);
+  await scanKnowledgeStore(workspaceRoot, options, false, "metadata-only");
+  return { schemaVersion: "tcrn.knowledge-retire-sweep.v2", reasonCode: "KNOWLEDGE_RETIRE_SWEEP_CONFLICT_ONLY", at: input.at, retired: [] };
 }
 
 // WSC-5: retire a record — it becomes a tombstoned audit entry (lifecycle

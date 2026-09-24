@@ -339,6 +339,25 @@ function integerValue(values: Readonly<Record<string, string>>, name: string, mi
   return value;
 }
 
+// TCRN-CROSS-MIN-225 D1 (TCRN-CROSS-SUB-258): --window-days and --min-events configured the retired
+// fitness window. They stay in the catalog, which must not change before a release installs this
+// one, so they keep the checks that window gave them (window-days 1..3650, min-events at least 1),
+// are listed back under retiredInputs, and reach nothing.
+function retiredFitnessInputs(values: Readonly<Record<string, string>>): Readonly<Record<string, JsonValue>> {
+  const inputs: Record<string, JsonValue> = {};
+  if (values["window-days"] !== undefined) {
+    const windowDays = integerValue(values, "window-days");
+    if (windowDays < 1 || windowDays > 3_650) fail("KNOWLEDGE_INPUT_INVALID", "fitness window");
+    inputs["window-days"] = windowDays;
+  }
+  if (values["min-events"] !== undefined) {
+    const minEvents = integerValue(values, "min-events");
+    if (minEvents < 1) fail("KNOWLEDGE_INPUT_INVALID", "fitness window");
+    inputs["min-events"] = minEvents;
+  }
+  return inputs;
+}
+
 // STORY-178: the file↔pg migration target. Only `file` and `pg` are legal; the
 // migration verbs refuse anything else by derivation rather than a hard-coded
 // list of typo'd backends.
@@ -2339,18 +2358,19 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
     })));
     return;
   }
+  // TCRN-CROSS-MIN-225 D1 (TCRN-CROSS-SUB-258): retire-proposals is the read-only fitness statistic
+  // plus the cards already retired (manually, or by a sweep before the change) with their historical
+  // retirement records; it proposes nothing, so proposals and ruleDiffs are always empty.
+  // retire-sweep retires nothing. Both keep their catalog entries and the retired flags.
   if (command === "retire-proposals") {
     const values = parseArguments(rest, ["workspace", "at", "window-days", "min-events"]);
     required(values, ["workspace", "at"]);
-    const fitness: KnowledgeFitnessResult = await evaluateKnowledgeFitness(values.workspace ?? "", {
-      at: values.at ?? "",
-      ...(values["window-days"] === undefined ? {} : { windowDays: integerValue(values, "window-days") }),
-      ...(values["min-events"] === undefined ? {} : { minEvents: integerValue(values, "min-events") }),
-    });
+    const retiredInputs = retiredFitnessInputs(values);
+    const fitness: KnowledgeFitnessResult = await evaluateKnowledgeFitness(values.workspace ?? "", { at: values.at ?? "" });
     io.write(canonicalJson({
       ...fitness,
       reasonCode: "KNOWLEDGE_RETIRE_PROPOSALS_READY",
-      proposals: fitness.proposals,
+      proposals: [],
       retiredRecords: fitness.records.filter((record) => record.lifecycle === "retired").map((record: KnowledgeFitnessRecord) => {
         const retirement: KnowledgeRetirementRecord | undefined = record.retirement;
         return {
@@ -2359,18 +2379,16 @@ async function dispatchCli(arguments_: readonly string[], io: CliIo): Promise<vo
           ...(retirement === undefined ? {} : { retirement }),
         };
       }),
-      ruleDiffs: fitness.proposals.filter((proposal) => proposal.requiresOwnerReview === true),
+      retiredInputs,
+      ruleDiffs: [],
     }));
     return;
   }
   if (command === "retire-sweep") {
     const values = parseArguments(rest, ["workspace", "at", "window-days", "min-events"]);
     required(values, ["workspace", "at"]);
-    io.write(canonicalJson(await retireKnowledgeSweep(values.workspace ?? "", {
-      at: values.at ?? "",
-      ...(values["window-days"] === undefined ? {} : { windowDays: integerValue(values, "window-days") }),
-      ...(values["min-events"] === undefined ? {} : { minEvents: integerValue(values, "min-events") }),
-    })));
+    const retiredInputs = retiredFitnessInputs(values);
+    io.write(canonicalJson({ ...await retireKnowledgeSweep(values.workspace ?? "", { at: values.at ?? "" }), retiredInputs }));
     return;
   }
   if (command === "knowledge-promote") {

@@ -983,6 +983,60 @@
       "testName": "__assertions__",
       "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-257 (TCRN-CROSS-STORY-465 R5): tests/telemetry.test.mjs loses the assertions of the 36 observation-boundary, seal, self-check and per-channel verdict cases (nine of them baseline names, waived above); what remains asserts the dispatch telemetry hook, the store and done evidence, unchanged. The replacements assert that the hooks, the batch entry and the retired arguments write no observation record at all.",
       "replacement": "tests/knowledge-inject.test.mjs:MIN-225: hook events write the four channel events and no boundary, seal receipt, self-check, summary, or sweep; tests/knowledge-inject.test.mjs:MIN-225: the retired observation-boundary argument is answered and writes nothing; tests/final-gate-plan-batch-verify.test.mjs:MIN-225: the batch verify emitter has no self-check mode and a legacy self-check call writes nothing; tests/p3-cli-read-surface.test.mjs:MIN-225: telemetry-observation keeps its catalog entry and refuses as retired without reading telemetry"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "INC-295: existing empty day files do not establish complete observation",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- that empty day files never complete an observation window, so no card retires -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "INC-295: unknown collection and stale or partial coverage never authorize retirement",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- that unknown, unavailable, partial or inconsistent coverage never authorizes a retirement -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "INC-295: changed input invalidates a seal and useful rules or checks are not removal candidates",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- that a changed day invalidates its seal and that rules and checks in use are no removal candidates -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: fitness counts are read-only statistics that legacy observation records do not change"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "INC-295: a conflicting collector receipt or partial day is not coverage",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- that a conflicting receipt or a partial day is not coverage -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "STORY-377 GWT1/GWT2/GWT3: fitness is complete, proposals are read-only, and only a small idle card retires",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- a complete fitness window, read-only proposals and the sweep retiring a small idle card -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input; tests/story-377-retire-sweep.test.mjs:MIN-225: fitness counts are read-only statistics that legacy observation records do not change; tests/story-377-retire-sweep.test.mjs:MIN-225: a supersede write is the only retirement"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "STORY-377 GWT4: missing, invalid, and rolled-back observation windows never become zero",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- that missing, invalid and rolled-back windows never count as zero activity and retire nothing -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input; tests/story-377-retire-sweep.test.mjs:MIN-225: fitness counts are read-only statistics that legacy observation records do not change"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "STORY-377: a stopped sweep recovers a retired card once, then its evidence survives telemetry cleanup",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- the recovery of a sweep stopped after its metadata write, and the retirement record outliving telemetry -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: fitness counts are read-only statistics that legacy observation records do not change"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "STORY-377: concurrent sweeps converge without a second retirement",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): knowledge retires only through write-time conflict and --supersedes, so this case's subject -- two concurrent sweeps retiring one card once -- no longer exists. The replacement asserts the behaviour that took its place: nothing is retired by time, window or observation input, and fitness is a read-only statistic.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input"
+    },
+    {
+      "path": "tests/story-377-retire-sweep.test.mjs",
+      "testName": "__assertions__",
+      "reason": "TCRN-CROSS-MIN-225 D1/D3 (minutes:f315e910c001922d31802d0d), TCRN-CROSS-SUB-258 (TCRN-CROSS-STORY-465 R1, R2): the nine window, proposal and automatic-retirement cases (eight of them baseline names, waived above) give way to five cases asserting conflict-only retirement, read-only fitness, the stale and full-store limits, the retired settings, and the recovery of a stopped manual retirement write.",
+      "replacement": "tests/story-377-retire-sweep.test.mjs:MIN-225: retire-sweep retires nothing for any instant, window, or observation input; tests/story-377-retire-sweep.test.mjs:MIN-225: a supersede write is the only retirement; tests/story-377-retire-sweep.test.mjs:MIN-225: a stale card and a full store lose nothing; tests/story-377-retire-sweep.test.mjs:MIN-225: fitness counts are read-only statistics that legacy observation records do not change; tests/story-377-retire-sweep.test.mjs:MIN-225: the retired fitness settings refuse new writes and their history still replays"
     }
   ]
 }

@@ -140,7 +140,7 @@
         "scripts/lib/dependency-graph.mjs",
         "tests/dependency-policy.test.mjs"
       ],
-      "fixtureDigest": "e29849de2371204fe65b928e1d2684edc54ae1f7ccdcffb987aa179b410db6e6",
+      "fixtureDigest": "039f5f310358a3be339ad2a4fb061b7540ce513bbb38c3e19ff2e4c518442c6b",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",
@@ -261,7 +261,7 @@
         "scripts/lib/privacy.mjs",
         "tests/local-command-byte-fidelity.test.mjs"
       ],
-      "fixtureDigest": "37d39013cab2cb0f21c43deec0ca4a199b63ed346b087ba248598ac2a29da8b9",
+      "fixtureDigest": "ae9ccadea1dc7e5cc5d04dfa933932fbd2e965e61f4f7009781604c276b83097",
       "environment": {
         "node": "24.16.0",
         "pnpm": "11.3.0",

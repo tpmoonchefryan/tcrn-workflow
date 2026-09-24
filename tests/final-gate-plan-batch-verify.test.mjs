@@ -58,7 +58,7 @@ async function nonBoundaryVerifyRecords(fixture) {
   const state = await materializeWorkspace(fixture.root);
   const transient = activeBinding(state.metadata).find((entry) => entry.kind === "transient");
   assert.ok(transient);
-  const read = await readTelemetryRecords(transient.path, { kind: "verify", limit: Number.MAX_SAFE_INTEGER, preserveOrder: true });
+  const read = await readTelemetryRecords(transient.path, { kind: "verify", limit: Number.MAX_SAFE_INTEGER });
   return read.records.filter((record) => typeof record.payload?.source === "string" && !record.payload.source.startsWith(boundaryPrefix));
 }
 

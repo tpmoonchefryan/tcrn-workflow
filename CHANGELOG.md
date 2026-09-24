@@ -20,6 +20,30 @@ including the boundary rows, receipts and self-checks an installed 1.2.0 hook
 keeps writing until both hosts are upgraded, stay readable through
 `telemetry-list` and `telemetry-stats`.
 
+Knowledge retires only through write-time conflict detection and
+`--supersedes` (TCRN-CROSS-MIN-225 D1, TCRN-CROSS-SUB-258). `retire-sweep`
+retires nothing for any instant, window or telemetry and writes nothing, the
+marker's `lastSweepAt` included: it answers
+`KNOWLEDGE_RETIRE_SWEEP_CONFLICT_ONLY` under
+`tcrn.knowledge-retire-sweep.v2`. Fitness is a read-only statistic,
+`tcrn.knowledge-fitness.v2`: per artifact it counts every readable telemetry
+record up to `--at`, with no window, eligibility or proposal, and
+`retire-proposals` returns those counts with the retired cards and their
+historical retirement records, while `proposals` and `ruleDiffs` stay empty.
+`--window-days` and `--min-events` remain in the catalog, are still
+validated, are listed back under `retiredInputs`, and have no effect.
+`fitness.windowDays` and `fitness.minEvents` are retired settings: a new
+write is refused with `SETTINGS_KEY_UNREGISTERED`, and recorded values replay
+as history. The core observation-day readers (receipt validation, the
+collector self-check table, per-channel day verdicts, observation windows and
+`telemetry/summaries`) are removed; the `tcrn.knowledge-retirement.v1`
+metadata record and `lastSweepAt` stay readable as historical formats.
+`maximumAgeDays` still only marks a card stale, and a full store still
+refuses the next write rather than evicting anything. `hardRatio` rises from
+2.5354 to the measured 2.5481 with one recorded exception and
+`coreSourceLineCap` falls from 24683 to the measured 23943 under Owner ruling
+minutes:1e37408180449980244bdf7b D1.
+
 ## 1.2.0 — minor candidate
 
 This release seals and reads the observation evidence behind automatic

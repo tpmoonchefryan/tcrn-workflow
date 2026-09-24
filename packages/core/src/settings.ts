@@ -24,8 +24,12 @@ export const SETTINGS_REASON_CODES = Object.freeze([
 // A catalog deletion must leave a replay-compatibility marker behind. Keep this
 // list separate from the live catalog: old events may be read, but the setting
 // is not a valid target for any new write.
+// TCRN-CROSS-MIN-225 D1/D3 (TCRN-CROSS-SUB-258): fitness.minEvents and fitness.windowDays retire with
+// the time-based retirement they configured; their recorded values stay readable history.
 export const RETIRED_SETTING_KEYS: readonly string[] = Object.freeze([
   "execution.personalessDispatch",
+  "fitness.minEvents",
+  "fitness.windowDays",
   "model.economyTier",
 ]);
 
@@ -51,8 +55,6 @@ export type SettingKey =
   | "execution.maxConcurrentSubagents"
   | "execution.maxDispatchDepth"
   | "execution.subagentPolicy"
-  | "fitness.minEvents"
-  | "fitness.windowDays"
   | "injection.budgetBytes"
   | "injection.perPromptBytes"
   | "knowledge.aggregateBytes"
@@ -343,24 +345,6 @@ const catalogEntries: readonly SettingsCatalogEntry[] = [
     layerKind: SETTINGS_LAYER_KIND,
     defaultValue: "allowed",
     allowedValues: ["allowed", "review-only", "forbidden"],
-  },
-  {
-    key: "fitness.minEvents",
-    type: "string",
-    controlType: "number",
-    layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: "1",
-    min: 1,
-    max: 1_000_000,
-  },
-  {
-    key: "fitness.windowDays",
-    type: "string",
-    controlType: "number",
-    layerKind: SETTINGS_LAYER_KIND,
-    defaultValue: "90",
-    min: 1,
-    max: 3_650,
   },
   {
     key: "injection.budgetBytes",

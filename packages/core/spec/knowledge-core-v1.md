@@ -150,38 +150,47 @@ and its body may be reclaimed, while the aggregate source-byte budget still coun
 the metadata that remains on disk. Capacity is therefore controlled by the
 canonical byte ceiling, not by a historical count or by a retired-record allowance.
 
-## Fitness and automatic retirement
+## Fitness and conflict retirement
 
-`evaluateKnowledgeFitness` reads the local transient telemetry root for the preceding
-complete UTC days. The default window is 90 days and the default minimum is one
-observed event; `fitness.windowDays` and `fitness.minEvents` are registered workspace
-settings, and explicit command flags override them. Missing days and invalid lines make
-the window incomplete and never count as zero activity. Counts are grouped by artifact
-id and include retrievals, references, triggers, verification failures, total observed
-events, and the first/last observed times. A knowledge card's creation/update day and
-its first observed day both bound the retirement window.
+Knowledge retires automatically only at write time (TCRN-CROSS-MIN-225 D1). A capture
+or create whose subject scores as a possible conflict with an active card is refused
+with `KNOWLEDGE_POSSIBLE_CONFLICT` unless it names `--supersedes` or `--coexist`;
+`--supersedes` marks the older card with `extensions.supersededBy`, which takes it out
+of default retrieval while its body stays on disk. No clock, observation day or window
+retires a card: `maximumAgeDays` only marks a card `stale`, and a store at its
+aggregate limit refuses the next write with `KNOWLEDGE_LIMIT_EXCEEDED` rather than
+evicting anything. `knowledge-retire`, and `--retire-invalid` during a rebase, remain
+explicit operator actions.
 
-`retire-proposals` is read-only. It returns pending small-card candidates, historical
-retirement metadata, and base-digest-bound removal diffs for non-card rule/gate/verify
-artifacts. `retire-sweep` invokes the existing CAS-protected `retire` path only for
-active `fact`, `guide`, and `summary` cards with default retrieval, a complete window,
-and zero retrieval/reference counts. It deletes the body and stores the card id,
-reason, counts, sweep instant, and observation window in metadata. Reference/article
-cards and decision records are never automatically retired, and a proposal does not
-modify rules, packages, gates, or verification files.
+`evaluateKnowledgeFitness` is a read-only statistic (`tcrn.knowledge-fitness.v2`). It
+counts, per artifact id, every readable telemetry record at or before the evaluation
+instant: retrievals, references, triggers, verification failures, total observed
+events, and the first/last observed times. It has no window, eligibility or proposal.
+Unreadable lines are skipped, and the collector self-checks, observation boundary rows
+and seal receipts that earlier versions wrote name no artifact, so they count nowhere.
+`retire-proposals` returns these counts together with the cards already retired and
+their historical retirement metadata; its `proposals` and `ruleDiffs` are always empty.
+`retire-sweep` (`tcrn.knowledge-retire-sweep.v2`, `KNOWLEDGE_RETIRE_SWEEP_CONFLICT_ONLY`)
+reads the store once, metadata only, and neither retires nor writes anything. The
+retired `--window-days` and `--min-events` flags are still validated and are listed back
+under `retiredInputs`; `fitness.windowDays` and `fitness.minEvents` are retired settings
+whose recorded values replay as history.
+
+The `tcrn.knowledge-retirement.v1` metadata record (card id, reason, counts, sweep
+instant and window) and the marker's `lastSweepAt` are read-only historical formats:
+readers and the schema accept them, and no command writes them any more.
 
 The knowledge mutation claim records its process identity and acquisition instant.
 `knowledge-recover` only reclaims a claim whose process is demonstrably gone and whose
-metadata/body set can be fully validated; otherwise the store remains blocked. Repeated
-sweeps on one UTC day are idempotent through the marker's `lastSweepAt` value.
+metadata/body set can be fully validated; otherwise the store remains blocked.
 
 ## Governed surfaces
 
 Core exports empty initialization/validation, creation, metadata listing and
 filtering, bounded snippet read, explicit body read, freshness evaluation,
 promotion transition, re-verify, retire, high-water rebase, and metadata-only
-checkpoint generation, fitness evaluation, retirement proposals, automatic retirement,
-and dead-claim recovery. CLI commands mirror these surfaces.
+checkpoint generation, fitness evaluation, retirement proposals, and dead-claim
+recovery. CLI commands mirror these surfaces.
 `P4_KNOWLEDGE_CORE_VERIFIED` proves only this bounded file-native capability; it
 does not mark the graph work done or start RC2/P5/P6.
 
