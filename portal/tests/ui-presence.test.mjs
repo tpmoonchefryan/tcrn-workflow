@@ -1491,7 +1491,9 @@ if (process.argv[2] === "status" && actual.status === 0) {
     await mkdir(bin);
     const fake = join(bin, "claude");
     await writeFile(fake, "#!/usr/bin/env node\nprocess.stderr.write('host says model missing\\n'); process.exitCode = 7;\n", { mode: 0o700 });
-    const page = await loadExecutedDom(fixture, { PATH: `${bin}:${process.env.PATH}` });
+    // TCRN-CROSS-INC-387: host-probe prefers the host CLI named by CLAUDE_CODE_EXECPATH, which a
+    // Claude Code session sets; clearing it keeps this case on the fake claude first on PATH.
+    const page = await loadExecutedDom(fixture, { PATH: `${bin}:${process.env.PATH}`, CLAUDE_CODE_EXECPATH: "" });
     page.workspace = fixture.workspace;
     page.cleanup = async () => { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); };
     page.document.querySelector('[data-page-target="settings"]')?.click();

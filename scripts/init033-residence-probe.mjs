@@ -11,8 +11,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { resolveModelCli } from "./injection-session.mjs";
 
 const execFileAsync = promisify(execFile);
+// TCRN-CROSS-INC-387 (STORY-461 R3): the Claude CLI is the one resolveModelCli picks -- the
+// host's own executable (CLAUDE_CODE_EXECPATH) first, `claude` from PATH only as the named
+// fallback -- and every Claude result carries cliSource (host or path). Codex runs as before.
+const claudeCli = resolveModelCli("claude");
 
 async function run(label, executable, args, cwd, environment = {}) {
   try {
@@ -34,6 +39,10 @@ async function run(label, executable, args, cwd, environment = {}) {
       stderr: error?.stderr ?? String(error),
     };
   }
+}
+
+async function runClaude(label, args, cwd) {
+  return { ...(await run(label, claudeCli.executable, args, cwd)), cliSource: claudeCli.source };
 }
 
 const root = await mkdtemp(join(tmpdir(), "tcrn-init033-residence-"));
@@ -63,16 +72,16 @@ try {
   await writeFile(join(project, "AGENTS.md"), "INIT033 disposable fixture\n");
 
   const hostVersions = [
-    await run("claude version", "claude", ["--version"], project),
+    await runClaude("claude version", ["--version"], project),
     await run("codex version", "codex", ["--version"], project, { CODEX_HOME: codexHome }),
   ];
   const probes = [
     // `doctor` is a read-only config parse/entry probe. It does not open a
     // network model session, so settings deny/hooks are reported as loaded
     // surface, with behavior deliberately marked unobserved below.
-    await run("claude settings doctor", "claude", ["doctor"], root),
-    await run("claude project MCP list", "claude", ["mcp", "list"], project),
-    await run("claude project MCP get", "claude", ["mcp", "get", "init033Fixture"], project),
+    await runClaude("claude settings doctor", ["doctor"], root),
+    await runClaude("claude project MCP list", ["mcp", "list"], project),
+    await runClaude("claude project MCP get", ["mcp", "get", "init033Fixture"], project),
     await run("codex container-root feature list", "codex", ["-C", project, "features", "list"], project, { CODEX_HOME: codexHome }),
     await run("codex project MCP list", "codex", ["-C", project, "mcp", "list"], project, { CODEX_HOME: codexHome }),
   ];

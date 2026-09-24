@@ -92,3 +92,38 @@ test("STORY-373: host-probe is a read-only catalog command with explicit host an
     ],
   });
 });
+
+// TCRN-CROSS-INC-387 (STORY-461 R3): with no test executable, the Claude Code probe runs the CLI
+// resolveModelCli would run: the host's own (CLAUDE_CODE_EXECPATH naming an executable regular
+// file), else `claude` from PATH. command[0] names which one ran. Every case passes an env whose
+// PATH is only a temporary directory, so no real claude or codex can start.
+async function pathDirectory(t) {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "tcrn-host-probe-path-")));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  return directory;
+}
+
+function probeWithEnv(t, env) {
+  return runUnpreloadedRelay(t, `const result = await probeHost({ host: "claude-code", model: "m", env: ${JSON.stringify(env)} }); process.stdout.write(JSON.stringify(result));`);
+}
+
+test("TCRN-CROSS-INC-387: without a test executable host-probe runs the host Claude CLI named by CLAUDE_CODE_EXECPATH", async (t) => {
+  const host = await fakeExecutable(t, "process.stdout.write(`host ${JSON.stringify(process.argv.slice(2))}`)");
+  const result = await probeWithEnv(t, { PATH: await pathDirectory(t), CLAUDE_CODE_EXECPATH: host });
+  assert.deepEqual(result.command, [host, "-p", "--bare", "--model", "m"], "command[0] is the host CLI");
+  assert.equal(result.reasonCode, "HOST_PROBE_SUCCEEDED");
+  assert.equal(result.stdout, `host ${JSON.stringify(["-p", "--bare", "--model", "m"])}`);
+});
+
+test("TCRN-CROSS-INC-387: a usable host CLI wins over a claude on PATH and an unusable one falls back to the PATH claude named bare", async (t) => {
+  const host = await fakeExecutable(t, "process.stdout.write('host')");
+  const path = await pathDirectory(t);
+  await writeFile(join(path, "claude"), `#!${process.execPath}\nprocess.stdout.write('path')\n`, { mode: 0o700 });
+  await writeFile(join(path, "not-executable"), "", { mode: 0o600 });
+  const preferred = await probeWithEnv(t, { PATH: path, CLAUDE_CODE_EXECPATH: host });
+  assert.deepEqual([preferred.command[0], preferred.stdout], [host, "host"], "the host CLI runs even with a claude on PATH");
+  for (const unusable of ["", join(path, "missing"), join(path, "not-executable"), path]) {
+    const fallback = await probeWithEnv(t, { PATH: path, CLAUDE_CODE_EXECPATH: unusable });
+    assert.deepEqual([fallback.command[0], fallback.stdout, fallback.reasonCode], ["claude", "path", "HOST_PROBE_SUCCEEDED"], `unusable host CLI ${JSON.stringify(unusable)}`);
+  }
+});

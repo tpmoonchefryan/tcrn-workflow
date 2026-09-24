@@ -937,6 +937,19 @@ test("STORY-459 R2: the judge resolves the host CLI from CLAUDE_CODE_EXECPATH an
   assert.deepEqual(seen[0].args.slice(0, 4), ["-p", "--bare", "--model", "economy"]);
 });
 
+// TCRN-CROSS-INC-387 (STORY-461 R3): the INIT-033 residence probe was the last script that ran
+// `claude` from PATH by name. It takes its Claude CLI from resolveModelCli, as the judge does,
+// and names the source on every Claude result. Checked statically: running the probe builds its
+// fixture in the system temporary directory, outside the repository.
+test("TCRN-CROSS-INC-387: the INIT-033 residence probe takes its Claude CLI from resolveModelCli and names the source", async () => {
+  const source = await readFile(new URL("../scripts/init033-residence-probe.mjs", import.meta.url), "utf8");
+  assert.match(source, /^import \{ resolveModelCli \} from "\.\/injection-session\.mjs";$/mu);
+  assert.match(source, /resolveModelCli\("claude"\)/u);
+  assert.doesNotMatch(source, /\brun\("[^"]*", "claude",/u, "no probe step names the literal claude as its executable");
+  assert.doesNotMatch(source, /execFile(?:Async)?\(\s*"claude"/u);
+  assert.match(source, /cliSource/u, "each Claude result says whether the host CLI or PATH ran");
+});
+
 test("STORY-459 R2: an authentication failure is named, with the CLI message kept", async () => {
   const child = () => {
     const failing = new EventEmitter();
