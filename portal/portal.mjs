@@ -212,16 +212,14 @@ async function workProjection() {
 async function knowledgeProjection() {
   const selected = currentPartition();
   const at = readInstant();
-  const [listing, retirement] = await Promise.all([
-    cliResult(["knowledge-list", "--workspace", selected.workspace, "--at", at, "--selection", "all", "--allow-trailing", "true"]),
-    cliResult(["retire-proposals", "--workspace", selected.workspace, "--at", at]),
-  ]);
+  // TCRN-CROSS-MIN-225 (TCRN-CROSS-SUB-259): the knowledge view never read the retire-proposals
+  // answer fetched beside the list, so that call, a full telemetry read on every load, is gone.
+  const listing = await cliResult(["knowledge-list", "--workspace", selected.workspace, "--at", at, "--selection", "all", "--allow-trailing", "true"]);
   return {
-    ok: listing.ok || retirement.ok,
+    ok: listing.ok,
     reasonCode: listing.ok ? "PORTAL_KNOWLEDGE_READY" : "PORTAL_KNOWLEDGE_PARTIAL",
     at,
     listing: listing.body,
-    retirement: retirement.body,
     records: listing.ok ? (listing.body.records ?? []) : [],
     total: listing.ok ? (listing.body.total ?? listing.body.records?.length ?? 0) : 0,
   };
@@ -292,30 +290,51 @@ function modeStats(records) {
   }]));
 }
 
+// TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-259): the only automatic retirement left is a --supersedes
+// write, so the evolution panel lists the cards such writes replaced: id, subject, replacement and
+// time, newest first. They come from knowledge-list, read page by page until it is no longer
+// truncated (its default page holds eight). retire-proposals is not read: it proposes nothing now.
+// A page that fails leaves the list partial and the count unknown, never zero.
+const KNOWLEDGE_LIST_PAGE = 100;
+
+async function conflictRetirements(workspace, at) {
+  const records = [];
+  for (let offset = 0; ;) {
+    const page = await cliResult(["knowledge-list", "--workspace", workspace, "--at", at, "--selection", "all", "--allow-trailing", "true", "--limit", String(KNOWLEDGE_LIST_PAGE), "--offset", String(offset)]);
+    const rows = page.ok && Array.isArray(page.body?.records) ? page.body.records : null;
+    if (rows === null) return { ok: false, records };
+    for (const row of rows) {
+      const supersededBy = row?.extensions?.supersededBy;
+      if (typeof supersededBy === "string") records.push({ id: row.id, subject: row.subject ?? null, supersededBy, updatedAt: row.updatedAt ?? null });
+    }
+    if (page.body.truncated !== true || rows.length === 0) break;
+    offset += rows.length;
+  }
+  records.sort((left, right) => String(right.updatedAt ?? "").localeCompare(String(left.updatedAt ?? "")) || String(left.id).localeCompare(String(right.id)));
+  return { ok: true, records };
+}
+
 async function evolutionProjection() {
   const selected = currentPartition();
   const at = readInstant();
-  const [stats, listing, retirement, retrieval, claude, codex] = await Promise.all([
+  const [stats, listing, conflicts, retrieval, claude, codex] = await Promise.all([
     cliResult(["telemetry-stats", "--workspace", selected.workspace]),
     cliResult(["telemetry-list", "--workspace", selected.workspace, "--limit", "4096"]),
-    cliResult(["retire-proposals", "--workspace", selected.workspace, "--at", at]),
+    conflictRetirements(selected.workspace, at),
     retrievalEvaluation(),
     hostSettingsProjection("claude-code"),
     hostSettingsProjection("codex"),
   ]);
   const telemetryRecords = listing.ok && Array.isArray(listing.body.records) ? listing.body.records : [];
-  const pending = retirement.ok && Array.isArray(retirement.body?.proposals) ? retirement.body.proposals.filter((entry) => entry.automatic === true).length : 0;
-  const retired = retirement.ok && Array.isArray(retirement.body?.retiredRecords) ? retirement.body.retiredRecords.length : 0;
   return {
     ok: true,
     reasonCode: "PORTAL_EVOLUTION_READY",
     at,
-    partial: !stats.ok || !listing.ok || !retirement.ok || retrieval.ok === false,
+    partial: !stats.ok || !listing.ok || !conflicts.ok || retrieval.ok === false,
     telemetry: stats.body,
     modeStats: modeStats(telemetryRecords),
-    retirement: retirement.body,
-    pendingRetirementCount: pending,
-    retiredCount: retired,
+    conflictRetirements: conflicts.records,
+    conflictRetirementCount: conflicts.ok ? conflicts.records.length : null,
     retrievalEval: retrieval,
     hosts: [claude, codex],
   };

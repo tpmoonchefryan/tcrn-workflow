@@ -1601,31 +1601,39 @@ if (process.argv[2] === "status" && actual.status === 0) {
     } finally { await page.cleanup(); }
   });
 
-  // TCRN-CROSS-INC-381 (SUB-252): since SUB-228 retire-proposals keeps missingDays as the
-  // compatibility name for idle days, and the evolution panel still counted it as missing. An
-  // idle day neither counts toward the window nor breaks it (STORY-454 R2); what the card
-  // window lacks is windows.card.missingObservationDays, and the idle and unproven days are
-  // listed beside it. Red leg: count missingDays again.
-  test("INC-381 the evolution panel shows missing observation days, not idle days", async () => {
-    const fixture = await scratch("tcrn-inc381-evolution-dom-");
-    const idleDays = Array.from({ length: 11 }, (_, index) => `2026-09-${String(index + 1).padStart(2, "0")}`);
-    const unprovenDays = ["2026-09-12", "2026-09-13"];
-    const payload = {
+  // TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-259): the only automatic retirement left is a --supersedes
+  // write, so the evolution panel lists the cards such writes replaced and nothing else: no window,
+  // no last sweep, no proposal, no pending count and no button. The wrapper answers knowledge-list
+  // with two replaced cards, a manually retired card and a card carrying a v1.2.0 retirement record,
+  // and still answers retire-proposals with the old window payload, which the panel must not show.
+  test("MIN-225 the evolution panel lists conflict retirements only", async () => {
+    const fixture = await scratch("tcrn-min225-evolution-dom-");
+    const card = (suffix, subject, updatedAt, extra = {}) => ({ id: `knowledge:000000000000000000000${suffix}`, subject, updatedAt, lifecycle: "active", extensions: {}, ...extra });
+    const records = [
+      card("a01", "Older card A", "2026-09-20T10:00:00.000Z", { extensions: { supersededBy: "knowledge:000000000000000000000b01" } }),
+      card("b01", "Newer card A", "2026-09-20T10:00:00.000Z"),
+      card("a02", "Older card B", "2026-09-22T10:00:00.000Z", { extensions: { supersededBy: "knowledge:000000000000000000000b02" } }),
+      card("b02", "Newer card B", "2026-09-22T10:00:00.000Z"),
+      card("c01", "Manually retired card", "2026-09-21T10:00:00.000Z", { lifecycle: "retired" }),
+      card("c02", "Card swept in 1.2.0", "2026-09-21T11:00:00.000Z", { lifecycle: "retired", retirement: { schemaVersion: "tcrn.knowledge-retirement.v1", reason: "zero-retrieval-zero-reference" } }),
+    ];
+    const listing = { schemaVersion: "tcrn.knowledge-list.v1", reasonCode: "KNOWLEDGE_LIST_READY", total: records.length, truncated: false, records };
+    const legacy = {
       reasonCode: "KNOWLEDGE_RETIRE_PROPOSALS_READY",
       windowComplete: false,
-      missingDays: idleDays.map((day) => `${day}.ndjson`),
-      invalidDays: unprovenDays.map((day) => `${day}.ndjson`),
-      idleDays,
-      unprovenDays,
       windows: { card: { complete: false, observationDays: 89, missingObservationDays: 1 } },
-      proposals: [],
-      retiredRecords: [],
-      lastSweepAt: null,
+      idleDays: ["2026-09-01"],
+      unprovenDays: ["2026-09-12"],
+      proposals: [{ id: "knowledge:000000000000000000000c09", automatic: true, baseDigest: "legacy-digest", retrievalCount: 0, referenceCount: 0 }],
+      retiredRecords: [{ id: "knowledge:000000000000000000000c02", retirement: { reason: "zero-retrieval-zero-reference" } }],
+      lastSweepAt: "2026-09-24T00:47:10.039Z",
     };
-    const wrapper = join(fixture.base, "retire-proposals-wrapper.mjs");
+    const wrapper = join(fixture.base, "evolution-wrapper.mjs");
     await writeFile(wrapper, `import { spawnSync } from "node:child_process";
-if (process.argv[2] === "retire-proposals") {
-  process.stdout.write(${JSON.stringify(JSON.stringify(payload))});
+if (process.argv[2] === "knowledge-list") {
+  process.stdout.write(${JSON.stringify(JSON.stringify(listing))});
+} else if (process.argv[2] === "retire-proposals") {
+  process.stdout.write(${JSON.stringify(JSON.stringify(legacy))});
 } else {
   const actual = spawnSync(process.execPath, [${JSON.stringify(CLI)}, ...process.argv.slice(2)], { encoding: "utf8" });
   process.stdout.write(actual.stdout || "");
@@ -1635,8 +1643,20 @@ if (process.argv[2] === "retire-proposals") {
 `, "utf8");
     const page = await loadExecutedDom(fixture, { TCRN_WORKFLOW_CLI: wrapper });
     try {
-      const label = page.document.querySelector("#evolution-retirement strong")?.textContent ?? "";
-      assert.equal(label, "incomplete observation window · 1 missing days · 11 idle days · 2 unproven days");
+      const dashboard = page.document.querySelector('[data-ui="evolution-dashboard"]');
+      const panel = page.document.querySelector("#evolution-retirement");
+      const rows = [...panel.querySelectorAll(".tcrn-read-list__row")].map((row) => row.textContent.replace(/\s+/gu, " ").trim());
+      assert.equal(rows.length, 2, `only the two replaced cards are listed: ${JSON.stringify(rows)}`);
+      assert.match(rows[0], /^Older card B.*knowledge:000000000000000000000a02.*knowledge:000000000000000000000b02.*2026-09-22T10:00:00\.000Z/u, "newest first, with the card, its replacement and the time");
+      assert.match(rows[1], /^Older card A.*knowledge:000000000000000000000a01.*knowledge:000000000000000000000b01.*2026-09-20T10:00:00\.000Z/u);
+      const text = dashboard.textContent.replace(/\s+/gu, " ");
+      for (const absent of [/observation window/iu, /last sweep/iu, /proposal/iu, /pending retirement/iu, /Manually retired card/u, /Card swept in 1\.2\.0/u, /legacy-digest/u]) {
+        assert.doesNotMatch(text, absent, `the panel shows no ${absent}`);
+      }
+      assert.equal(dashboard.querySelectorAll("button").length, 0, "the list is read-only");
+      const cells = [...page.document.querySelectorAll("#evolution-stats .tcrn-inline-metric")].map((cell) => cell.textContent.replace(/\s+/gu, " ").trim());
+      assert.equal(cells.length, 4, "the stats block keeps its four cells");
+      assert.match(cells[3], /^Conflict retirements ?2 ?items$/u, "and counts the conflict retirements in the fourth");
     } finally { page.child.kill(); await rm(fixture.base, { recursive: true, force: true }); }
   });
 

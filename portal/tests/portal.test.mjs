@@ -157,6 +157,49 @@ test("STORY-379 read views use CLI projections and keep partial data visible", a
   assert.equal(untokened.body.reasonCode, "PORTAL_TOKEN_REQUIRED");
 });
 
+// TCRN-CROSS-MIN-225 D3 (TCRN-CROSS-SUB-259): the evolution projection pages through knowledge-list
+// until the list is no longer truncated and never asks retire-proposals, which proposes nothing now.
+// The recording CLI serves knowledge-list in pages of four records, standing in for a store larger
+// than one page, so the eleven cards below take three pages; every call's arguments are logged.
+test("MIN-225 the evolution projection reads every page of the knowledge list and never calls retire-proposals", async (t) => {
+  const fixture = await scratch("tcrn-portal-min225-", "FIXTURE-TCRN-PORTAL-MIN225");
+  t.after(() => rm(fixture.base, { recursive: true, force: true }));
+  await cli(["project-create", "--workspace", fixture.workspace, "--expected-version", "0", "--at", "2026-09-20T09:00:00Z", "--external-key", "FIXTURE-PORTAL-MIN225-PROJECT", "--name", "MIN-225"]);
+  await cli(["knowledge-init", "--workspace", fixture.workspace]);
+  const capture = (subject, extra = []) => cli(["knowledge-capture", "--workspace", fixture.workspace, "--at", "2026-09-20T10:00:00Z",
+    "--subject", subject, "--summary", `${subject} summary`, "--snippet", `${subject} snippet`, "--tags", "min225",
+    "--accountable-owner-id", "owner:portal-min225", "--body", `${subject} body`, "--coexist", "true", ...extra]);
+  const originals = [];
+  for (let index = 0; index < 5; index += 1) originals.push(await capture(`MIN-225 original card ${index}`));
+  const replacements = [];
+  for (let index = 0; index < 3; index += 1) replacements.push(await capture(`MIN-225 replacement card ${index}`, ["--supersedes", originals[index].id]));
+  for (let index = 0; index < 3; index += 1) await capture(`MIN-225 unrelated card ${index}`);
+  const log = join(fixture.base, "cli-calls.ndjson");
+  const recorder = join(fixture.base, "recording-cli.mjs");
+  await writeFile(recorder, `import { appendFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(log)}, JSON.stringify(args) + "\\n");
+const forwarded = args[0] === "knowledge-list" ? args.map((value, index) => (args[index - 1] === "--limit" ? "4" : value)) : args;
+const actual = spawnSync(process.execPath, [${JSON.stringify(CLI)}, ...forwarded], { encoding: "utf8", maxBuffer: 32e6 });
+process.stdout.write(actual.stdout || "");
+process.stderr.write(actual.stderr || "");
+process.exitCode = actual.status ?? 1;
+`, "utf8");
+  const { child, url } = await startPortal({ ...fixture, env: { TCRN_WORKFLOW_CLI: recorder } });
+  t.after(() => child.kill());
+  const { boot } = await readBoot(url);
+  const evolution = await request(url, "/api/evolution", readOptions(boot.token));
+  assert.equal(evolution.body.reasonCode, "PORTAL_EVOLUTION_READY");
+  assert.equal(evolution.body.conflictRetirementCount, 3, "every replaced card is counted, beyond the default page of eight");
+  assert.deepEqual(evolution.body.conflictRetirements.map((entry) => [entry.id, entry.supersededBy]).sort(), originals.slice(0, 3).map((card, index) => [card.id, replacements[index].id]).sort());
+  for (const field of ["retirement", "pendingRetirementCount", "retiredCount"]) assert.equal(Object.hasOwn(evolution.body, field), false, field);
+  const calls = (await readFile(log, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(calls.some((args) => args[0] === "retire-proposals"), false, "retire-proposals is never called");
+  const pages = calls.filter((args) => args[0] === "knowledge-list" && args.includes("--offset")).map((args) => Number(args[args.indexOf("--offset") + 1]));
+  assert.deepEqual(pages, [0, 4, 8], "the list is read page by page until it is no longer truncated");
+});
+
 test("portal writes use actor plus live CAS, then return readback and session audit", async (t) => {
   const fixture = await scratch("tcrn-portal-write-", "TCRN-PORTAL-WRITE");
   const { child, url } = await startPortal(fixture);

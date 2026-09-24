@@ -44,6 +44,13 @@ refuses the next write rather than evicting anything. `hardRatio` rises from
 `coreSourceLineCap` falls from 24683 to the measured 23943 under Owner ruling
 minutes:1e37408180449980244bdf7b D1.
 
+The portal's evolution panel lists conflict retirements only: the cards a
+`--supersedes` write replaced, each with its replacement and time, newest
+first, read from `knowledge-list` page by page; its fourth stat counts them.
+The window, last-sweep, proposal and pending-retirement lines are gone, and
+neither the evolution nor the knowledge view calls `retire-proposals` any
+more (TCRN-CROSS-MIN-225 D3, TCRN-CROSS-SUB-259).
+
 ## 1.2.0 — minor candidate
 
 This release seals and reads the observation evidence behind automatic
