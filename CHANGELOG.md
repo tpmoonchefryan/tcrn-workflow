@@ -3,7 +3,28 @@
 All notable changes will be documented here. The project uses Semantic
 Versioning after the first accepted release.
 
-## Unreleased
+## 1.2.1 — patch candidate
+
+This patch release makes write-time conflict detection and `--supersedes` the
+only way knowledge retires (Owner ruling TCRN-CROSS-MIN-225,
+TCRN-CROSS-STORY-465): the hooks and the batch entry stop writing observation
+boundary rows, seal receipts, collector self-checks and day summaries, and
+`telemetry-observation` refuses (TCRN-CROSS-SUB-257); `retire-sweep` retires
+nothing and writes nothing, fitness is a read-only statistic, and
+`fitness.windowDays` and `fitness.minEvents` are retired settings
+(TCRN-CROSS-SUB-258); the portal's evolution panel lists conflict retirements
+only (TCRN-CROSS-SUB-259); and replay reads the removal of a retired setting
+as history while a replay snapshot no longer seeds a retired key, so the
+snapshot-seeded read and a replay from genesis hold the same state
+(TCRN-CROSS-INC-389, TCRN-CROSS-SUB-261). The command catalog is unchanged
+from 1.2.0. `hardRatio` rises from 2.5354 to the measured 2.5521 with two
+recorded exceptions and `coreSourceLineCap` falls from 24683 to the measured
+23956 under Owner ruling minutes:1e37408180449980244bdf7b D1. The upgrade note
+(upgrade both hosts together, and when to run `snapshot-replay-rebuild` and
+then `recover`) and the known limitations are in `docs/releases/1.2.1.md`.
+The immutable 1.2.0 Engine and 1.0.6 Helper publications remain unchanged;
+the paired 1.2.1/1.0.7 release is published only after exact-commit CI and
+independent asset verification.
 
 The hooks and the batch entry no longer write observation boundary rows,
 per-channel or four-channel seal receipts, `collector-self-check` records or
