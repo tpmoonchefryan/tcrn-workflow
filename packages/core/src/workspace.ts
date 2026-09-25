@@ -2226,7 +2226,13 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
   const conferencePositions = new Map<string, ConferencePosition>((snapshot?.conferencePositions ?? []).map((record) => [record.id, record]));
   const conferenceMinutes = new Map<string, ConferenceMinutes>((snapshot?.conferenceMinutes ?? []).map((record) => [record.id, record]));
   const gates = new Map<string, GateRecord>((snapshot?.gates ?? []).map((record) => [record.id, record]));
-  const settings = new Map<string, WorkspaceSettingRecord>((snapshot?.settings ?? []).map((record) => [record.key, record]));
+  // TCRN-CROSS-INC-389 R2: a replay snapshot taken while a key was live still lists it after the key
+  // retires, as a 1.1.0-1.2.0 snapshot lists fitness.windowDays. The snapshot is verified exactly as
+  // stored (state digest, manifest, segment digests); only the seed drops retired keys, the rule the
+  // settings.updated arm below applies on a replay from genesis, so both reads hold the same settings.
+  // The convention is the one settings.ts states for RETIRED_SETTING_KEYS: historical events remain
+  // legible without reopening new writes.
+  const settings = new Map<string, WorkspaceSettingRecord>((snapshot?.settings ?? []).filter((record) => !isRetiredSettingKey(record.key)).map((record) => [record.key, record]));
   let executionConfig: ExecutionConfigState = snapshot?.executionConfig ?? EMPTY_EXECUTION_CONFIG;
   const templates = new Map<string, TemplateAdmissionRecord>((snapshot?.templates ?? []).map((record) => [record.registrationId, record]));
   const workspaceRoot = metadata.roots.find((root) => root.kind === "workspace")?.path;
@@ -2523,6 +2529,13 @@ function materialize(metadata: WorkspaceMetadata, events: readonly EventRecord[]
         if (typeof body.key !== "string" || typeof body.updatedAt !== "string") fail("WORKSPACE_EVENT_CORRUPT", "setting removal record is invalid");
         try { assertStrictInstant(body.updatedAt); } catch { fail("WORKSPACE_EVENT_CORRUPT", "setting removal timestamp is invalid"); }
         requireEventBoundTimestamp(body.updatedAt, event, `setting ${body.key}`);
+        // TCRN-CROSS-INC-389 R1: the removal of a retired key is history, read like the settings.updated
+        // records for it below. The envelope checks above still apply; the current settings are neither
+        // consulted nor changed, since they never hold a retired key. A chain that set and then removed
+        // fitness.windowDays under 1.1.0-1.2.0 was valid there and stays readable (settings.ts, on
+        // RETIRED_SETTING_KEYS: historical events remain legible without reopening new writes). A live
+        // key removed while unset is still a corrupt chain.
+        if (isRetiredSettingKey(body.key)) continue;
         const current = settings.get(body.key);
         if (current === undefined) fail("WORKSPACE_EVENT_CORRUPT", `cannot remove unknown setting ${body.key}`);
         settings.delete(body.key);

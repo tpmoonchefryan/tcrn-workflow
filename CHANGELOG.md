@@ -51,6 +51,29 @@ The window, last-sweep, proposal and pending-retirement lines are gone, and
 neither the evolution nor the knowledge view calls `retire-proposals` any
 more (TCRN-CROSS-MIN-225 D3, TCRN-CROSS-SUB-259).
 
+Replay reads the removal of a retired setting as history, and a replay
+snapshot no longer carries a retired key into the current settings
+(TCRN-CROSS-INC-389, TCRN-CROSS-SUB-261). A `settings.removed` event for a
+key on the retired list keeps its envelope checks (exact fields, field types,
+a strict and event-bound timestamp) and neither consults nor changes the
+current settings, like the `settings.updated` records for that key, so a
+chain that set and then removed `fitness.windowDays` or `fitness.minEvents`
+under 1.1.0 to 1.2.0 reads again; removing a live key that was never set is
+still `WORKSPACE_EVENT_CORRUPT`. A replay snapshot is still verified exactly
+as stored, and only its seed drops retired keys, so the snapshot-seeded read
+and a replay from genesis hold the same state. Upgrade note: a workspace
+whose newest replay snapshot was taken while a now-retired key
+(`execution.personalessDispatch`, `model.economyTier`, `fitness.windowDays`
+or `fitness.minEvents`) was still live, or that recorded such a key while it
+was live and also holds another setting, conference, gate or template
+record, may first answer `WORKSPACE_VIEW_STALE` from `validate` and the read
+verbs that check the views after the upgrade. Upgrade every engine copy that
+reads the workspace together, then run `snapshot-replay-rebuild` and after it
+`recover` with 1.2.1. `hardRatio` rises from 2.5481 to the measured 2.5521
+(proofLines from 72243 to 72390, productLines from 28352 to 28365) with one
+recorded exception and `coreSourceLineCap` rises from 23943 to the measured
+23956 under Owner ruling minutes:1e37408180449980244bdf7b D1.
+
 ## 1.2.0 — minor candidate
 
 This release seals and reads the observation evidence behind automatic
